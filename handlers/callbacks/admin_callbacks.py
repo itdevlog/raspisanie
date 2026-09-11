@@ -20,6 +20,12 @@ class AdminCallbackHandler:
     def __init__(self):
         self._refresh_lock = asyncio.Lock()
 
+    def _updater_lock(self, context: ContextTypes.DEFAULT_TYPE):
+        """Общая блокировка обновлений: не даём ручному и фоновому обновлению пересекаться."""
+        updater = context.bot_data.get('background_updater')
+        lock = getattr(updater, '_update_lock', None) if updater else None
+        return lock or self._refresh_lock
+
     def _invalidate_data(self, context: ContextTypes.DEFAULT_TYPE):
         """Единая инвалидация после ручной замены schools_data."""
         updater = context.bot_data.get('background_updater')
@@ -162,11 +168,11 @@ class AdminCallbackHandler:
         query = update.callback_query
         user_id = update.effective_user.id
 
-        if self._refresh_lock.locked():
-            await query.answer("⏳ Обновление уже выполняется")
+        if self._updater_lock(context).locked():
+            await query.edit_message_text("⏳ Обновление уже выполняется в фоне. Дождитесь завершения.")
             return
 
-        async with self._refresh_lock:
+        async with self._updater_lock(context):
             await query.edit_message_text("🔄 *Обновление данных всех школ...*\n\nЭто может занять несколько секунд.", parse_mode='Markdown')
 
             chat_id = update.effective_chat.id if update.effective_chat else None
@@ -178,7 +184,14 @@ class AdminCallbackHandler:
                 schools_data = await asyncio.to_thread(loader.load_all_schools_data)
 
             if schools_data:
-                context.bot_data['schools_data'] = schools_data
+                merged = context.bot_data.get('schools_data', {})
+                updater = context.bot_data.get('background_updater')
+                if updater and hasattr(updater, '_merge_schools_data'):
+                    merged = updater._merge_schools_data(merged, schools_data)
+                else:
+                    merged = dict(merged or {})
+                    merged.update(schools_data)
+                context.bot_data['schools_data'] = merged
                 self._invalidate_data(context)
                 admin_logger.info(f"Admin {user_id} manually refreshed all schools data")
 
@@ -207,11 +220,11 @@ class AdminCallbackHandler:
             await query.answer("❌ Школа не найдена")
             return
 
-        if self._refresh_lock.locked():
-            await query.answer("⏳ Обновление уже выполняется")
+        if self._updater_lock(context).locked():
+            await query.edit_message_text("⏳ Обновление уже выполняется в фоне. Дождитесь завершения.")
             return
 
-        async with self._refresh_lock:
+        async with self._updater_lock(context):
             school_name = school_config.get('name', school_id)
             await query.edit_message_text(f"🔄 *Обновление данных {school_name}...*", parse_mode='Markdown')
 

@@ -40,12 +40,11 @@ class UserService:
         user_data['current_school'] = school_id
         user_data['updated_at'] = datetime.now().isoformat()
 
-        self.users_collection.update_one(
+        return self.users_collection.update_one(
             {'user_id': user_id},
             user_data,
             upsert=True
         )
-        return True
 
     def get_user_class(self, user_id: int, school_id: str = None) -> str | None:
         """Получает выбранный класс пользователя для конкретной школы"""
@@ -91,12 +90,11 @@ class UserService:
         user_data['school_classes'][school_id] = class_name
         user_data['updated_at'] = datetime.now().isoformat()
 
-        self.users_collection.update_one(
+        return self.users_collection.update_one(
             {'user_id': user_id},
             user_data,
             upsert=True
         )
-        return True
 
     def set_user_notification_settings(self, user_id: int, notifications_enabled: bool, school_id: str = None) -> bool:
         """Устанавливает настройки уведомлений для пользователя для конкретной школы"""
@@ -129,12 +127,11 @@ class UserService:
         user_data['notification_settings'][school_id] = notifications_enabled
         user_data['updated_at'] = datetime.now().isoformat()
 
-        self.users_collection.update_one(
+        return self.users_collection.update_one(
             {'user_id': user_id},
             user_data,
             upsert=True
         )
-        return True
 
     def get_user_notification_settings(self, user_id: int, school_id: str = None) -> bool:
         """Получает настройки уведомлений пользователя для конкретной школы"""
@@ -182,11 +179,10 @@ class UserService:
             del user_data['school_classes'][school_id]
             user_data['updated_at'] = datetime.now().isoformat()
 
-            self.users_collection.update_one(
+            return self.users_collection.update_one(
                 {'user_id': user_id},
                 user_data
             )
-            return True
 
         return False
 
