@@ -254,6 +254,8 @@ class EntityMenuHandler:
                 keyboard.append(other_days)
 
             keyboard.append([
+                InlineKeyboardButton("🔄 Обновить", callback_data=f"{self.p}_{schedule_type}_{suffix}_{idx}"
+                                     if idx is not None else f"{self.p}_{schedule_type}_{entity_name}"),
                 InlineKeyboardButton("🔍 Найти другого", callback_data=f"menu_{self.p}"),
                 InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
             ])

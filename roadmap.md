@@ -12,7 +12,7 @@
 
 | # | Место | Проблема | Исправление |
 |---|-------|----------|-------------|
-| 9 | `handlers/teachers/teacher_menu.py:156,267`, `handlers/rooms/room_schedule.py:158,274` | `Message is not modified` — повторное нажатие «Обновить»/«Назад» в этих файлах ещё уходит в error handler | Применить `safe_edit_message` (есть в `messaging`, применён в `class_callbacks`/`school_info`/`main_menu`, тут ещё нет) |
+| 9 | `handlers/teachers/teacher_menu.py:156,267`, `handlers/rooms/room_schedule.py:158,274` | `Message is not modified` — повторное нажатие «Обновить»/«Назад» в этих файлах ещё уходит в error handler | ✅ **исправлено 11.09**: рендер расписания вынесен в `EntityMenuHandler::select` через `edit_long_message`→`safe_edit_message` (глотает «not modified») |
 
 ---
 
@@ -33,7 +33,6 @@
 ### Замены и уведомления
 
 - **Экранирование до бизнес-логики** — `room_service.py:95-100`, `teacher_service.py:95-100`: `class_name` экранируется (`replace('*','\\*')…`) и затем передаётся в `apply_exchanges_to_schedule`, где `_find_class_id` сравнивает его с «чистыми» именами → замены для расписаний учителей/кабинетов **не находятся**. → ✅ **исправлено 11.09**: в `teacher_service`/`room_service` для поиска замен и хранения имени используется чистое `class_name`.
-- **`ExchangeService` создаётся в цикле** — `exchange_detector.py:102`: на каждую школу каждый тик.
 - **`ExchangeService` создаётся в цикле** — `exchange_detector.py:102`: на каждую школу каждый тик.
 
 ### Инфраструктура
@@ -63,7 +62,7 @@
 
 - Ошибки показывают `str(e)` пользователю — утекают внутренности. → ✅ **исправлено 11.09**: `messaging::log_user_error` логирует реальное исключение и возвращает общее сообщение; применён в `class_callbacks`, `week_command`, `callback_handler`, `admin_callbacks`. `str(e)` пользователю больше нигде не показывается.
 - «Список устарел» оставляет мёртвую клавиатуру — перерисовывать актуальный список вместо тоста.
-- Нет кнопки «Обновить» в клавиатурах учителей/кабинетов (в классах есть).
+- Нет кнопки «Обновить» в клавиатурах учителей/кабинетов. → ✅ **исправлено 11.09**: добавлена кнопка «🔄 Обновить» в `EntityMenuHandler::select` (перерисовывает текущий день/неделю той же записи или по имени).
 - Ввод поиска без ограничения длины и кнопки «Отмена» (только «Назад», не сбрасывающая флаг).
 - Прогресс для долгих админ-операций: `ChatAction.TYPING` или статус по школам.
 
@@ -99,12 +98,12 @@
 
 Приоритетные юнит-тесты (чистые функции, без Telegram):
 
-- `ExchangeService.apply_exchanges_to_schedule` — тест «исходные данные не изменились»;
-- `ExchangeDetector._compare_class_exchanges` с раунд-трипом через `json.dumps/loads`;
-- `FileDB` — битый файл, upsert, параллельная запись;
-- `_find_class_id` — однозначность матчинга классов;
+- `ExchangeService.apply_exchanges_to_schedule` — тест «исходные данные не изменились» (ловит п.1); → ✅ **11.09** `tests/test_exchange_service.py`;
+- `ExchangeDetector._compare_class_exchanges` с раунд-трипом через `json.dumps/loads` (ловит п.5);
+- `FileDB` — битый файл, upsert, delete_one, round-trip (ловит п.4); → ✅ **11.09** `tests/test_file_db.py`;
+- `_find_class_id` — однозначность матчинга классов (ловит п.12); → ✅ **11.09** в `test_exchange_service.py`;
 - роутинг callback-префиксов `_get_handler_key`;
-- генератор длинного недельного расписания → проверка нарезки ≤4096.
+- генератор длинного недельного расписания → проверка нарезки ≤4096 (ловит п.9).
 
 Интеграционные (pytest-asyncio + мок): ввод несуществующего класса текстом, клик по результату поиска, двойное нажатие «Обновить», `admin_force_update`.
 
