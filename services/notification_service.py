@@ -1,10 +1,12 @@
 # services/notification_service.py
+import asyncio
 import json
 import logging
 import os
 import time
 from datetime import datetime
 
+from telegram.error import RetryAfter
 from telegram.ext import ContextTypes
 
 from config.config import Config, get_timezone
@@ -124,16 +126,28 @@ class NotificationService:
          except Exception as e:
              self.logger.error(f"Ошибка сохранения кэша уведомлений: {e}")
 
+    async def _send_message(self, bot, chat_id: int, text: str, parse_mode: str = 'Markdown',
+                            max_attempts: int = 3) -> bool:
+        """Отправляет сообщение, пережидая Telegram RetryAfter (429)."""
+        for attempt in range(max_attempts):
+            try:
+                await bot.send_message(chat_id=chat_id, text=text, parse_mode=parse_mode)
+                return True
+            except RetryAfter as e:
+                wait = float(getattr(e, 'retry_after', 1) or 1)
+                self.logger.warning(f"Telegram RetryAfter {wait}s (попытка {attempt + 1})")
+                await asyncio.sleep(wait)
+            except Exception as e:
+                self.logger.error(f"Failed to send message to {chat_id}: {e}")
+                return False
+        return False
+
     async def notify_admins(self, context: ContextTypes.DEFAULT_TYPE, message: str, parse_mode: str = 'Markdown'):
         """Отправляет уведомление всем администраторам"""
         try:
             for admin_id in self.config.ADMIN_IDS:
                 try:
-                    await context.bot.send_message(
-                        chat_id=admin_id,
-                        text=message,
-                        parse_mode=parse_mode
-                    )
+                    await self._send_message(context.bot, admin_id, message, parse_mode=parse_mode)
                 except Exception as e:
                     self.logger.error(f"Failed to send notification to admin {admin_id}: {e}")
         except Exception as e:
@@ -187,13 +201,11 @@ class NotificationService:
             sent_count = 0
             for user_id in users:
                 try:
-                    await context.bot.send_message(
-                        chat_id=user_id,
-                        text=notification_text,
-                        parse_mode='Markdown'
-                    )
-                    sent_count += 1
-                    self.logger.info(f"Exchange notification sent to user {user_id}")
+                    if await self._send_message(context.bot, user_id, notification_text, parse_mode='Markdown'):
+                        sent_count += 1
+                        self.logger.info(f"Exchange notification sent to user {user_id}")
+                    # Небольшая пауза между отправками — защита от flood-лимитов Telegram
+                    await asyncio.sleep(0.05)
                 except Exception as e:
                     self.logger.error(f"Failed to send message to user {user_id}: {e}")
 
