@@ -1,4 +1,15 @@
 # services/user_preferences.py
+"""Настройки уведомлений разделены на два независимых хранилища.
+
+- Замены (exchange) — настройки per-school: единственный источник
+  `UserService.get_user_notification_settings` / `set_user_notification_settings`.
+- Обновления (update_notifications) — администраторский флаг: единственный
+  писатель и читатель здесь, в `UserPreferencesService`. UI (`settings.py`) и
+  фоновый апдейтер (`core/background_updater.py`) читают его отсюда же.
+
+Кросс-запись между хранилищами запрещена: exchange пишется только через
+`UserService`, update — только через `UserPreferencesService`.
+"""
 from datetime import datetime
 
 

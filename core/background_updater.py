@@ -172,9 +172,10 @@ class BackgroundUpdater:
         """Получает настройки уведомлений для администраторов.
 
         Читает сохранённые предпочтения через UserPreferencesService — тот же
-        источник, что и меню настроек (settings.py). Если у администратора нет
-        сохранённых настроек, возвращает `update_notifications: False`, чтобы
-        совпадать с тем, что показывает UI («Уведомления об обновлениях: Выкл»).
+        источник, что и меню настроек (settings.py). Уведомление отправляется,
+        если хотя бы один администратор включил `update_notifications`. Если нет
+        сохранённых настроек ни у кого, возвращает False, чтобы совпадать с тем,
+        что показывает UI («Уведомления об обновлениях: Выкл»).
         Раньше здесь жёстко возвращалось True -> тосты-предупреждения расходились
         с отображением.
         """
@@ -190,15 +191,17 @@ class BackgroundUpdater:
             if not config or not hasattr(config, 'ADMIN_IDS'):
                 return {'update_notifications': False}
 
-            # Для упрощения возвращаем настройки первого администратора
-            # В реальном приложении может потребоваться более сложная логика
+            # Уведомления об обновлениях — общий флаг для админов: шлём, если
+            # хотя бы один администратор включил их в меню настроек.
             admin_ids = config.ADMIN_IDS
             if admin_ids:
-                # Используем настройки уведомлений первого администратора
                 from services.user_preferences import UserPreferencesService
                 preferences_service = UserPreferencesService(user_service.db)
-                settings = preferences_service.get_notification_settings(admin_ids[0])
-                return settings
+                any_enabled = any(
+                    preferences_service.get_notification_settings(admin_id).get('update_notifications', False)
+                    for admin_id in admin_ids
+                )
+                return {'update_notifications': any_enabled}
 
             return {'update_notifications': False}  # По умолчанию выключены
 
