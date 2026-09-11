@@ -25,6 +25,9 @@ class RoomCallbackHandler:
             await query.answer("Используйте кнопки навигации по страницам")
         elif callback_data.startswith("room_search_page_"):
             await self._handle_room_search_pagination(update, context, callback_data)
+        elif callback_data.startswith("room_subscribe_"):
+            from handlers.rooms.room_schedule import handle_room_subscription
+            await handle_room_subscription(update, context, callback_data)
         elif callback_data.startswith("room_"):
             await self._handle_room_selection(update, context, callback_data)
         else:

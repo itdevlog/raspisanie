@@ -117,6 +117,10 @@ class ScheduleBot:
         # Инициализируем сервис уведомлений
         notification_service = NotificationService()
 
+        # Инициализируем сервис подписок на преподавателей/кабинеты
+        from services.subscription_service import SubscriptionService
+        subscription_service = SubscriptionService(db)
+
         # Инициализируем детектор замен - ДОБАВЛЕНО
         from services.exchange_detector import ExchangeDetector
         exchange_detector = ExchangeDetector()
@@ -127,6 +131,7 @@ class ScheduleBot:
         self.application.bot_data['config'] = self.config
         self.application.bot_data['cache_service'] = cache_service
         self.application.bot_data['notification_service'] = notification_service
+        self.application.bot_data['subscription_service'] = subscription_service
         self.application.bot_data['schools_config'] = SCHOOLS_CONFIG
         self.application.bot_data['state_service'] = state_service  # ДОБАВЛЕНО
         self.application.bot_data['exchange_detector'] = exchange_detector

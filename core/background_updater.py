@@ -285,6 +285,12 @@ class BackgroundUpdater:
                                 )
                                 self.logger.info(f"Notification result for class {class_name}: {result}")
 
+                                # Best-effort: уведомляем подписчиков преподавателей/кабинетов
+                                await self._notify_entity_subscribers(
+                                    context, notification_service, school_id, class_name,
+                                    class_exchanges, today
+                                )
+
                                 # Логируем активность обновления
                                 await asyncio.to_thread(
                                     self.log_update_activity,
@@ -302,6 +308,37 @@ class BackgroundUpdater:
 
         except Exception as e:
             self.logger.error(f"Ошибка в проверке обновлений замен: {e}")
+
+    async def _notify_entity_subscribers(self, context, notification_service, school_id: str,
+                                         class_name: str, class_exchanges: list, date) -> None:
+        """Best-effort уведомление подписчиков новых преподавателей/кабинетов.
+
+        Для каждой замены с непустым `new_teacher`/`new_room` шлём подписчикам
+        текст уведомления о замене. Ошибки не влияют на детекцию замен.
+        """
+        try:
+            if not notification_service or not hasattr(notification_service, 'notify_subscribers'):
+                return
+
+            text = notification_service._format_exchange_notification(class_name, class_exchanges, date)
+            if not text:
+                return
+
+            seen: set[tuple[str, str]] = set()
+            for exchange in class_exchanges:
+                for kind, field in (('teacher', 'new_teacher'), ('room', 'new_room')):
+                    name = (exchange.get(field) or '').strip()
+                    if not name or (kind, name) in seen:
+                        continue
+                    seen.add((kind, name))
+                    try:
+                        await notification_service.notify_subscribers(
+                            context, school_id, kind, name, text
+                        )
+                    except Exception as e:
+                        self.logger.error(f"Ошибка уведомления подписчиков {kind} {name}: {e}")
+        except Exception as e:
+            self.logger.error(f"Ошибка в _notify_entity_subscribers: {e}", exc_info=True)
 
     def _make_context(self):
         """Создает минимальный контекст для использования вне handler-ов"""

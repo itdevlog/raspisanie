@@ -255,6 +255,18 @@ class EntityMenuHandler:
             if other_days:
                 keyboard.append(other_days)
 
+            # Кнопка подписки — только когда сущность разрешается по индексу
+            if idx is not None:
+                subscription_service = context.bot_data.get('subscription_service')
+                is_subscribed = bool(
+                    subscription_service
+                    and subscription_service.is_subscribed(user_id, current_school_id, self.p, entity_name)
+                )
+                sub_label = "🔕 Отписаться" if is_subscribed else "🔔 Подписаться"
+                keyboard.append([InlineKeyboardButton(
+                    sub_label,
+                    callback_data=f"{self.p}_subscribe_{schedule_type}_{suffix}_{idx}")])
+
             keyboard.append([
                 InlineKeyboardButton("🔄 Обновить", callback_data=f"{self.p}_{schedule_type}_{suffix}_{idx}"
                                      if idx is not None else f"{self.p}_{schedule_type}_{entity_name}"),
@@ -270,6 +282,68 @@ class EntityMenuHandler:
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🔙 Назад", callback_data=f"menu_{self.p}")]
                 ]))
+
+    # ---------- подписки ----------
+
+    async def toggle_subscription(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                                  entity_name: str, schedule_type: str = "today"):
+        """Переключает подписку на сущность и перерисовывает расписание."""
+        query = update.callback_query
+        user_id = update.effective_user.id
+        user_service = context.bot_data.get('user_service')
+        subscription_service = context.bot_data.get('subscription_service')
+
+        if not user_service or not subscription_service:
+            await query.answer("❌ Сервис подписок не доступен")
+            return
+
+        school_id = user_service.get_user_school(user_id)
+        if subscription_service.is_subscribed(user_id, school_id, self.p, entity_name):
+            subscription_service.unsubscribe(user_id, school_id, self.p, entity_name)
+            await query.answer(f"🔕 Подписка на {self.n} {entity_name} отключена")
+        else:
+            subscription_service.subscribe(user_id, school_id, self.p, entity_name)
+            await query.answer(f"🔔 Вы подписались на {self.n} {entity_name}")
+
+        await self.select(update, context, entity_name, schedule_type)
+
+    async def handle_subscription_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                                           callback_data: str):
+        """Разбирает `{p}_subscribe_{schedule_type}_{sidx|idx}_{index}` и переключает подписку."""
+        user_id = update.effective_user.id
+        state_service = context.bot_data.get('state_service')
+        parts = callback_data.split('_', 3)
+        # parts: [entity, 'subscribe', schedule_type, 'idx_0'|'sidx_0']
+        if len(parts) < 4:
+            await update.callback_query.answer("❌ Ошибка в данных подписки")
+            return
+
+        schedule_type = parts[2]
+        tail = parts[3]
+        if not state_service:
+            await update.callback_query.answer("❌ Сервис состояния не доступен")
+            return
+
+        if tail.startswith('sidx_'):
+            list_key, index = self.cfg.state_search_key, tail[5:]
+        elif tail.startswith('idx_'):
+            list_key, index = self.cfg.state_full_key, tail[4:]
+        else:
+            await update.callback_query.answer("❌ Ошибка в данных подписки")
+            return
+
+        try:
+            entity_index = int(index)
+        except ValueError:
+            await update.callback_query.answer("❌ Ошибка в данных подписки")
+            return
+
+        items = state_service.get_user_list(user_id, list_key) or []
+        if not (0 <= entity_index < len(items)):
+            await update.callback_query.answer("❌ Список устарел, откройте расписание заново")
+            return
+
+        await self.toggle_subscription(update, context, items[entity_index], schedule_type)
 
     def _resolve_source(self, user_id: int, entity_name: str, state_service: UserStateService) -> tuple:
         """Возвращает (source, index): source — 'search' или 'full'."""

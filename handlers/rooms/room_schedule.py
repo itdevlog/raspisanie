@@ -58,3 +58,7 @@ async def handle_room_search_input(update: Update, context: ContextTypes.DEFAULT
 async def handle_room_search_results(update: Update, context: ContextTypes.DEFAULT_TYPE,
                                      search_query: str, page: int = 0):
     await _room_handler.search_results(update, context, search_query, page)
+
+
+async def handle_room_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
+    await _room_handler.handle_subscription_callback(update, context, callback_data)

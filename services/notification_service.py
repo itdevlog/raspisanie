@@ -142,6 +142,39 @@ class NotificationService:
                 return False
         return False
 
+    async def notify_subscribers(self, context: ContextTypes.DEFAULT_TYPE, school_id: str,
+                                 kind: str, name: str, text: str,
+                                 parse_mode: str = 'Markdown') -> int:
+        """Отправляет текст всем подписчикам преподавателя/кабинета.
+
+        Возвращает число успешно доставленных сообщений. Best-effort: ошибки
+        подписок/отправки не выбрасываются наружу.
+        """
+        try:
+            subscription_service = None
+            if getattr(context, 'bot_data', None):
+                subscription_service = context.bot_data.get('subscription_service')
+            if not subscription_service:
+                return 0
+
+            subscribers = subscription_service.get_subscribers(school_id, kind, name)
+            if not subscribers:
+                return 0
+
+            sent = 0
+            for user_id in subscribers:
+                try:
+                    if await self._send_message(context.bot, user_id, text, parse_mode=parse_mode):
+                        sent += 1
+                        await asyncio.sleep(0.05)
+                except Exception as e:
+                    self.logger.error(f"Failed to notify subscriber {user_id}: {e}")
+            self.logger.info(f"Subscription notification sent to {sent}/{len(subscribers)} ({kind} {name})")
+            return sent
+        except Exception as e:
+            self.logger.error(f"Error in notify_subscribers: {e}", exc_info=True)
+            return 0
+
     async def notify_admins(self, context: ContextTypes.DEFAULT_TYPE, message: str, parse_mode: str = 'Markdown'):
         """Отправляет уведомление всем администраторам"""
         try:

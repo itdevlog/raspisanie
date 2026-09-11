@@ -25,6 +25,9 @@ class TeacherCallbackHandler:
             await query.answer("Используйте кнопки навигации по страницам")
         elif callback_data.startswith("teacher_search_page_"):
             await self._handle_teacher_search_pagination(update, context, callback_data)
+        elif callback_data.startswith("teacher_subscribe_"):
+            from handlers.teachers.teacher_menu import handle_teacher_subscription
+            await handle_teacher_subscription(update, context, callback_data)
         elif callback_data.startswith("teacher_"):
             await self._handle_teacher_selection(update, context, callback_data)
         else:

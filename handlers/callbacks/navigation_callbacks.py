@@ -24,6 +24,8 @@ class NavigationCallbackHandler:
             await self._handle_toggle_notifications(update, context, callback_data)
         elif callback_data.startswith("toggle_update_notifications_"):
             await self._handle_toggle_update_notifications(update, context, callback_data)
+        elif callback_data.startswith("unsubscribe_"):
+            await self._handle_unsubscribe(update, context, callback_data)
         elif callback_data.startswith("select_school_"):
             await self._handle_school_selection(update, context, callback_data)
         elif callback_data.startswith("show_all_"):
@@ -134,6 +136,13 @@ class NavigationCallbackHandler:
         """Обрабатывает переход в меню кабинетов"""
         from handlers.rooms.room_schedule import room_menu_handler
         await room_menu_handler(update, context)
+
+    async def _handle_unsubscribe(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
+        """Обрабатывает отписку от преподавателя/кабинета из меню настроек."""
+        from handlers.common.settings import unsubscribe_by_callback
+
+        payload = callback_data.replace("unsubscribe_", "")
+        await unsubscribe_by_callback(update, context, payload)
 
     async def _handle_toggle_notifications(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает переключение уведомлений"""

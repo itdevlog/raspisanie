@@ -23,6 +23,7 @@ CASES = {
     'toggle_update_notifications_off': 'toggle_update_notifications',
     'main_menu': 'main_menu',
     'change_class': 'change_class',
+    'unsubscribe_teacher_0': 'unsubscribe',
     'no_such_prefix': 'menu',
 }
 

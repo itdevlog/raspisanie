@@ -2,6 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from config.config import Config
+from services.text_utils import escape_markdown
 
 
 async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -34,6 +35,21 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
 
+    # Подписки на преподавателей/кабинеты текущей школы
+    subscription_service = context.bot_data.get('subscription_service')
+    subscriptions = []
+    if subscription_service:
+        school_id = user_service.get_user_school(user_id)
+        subscriptions = subscription_service.get_subscriptions(user_id, school_id)
+        for index, (kind, name) in enumerate(subscriptions):
+            label_kind = "👨‍🏫" if kind == 'teacher' else "🏫"
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{label_kind} {name} — 🔕 Отписаться",
+                    callback_data=f"unsubscribe_{kind}_{index}"
+                )
+            ])
+
     # Если пользователь администратор, добавляем настройки уведомлений об обновлениях
     if is_admin:
         # Получаем настройки уведомлений об обновлениях
@@ -55,13 +71,55 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    text = "⚙️ *Настройки*\n\nВыберите параметр для изменения:"
+    text = "⚙️ *Настройки*\n\n"
+    if subscriptions:
+        text += "🔔 *Ваши подписки:*\n"
+        for kind, name in subscriptions:
+            label_kind = "👨‍🏫" if kind == 'teacher' else "🏫"
+            text += f"• {label_kind} {escape_markdown(name)}\n"
+        text += "\n"
+    text += "Выберите параметр для изменения:"
 
     if update.message:
         await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
     elif update.callback_query:
         query = update.callback_query
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+
+
+async def unsubscribe_by_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, payload: str):
+    """Отписывает по callback `unsubscribe_{kind}_{index}` и обновляет меню."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    user_service = context.bot_data.get('user_service')
+    subscription_service = context.bot_data.get('subscription_service')
+
+    if not user_service or not subscription_service:
+        await query.answer("❌ Сервис подписок не доступен")
+        return
+
+    parts = payload.split('_', 1)
+    if len(parts) != 2 or not parts[1].isdigit():
+        await query.answer("❌ Ошибка в данных подписки")
+        return
+
+    kind = parts[0]
+    index = int(parts[1])
+    school_id = user_service.get_user_school(user_id)
+    subscriptions = subscription_service.get_subscriptions(user_id, school_id)
+
+    if not (0 <= index < len(subscriptions)):
+        await query.answer("❌ Подписка не найдена")
+        return
+
+    sub_kind, name = subscriptions[index]
+    if sub_kind != kind:
+        await query.answer("❌ Подписка не найдена")
+        return
+
+    subscription_service.unsubscribe(user_id, school_id, kind, name)
+    await query.answer(f"🔕 Отписка от {name} оформлена")
+    await settings_handler(update, context)
 
 
 async def toggle_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE, state: str):
