@@ -27,7 +27,7 @@ class NotificationService:
          self.load_notifications_cache()
          # Кэш индекса (school_id, class_lower) -> [user_id], строится один раз за цикл
          self._user_class_index: dict[tuple, list[int]] = {}
-         self._index_loaded_for_school: str = None
+         self._index_loaded_for_school: str | None = None
          # Настройки уведомлений {user_id: enabled} для текущей школы, строится вместе с индексом
          self._settings_for_school: dict[int, bool] = {}
 
