@@ -67,7 +67,7 @@ class ClassCallbackHandler:
 
         try:
             cache_service = context.bot_data.get('cache_service')
-            schedule_service = ScheduleService(school_data, cache_service)
+            schedule_service = ScheduleService(school_data, cache_service, current_school_id)
 
             # Получаем расписание
             if schedule_type == "today":

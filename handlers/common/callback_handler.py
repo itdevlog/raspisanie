@@ -103,7 +103,7 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     try:
-        schedule_service = ScheduleService(school_data)
+        schedule_service = ScheduleService(school_data, school_id=current_school_id)
         available_classes = schedule_service.get_available_classes()
 
         if not available_classes:
@@ -256,7 +256,7 @@ async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_
         return
 
     try:
-        schedule_service = ScheduleService(school_data)
+        schedule_service = ScheduleService(school_data, school_id=current_school_id)
         available_classes = schedule_service.get_available_classes()
 
         state_service = context.bot_data.get('state_service')

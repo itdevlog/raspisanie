@@ -12,7 +12,7 @@ async def week_command_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     school_data = context.school_data
 
     # Создаем сервис ОДИН РАЗ
-    schedule_service = ScheduleService(school_data)
+    schedule_service = ScheduleService(school_data, school_id=context.current_school_id)
 
     if not context.args:
         # Показываем список классов

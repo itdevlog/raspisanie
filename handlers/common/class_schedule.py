@@ -82,7 +82,7 @@ async def class_schedule_handler(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     class_name = message_text
-    schedule_service = ScheduleService(school_data)
+    schedule_service = ScheduleService(school_data, school_id=current_school_id)
 
     # Проверяем существование класса
     available_classes = schedule_service.get_available_classes()

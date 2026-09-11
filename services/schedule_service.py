@@ -7,15 +7,21 @@ from .base_schedule_service import BaseScheduleService
 class ScheduleService(BaseScheduleService):
     """Сервис для работы с расписанием классов"""
 
-    def __init__(self, school_data: dict, cache_service=None):
+    def __init__(self, school_data: dict, cache_service=None, school_id: str = ""):
         super().__init__(school_data)
         self.cache_service = cache_service
+        self.school_id = school_id
+
+    def _cache_key(self, kind: str, class_name: str, date: datetime) -> str:
+        """Ключ кэша с префиксом школы — иначе классы-тёзки (5и, 8б) в разных
+        школах перетирали бы друг друга в общем CacheService."""
+        return f"{self.school_id}:{kind}:{class_name}:{date.strftime('%Y%m%d')}"
 
     def get_class_schedule_today(self, class_name: str) -> str:
         """Получает расписание класса на сегодня с учетом замен"""
         # Используем кэширование если доступно
         if self.cache_service:
-            cache_key = f"today_{class_name}_{datetime.now(self.moscow_tz).strftime('%Y%m%d')}"
+            cache_key = self._cache_key("today", class_name, datetime.now(self.moscow_tz))
             cached = self.cache_service.get(cache_key)
             if cached:
                 return cached
@@ -25,7 +31,7 @@ class ScheduleService(BaseScheduleService):
 
         # Сохраняем в кэш если доступно
         if self.cache_service and result:
-            cache_key = f"today_{class_name}_{datetime.now(self.moscow_tz).strftime('%Y%m%d')}"
+            cache_key = self._cache_key("today", class_name, datetime.now(self.moscow_tz))
             self.cache_service.set(cache_key, result)
 
         return result
@@ -35,7 +41,7 @@ class ScheduleService(BaseScheduleService):
         # Используем кэширование если доступно
         if self.cache_service:
             tomorrow = datetime.now(self.moscow_tz) + timedelta(days=1)
-            cache_key = f"tomorrow_{class_name}_{tomorrow.strftime('%Y%m%d')}"
+            cache_key = self._cache_key("tomorrow", class_name, tomorrow)
             cached = self.cache_service.get(cache_key)
             if cached:
                 return cached
@@ -46,7 +52,7 @@ class ScheduleService(BaseScheduleService):
         # Сохраняем в кэш если доступно
         if self.cache_service and result:
             tomorrow = datetime.now(self.moscow_tz) + timedelta(days=1)
-            cache_key = f"tomorrow_{class_name}_{tomorrow.strftime('%Y%m%d')}"
+            cache_key = self._cache_key("tomorrow", class_name, tomorrow)
             self.cache_service.set(cache_key, result)
 
         return result
@@ -57,7 +63,7 @@ class ScheduleService(BaseScheduleService):
         if self.cache_service:
             today = datetime.now(self.moscow_tz)
             current_monday = today - timedelta(days=today.weekday())
-            cache_key = f"week_{class_name}_{current_monday.strftime('%Y%m%d')}"
+            cache_key = self._cache_key("week", class_name, current_monday)
             cached = self.cache_service.get(cache_key)
             if cached:
                 return cached
@@ -68,7 +74,7 @@ class ScheduleService(BaseScheduleService):
         if self.cache_service and result:
             today = datetime.now(self.moscow_tz)
             current_monday = today - timedelta(days=today.weekday())
-            cache_key = f"week_{class_name}_{current_monday.strftime('%Y%m%d')}"
+            cache_key = self._cache_key("week", class_name, current_monday)
             self.cache_service.set(cache_key, result)
 
         return result
