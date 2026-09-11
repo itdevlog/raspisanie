@@ -126,6 +126,16 @@ class ExchangeDetector:
                 )
                 new_exchanges.extend(class_new_exchanges)
 
+            # Классы, у которых замены были, а теперь их нет вовсе:
+            # без этого удаление единственной замены класса не детектировалось бы
+            for class_name, previous_class_exchanges in previous_exchanges.items():
+                if class_name in current_exchanges:
+                    continue
+                removals = self._compare_class_exchanges(
+                    class_name, previous_class_exchanges, {}, school_data, date
+                )
+                new_exchanges.extend(removals)
+
             # Сохраняем текущее состояние только для этой даты
             by_date[date_str] = current_exchanges
             self.previous_schedules[school_id] = by_date

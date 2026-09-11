@@ -238,7 +238,7 @@ class NotificationService:
         message = [
             f"🔄 *{escape_markdown(class_name.upper())} - {day_name}, {date_str}*",
             "",
-            "📝 *Новые замены в расписании:*",
+            self._exchange_header(exchanges),
             ""
         ]
 
@@ -275,6 +275,13 @@ class NotificationService:
         ])
 
         return "\n".join(message)
+
+    @staticmethod
+    def _exchange_header(exchanges: list[dict]) -> str:
+        """Заголовок: только снятия → «Замены сняты», иначе общий."""
+        if exchanges and all(e.get('removed') for e in exchanges):
+            return "📝 *Замены сняты:*"
+        return "📝 *Новые замены в расписании:*"
 
     def _get_day_name(self, date: datetime) -> str:
         """Получает название дня недели"""

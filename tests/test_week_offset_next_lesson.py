@@ -21,7 +21,7 @@ def _svc():
 
 def test_get_next_lesson_picks_upcoming():
     svc = _svc()
-    date = datetime(2026, 9, 11, 8, 30, tzinfo=TZ)  # между уроком 1 и 2
+    date = datetime(2026, 9, 11, 8, 30, tzinfo=TZ)  # 08:30 идёт внутри урока 1 (08:00–08:45), метод берёт следующий урок
     data = [
         {'lesson_num': 1, 'data': {'s': ['x'], 't': [], 'r': []}, 'has_exchange': False, 'is_cancelled': False},
         {'lesson_num': 2, 'data': {'s': ['y'], 't': [], 'r': []}, 'has_exchange': False, 'is_cancelled': False},

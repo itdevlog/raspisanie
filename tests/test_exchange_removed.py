@@ -29,6 +29,28 @@ def test_removed_exchange_is_reported():
     assert removals[0]['original_subject'] == 'Урок 3'
 
 
+def test_class_with_only_exchange_removed_emits_removal():
+    d = _detector()
+    date = datetime(2026, 9, 11, 12, 0, tzinfo=d.moscow_tz)
+    school = {
+        'CLASSES': {'c1': '5А'},
+        'CLASS_EXCHANGE': {'c1': {'11.09.2026': {'3': {'s': '1', 't': '1', 'r': '1'}}}},
+        'SUBJECTS': {'1': 'Математика'},
+        'TEACHERS': {'1': 'Иванов'},
+        'ROOMS': {'1': '101'},
+    }
+    first = d.detect_exchanges('s', school, date, persist=False)
+    assert first
+    assert not any(e.get('removed') for e in first)
+
+    school['CLASS_EXCHANGE'] = {'c1': {'11.09.2026': {}}}
+    second = d.detect_exchanges('s', school, date, persist=False)
+    removals = [e for e in second if e.get('removed')]
+    assert len(removals) == 1
+    assert removals[0]['class_name'] == '5А'
+    assert removals[0]['lesson_num'] == 3
+
+
 def test_removal_is_rendered_in_notification():
     from services.notification_service import NotificationService
 
@@ -44,3 +66,43 @@ def test_removal_is_rendered_in_notification():
     text = svc._format_exchange_notification('5А', exchanges, date)
     assert '↩️' in text
     assert 'замена снята' in text
+
+
+def test_removal_only_notification_header():
+    from services.notification_service import NotificationService
+
+    svc = NotificationService.__new__(NotificationService)
+    svc.logger = logging.getLogger('test')
+    svc.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+    date = datetime(2026, 9, 11, 12, 0, tzinfo=svc.moscow_tz)
+    exchanges = [{
+        'class_name': '5А', 'lesson_num': 3, 'removed': True,
+        'original_subject': 'Урок 3', 'new_subject': '', 'new_teacher': '',
+        'new_room': '', 'is_cancelled': False, 'timestamp': date,
+    }]
+    text = svc._format_exchange_notification('5А', exchanges, date)
+    assert 'Замены сняты' in text
+    assert 'Новые замены' not in text
+
+
+def test_mixed_notification_keeps_original_header():
+    from services.notification_service import NotificationService
+
+    svc = NotificationService.__new__(NotificationService)
+    svc.logger = logging.getLogger('test')
+    svc.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+    date = datetime(2026, 9, 11, 12, 0, tzinfo=svc.moscow_tz)
+    exchanges = [
+        {
+            'class_name': '5А', 'lesson_num': 3, 'removed': True,
+            'original_subject': 'Урок 3', 'new_subject': '', 'new_teacher': '',
+            'new_room': '', 'is_cancelled': False, 'timestamp': date,
+        },
+        {
+            'class_name': '5А', 'lesson_num': 4, 'original_subject': 'Урок 4',
+            'new_subject': 'Физика', 'new_teacher': '', 'new_room': '',
+            'is_cancelled': False, 'timestamp': date,
+        },
+    ]
+    text = svc._format_exchange_notification('5А', exchanges, date)
+    assert 'Новые замены в расписании' in text
