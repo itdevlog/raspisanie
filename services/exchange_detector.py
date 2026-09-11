@@ -2,7 +2,7 @@
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from config.config import Config, get_timezone
 
@@ -26,29 +26,68 @@ class ExchangeDetector:
         return os.path.join(data_dir, 'exchange_cache.json')
 
     def load_cache(self):
-        """Загружает кэш замен из файла"""
+        """Загружает кэш замен. Старый (плоский) формат сбрасывается."""
         try:
             if os.path.exists(self.cache_file):
                 with open(self.cache_file, encoding='utf-8') as f:
-                    self.previous_schedules = json.load(f)
-                self.logger.info(f"Загружен кэш замен из {self.cache_file}, школ: {len(self.previous_schedules)}")
+                    data = json.load(f)
+                if self._is_legacy_cache(data):
+                    self.logger.warning(
+                        "Обнаружен старый формат кэша замен — сбрасываю (нужен сброс после смены схемы)")
+                    self.previous_schedules = {}
+                else:
+                    self.previous_schedules = data
+                    self.logger.info(
+                        f"Загружен кэш замен из {self.cache_file}, школ: {len(self.previous_schedules)}")
             else:
                 self.logger.info("Файл кэша замен не найден, используется пустой кэш")
         except Exception as e:
             self.logger.error(f"Ошибка загрузки кэша замен: {e}")
             self.previous_schedules = {}
 
-    def save_cache(self):
-        """Сохраняет кэш замен в файл"""
-        try:
-            # Создаем директорию, если она не существует
-            os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
+    @staticmethod
+    def _is_legacy_cache(data: dict) -> bool:
+        """True, если структура не соответствует {school: {date: {...}}}."""
+        import re
+        date_re = re.compile(r'^\d{2}\.\d{2}\.\d{4}$')
+        if not isinstance(data, dict):
+            return True
+        for _school, by_date in data.items():
+            if not isinstance(by_date, dict):
+                return True
+            for key in by_date:
+                if not date_re.match(str(key)):
+                    return True
+        return False
 
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
+    def save_cache(self):
+        """Атомарно сохраняет кэш; даты старше 3 суток удаляются."""
+        try:
+            self._prune_old_dates()
+            os.makedirs(os.path.dirname(self.cache_file) or '.', exist_ok=True)
+            tmp = f"{self.cache_file}.tmp"
+            with open(tmp, 'w', encoding='utf-8') as f:
                 json.dump(self.previous_schedules, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, self.cache_file)
             self.logger.info(f"Кэш замен сохранен в {self.cache_file}")
         except Exception as e:
             self.logger.error(f"Ошибка сохранения кэша замен: {e}")
+
+    def _prune_old_dates(self):
+        """Удаляет даты старше 3 суток, чтобы кэш не рос бесконечно."""
+        cutoff = datetime.now(self.moscow_tz).date() - timedelta(days=3)
+        for school_id in list(self.previous_schedules.keys()):
+            by_date = self.previous_schedules[school_id]
+            for date_str in list(by_date.keys()):
+                try:
+                    d = datetime.strptime(date_str, '%d.%m.%Y').date()
+                except ValueError:
+                    del by_date[date_str]
+                    continue
+                if d < cutoff:
+                    del by_date[date_str]
+            if not by_date:
+                del self.previous_schedules[school_id]
 
     def clear_cache(self, school_id: str = None):
         """Очищает кэш замен"""
@@ -61,39 +100,38 @@ class ExchangeDetector:
             self.logger.info("Полный кэш замен очищен")
         self.save_cache()
 
-    def detect_exchanges(self, school_id: str, school_data: dict, date: datetime) -> list[dict]:
+    def detect_exchanges(self, school_id: str, school_data: dict, date: datetime,
+                         persist: bool = True) -> list[dict]:
         """
-        Обнаруживает новые замены для всех классов школы
-        Возвращает список обнаруженных замен
+        Обнаруживает новые замены для всех классов школы на конкретную дату.
+        Состояние хранится отдельно для каждой даты, иначе проверка «завтра»
+        перетирала бы baseline «сегодня». persist=False — не писать на диск
+        (вызывающий делает один общий save_cache за цикл).
         """
         try:
-            self.logger.info(f"Начало обнаружения замен для школы {school_id} на дату {date.strftime('%d.%m.%Y')}")
+            date_str = date.strftime('%d.%m.%Y')
+            self.logger.info(f"Начало обнаружения замен для школы {school_id} на дату {date_str}")
             current_exchanges = self._get_current_exchanges(school_data, date)
-            previous_exchanges = self.previous_schedules.get(school_id, {})
+            by_date = self.previous_schedules.get(school_id, {})
+            previous_exchanges = by_date.get(date_str, {})
 
             self.logger.info(f"Найдено {len(current_exchanges)} классов с текущими заменами")
 
             new_exchanges = []
-
             for class_name, current_class_exchanges in current_exchanges.items():
                 previous_class_exchanges = previous_exchanges.get(class_name, {})
-
-                self.logger.info(f"Сравнение замен для класса {class_name}: текущие={len(current_class_exchanges)}, предыдущие={len(previous_class_exchanges)}")
-
-                # Сравниваем замены для каждого класса
                 class_new_exchanges = self._compare_class_exchanges(
                     class_name, previous_class_exchanges, current_class_exchanges,
-                    school_data, date  # дата замены нужна для корректного заголовка уведомления
+                    school_data, date
                 )
-                self.logger.info(f"Найдено {len(class_new_exchanges)} новых замен для класса {class_name}")
                 new_exchanges.extend(class_new_exchanges)
 
-            # Сохраняем текущее состояние для следующей проверки
-            self.previous_schedules[school_id] = current_exchanges
-            self.logger.info(f"Состояние замен для школы {school_id} сохранено. Предыдущие классы: {len(previous_exchanges)}, текущие: {len(current_exchanges)}")
+            # Сохраняем текущее состояние только для этой даты
+            by_date[date_str] = current_exchanges
+            self.previous_schedules[school_id] = by_date
 
-            # Сохраняем кэш в файл
-            self.save_cache()
+            if persist:
+                self.save_cache()
 
             self.logger.info(f"Обнаружено {len(new_exchanges)} новых замен всего для школы {school_id}")
             return new_exchanges
