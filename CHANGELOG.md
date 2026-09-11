@@ -114,3 +114,9 @@
 ### P1: обрезка списка пользователей в админке по границе строки
 
 - `admin_callbacks.py::_show_users_with_classes` — усечение `text[:4000]` заменено на рез по границе строки (`rfind('\n')`), чтобы не рвать разметку `*...*`/`` `...` `` → не падает `Can't parse entities`.
+
+### P2: вынос общего кода teacher_menu/room_schedule в EntityMenuHandler
+
+- `handlers/common/entity_menu.py` — новый параметризованный `EntityMenuHandler` + `EntityConfig`: меню, поиск, пагинация, выбор, дневные кнопки «Сегодня/Завтра/Неделя», resolve источника (поиск vs полный список).
+- `teacher_menu.py`/`room_schedule.py` — сведены к тонким обёрткам (~60 строк каждая) с прежней публичной API (callbacks-обработчики не менялись). Объём дублей: 913 → 500 строк суммарно.
+- Юнит-тесты `tests/test_entity_menu.py` (resolve source).
