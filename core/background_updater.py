@@ -81,7 +81,14 @@ class BackgroundUpdater:
             if new_schools_data:
                 # Атомарно обновляем данные
                 self.application.bot_data['schools_data'] = new_schools_data
-                
+
+                # Инвалидируем кэш расписания — иначе пользователи до TTL (10 мин)
+                # видели бы старое расписание после обновления данных
+                cache_service = self.application.bot_data.get('cache_service')
+                if cache_service:
+                    cache_service.clear()
+                    self.logger.info("Кэш расписания очищен после обновления данных")
+
                 # Проверяем замены
                 await self._check_exchange_updates(old_schools_data, new_schools_data)
                 
