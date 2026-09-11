@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes
 
 from config.config import Config
 from services.text_utils import escape_markdown
+from services.user_preferences import UserPreferencesService
 
 
 async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -25,12 +26,22 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Проверяем, является ли пользователь администратором
     is_admin = Config.is_admin(config, user_id)
 
+    # Напоминания об уроках — доступны всем пользователям
+    preferences_service = UserPreferencesService(user_service.db)
+    lesson_reminders_enabled = preferences_service.get_notification_settings(user_id).get('lesson_reminders', False)
+
     # Создаем клавиатуру с настройками
     keyboard = [
         [
             InlineKeyboardButton(
                 f"🔔 Уведомления: {'✅ Вкл' if notifications_enabled else '❌ Выкл'}",
                 callback_data=f"toggle_notifications_{'off' if notifications_enabled else 'on'}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"⏰ Напоминания об уроках: {'✅ Вкл' if lesson_reminders_enabled else '❌ Выкл'}",
+                callback_data=f"toggle_lesson_reminders_{'off' if lesson_reminders_enabled else 'on'}"
             )
         ]
     ]
@@ -53,8 +64,6 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Если пользователь администратор, добавляем настройки уведомлений об обновлениях
     if is_admin:
         # Получаем настройки уведомлений об обновлениях
-        from services.user_preferences import UserPreferencesService
-        preferences_service = UserPreferencesService(user_service.db)
         admin_notifications = preferences_service.get_notification_settings(user_id)
         update_notifications_enabled = admin_notifications.get('update_notifications', False)
 
@@ -141,6 +150,28 @@ async def toggle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer(f"🔔 Уведомления {status_text}")
 
     # Обновляем меню настроек
+    await settings_handler(update, context)
+
+
+async def toggle_lesson_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE, state: str):
+    """Переключает напоминания об уроках (доступно всем пользователям)."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    user_service = context.bot_data.get('user_service')
+
+    if not user_service:
+        await query.answer("❌ Сервис не доступен")
+        return
+
+    preferences_service = UserPreferencesService(user_service.db)
+    if state == 'on':
+        preferences_service.enable_lesson_reminders(user_id)
+        status_text = "включены"
+    else:
+        preferences_service.disable_lesson_reminders(user_id)
+        status_text = "отключены"
+
+    await query.answer(f"⏰ Напоминания об уроках {status_text}")
     await settings_handler(update, context)
 
 

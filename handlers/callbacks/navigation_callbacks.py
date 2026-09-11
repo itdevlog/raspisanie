@@ -20,6 +20,8 @@ class NavigationCallbackHandler:
             await self._handle_room_menu(update, context)
         elif callback_data.startswith("menu_"):
             await self._handle_menu_navigation(update, context, callback_data)
+        elif callback_data.startswith("toggle_lesson_reminders_"):
+            await self._handle_toggle_lesson_reminders(update, context, callback_data)
         elif callback_data.startswith("toggle_notifications_"):
             await self._handle_toggle_notifications(update, context, callback_data)
         elif callback_data.startswith("toggle_update_notifications_"):
@@ -150,6 +152,13 @@ class NavigationCallbackHandler:
 
         state = callback_data.replace("toggle_notifications_", "")
         await toggle_notifications(update, context, state)
+
+    async def _handle_toggle_lesson_reminders(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
+        """Обрабатывает переключение напоминаний об уроках"""
+        from handlers.common.settings import toggle_lesson_reminders
+
+        state = callback_data.replace("toggle_lesson_reminders_", "")
+        await toggle_lesson_reminders(update, context, state)
 
     async def _handle_toggle_update_notifications(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает переключение уведомлений обновлениях"""

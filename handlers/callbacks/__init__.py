@@ -29,6 +29,7 @@ class CallbackRouter:
             'main_menu': NavigationCallbackHandler(),
             'change_class': NavigationCallbackHandler(),
             'toggle_notifications': NavigationCallbackHandler(),
+            'toggle_lesson_reminders': NavigationCallbackHandler(),
             'toggle_update_notifications': NavigationCallbackHandler(),
             'unsubscribe': NavigationCallbackHandler()
         }
@@ -75,6 +76,8 @@ class CallbackRouter:
             return 'show_all'
         elif callback_data.startswith('clear_digit_'):
             return 'clear_digit'
+        elif callback_data.startswith('toggle_lesson_reminders_'):
+            return 'toggle_lesson_reminders'
         elif callback_data.startswith('toggle_notifications_'):
             return 'toggle_notifications'
         elif callback_data.startswith('toggle_update_notifications_'):

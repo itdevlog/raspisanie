@@ -63,3 +63,21 @@ class UserPreferencesService:
         settings = self.get_notification_settings(user_id)
         settings['update_notifications'] = not settings.get('update_notifications', False)
         return self.set_notification_settings(user_id, settings)
+
+    def enable_lesson_reminders(self, user_id: int) -> bool:
+        """Включает напоминания об уроках для пользователя"""
+        settings = self.get_notification_settings(user_id)
+        settings['lesson_reminders'] = True
+        return self.set_notification_settings(user_id, settings)
+
+    def disable_lesson_reminders(self, user_id: int) -> bool:
+        """Отключает напоминания об уроках для пользователя"""
+        settings = self.get_notification_settings(user_id)
+        settings['lesson_reminders'] = False
+        return self.set_notification_settings(user_id, settings)
+
+    def toggle_lesson_reminders(self, user_id: int) -> bool:
+        """Переключает напоминания об уроках для пользователя"""
+        settings = self.get_notification_settings(user_id)
+        settings['lesson_reminders'] = not settings.get('lesson_reminders', False)
+        return self.set_notification_settings(user_id, settings)

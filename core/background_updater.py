@@ -1,6 +1,7 @@
 # core/background_updater.py
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
@@ -8,6 +9,7 @@ from config.config import Config, get_timezone
 from config.schools import get_display_name
 from core.data_loader import DataLoader
 from services.notification_service import NotificationService
+from services.reminder_service import ReminderService
 
 
 class BackgroundUpdater:
@@ -22,6 +24,10 @@ class BackgroundUpdater:
         self.moscow_tz = get_timezone()
         self._update_task = None
         self._update_lock = asyncio.Lock()
+        # Напоминания об уроках: отдельный цикл + дедуп (ключ -> timestamp).
+        self.reminder_service = ReminderService()
+        self._reminder_task = None
+        self.sent_reminders: dict[str, float] = {}
 
     def start_periodic_updates(self):
         """Запускает периодическое обновление внутри event loop бота"""
@@ -31,6 +37,7 @@ class BackgroundUpdater:
 
         self.is_running = True
         self._update_task = asyncio.create_task(self._update_loop())
+        self._reminder_task = asyncio.create_task(self._reminder_loop())
 
         self.logger.info(f"✅ Фоновое обновление запущено (интервал: {self.update_interval} сек)")
 
@@ -39,6 +46,81 @@ class BackgroundUpdater:
         self.is_running = False
         if self._update_task and not self._update_task.done():
             self._update_task.cancel()
+        if self._reminder_task and not self._reminder_task.done():
+            self._reminder_task.cancel()
+
+    def _now(self):
+        """Текущее время в таймзоне приложения (точка подмены в тестах)."""
+        return datetime.now(self.moscow_tz)
+
+    async def _reminder_loop(self):
+        """Цикл напоминаний: раз в минуту проверяет ближайшие уроки."""
+        self.logger.info("⏰ Цикл напоминаний об уроках начал работу")
+        while self.is_running:
+            try:
+                await asyncio.sleep(60)
+                if not self.is_running:
+                    break
+                await self._send_reminders()
+            except asyncio.CancelledError:
+                self.logger.info("🔴 Цикл напоминаний отменён")
+                break
+            except Exception as e:
+                self.logger.error(f"❌ Ошибка в цикле напоминаний: {e}", exc_info=True)
+        self.logger.info("🔴 Цикл напоминаний остановлен")
+
+    async def _send_reminders(self):
+        """Считает и отправляет напоминания, дедуп за 24 часа."""
+        try:
+            bot_data = self.application.bot_data
+            user_service = bot_data.get('user_service')
+            schools_data = bot_data.get('schools_data', {})
+            if not user_service or not schools_data:
+                return
+
+            from services.user_preferences import UserPreferencesService
+
+            users = user_service.get_users_with_classes()
+            user_classes = self.reminder_service.to_user_classes(users)
+
+            preferences_service = UserPreferencesService(user_service.db)
+            enabled = {
+                user['user_id']
+                for user in users
+                if user.get('user_id')
+                and preferences_service.get_notification_settings(user['user_id']).get('lesson_reminders', False)
+            }
+            user_classes = {
+                user_id: target
+                for user_id, target in user_classes.items()
+                if user_id in enabled
+            }
+            if not user_classes:
+                return
+
+            due = self.reminder_service.get_due_reminders_detailed(
+                schools_data, user_classes, self._now()
+            )
+
+            self._cleanup_sent_reminders()
+            notification_service = bot_data.get('notification_service') or self.notification_service
+            for user_id, text, key in due:
+                if key in self.sent_reminders:
+                    continue
+                try:
+                    await notification_service._send_message(bot_data.get('bot') or self.application.bot, user_id, text, parse_mode=None)
+                    self.sent_reminders[key] = time.time()
+                except Exception as e:
+                    self.logger.error(f"Ошибка отправки напоминания {user_id}: {e}")
+                await asyncio.sleep(0.05)
+        except Exception as e:
+            self.logger.error(f"Ошибка в _send_reminders: {e}", exc_info=True)
+
+    def _cleanup_sent_reminders(self):
+        """Удаляет ключи напоминаний старше 24 часов."""
+        cutoff = time.time() - 24 * 60 * 60
+        for key in [k for k, ts in self.sent_reminders.items() if ts < cutoff]:
+            del self.sent_reminders[key]
 
     async def _update_loop(self):
         """Цикл обновления внутри event loop с оффлоадингом синхронного IO в to_thread"""
