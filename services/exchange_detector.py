@@ -6,7 +6,7 @@ import logging
 import json
 import os
 from services.exchange_service import ExchangeService
-from config.config import get_timezone
+from config.config import Config, get_timezone
 
 class ExchangeDetector:
     """Сервис для обнаружения новых замен в расписании"""
