@@ -19,6 +19,8 @@ class RoomCallbackHandler:
             await self._handle_room_pagination(update, context, callback_data)
         elif callback_data == "room_search_pages_info":
             await query.answer("Используйте кнопки навигации по страницам")
+        elif callback_data == "room_pages_info":
+            await query.answer("Используйте кнопки навигации по страницам")
         elif callback_data.startswith("room_search_page_"):
             await self._handle_room_search_pagination(update, context, callback_data)
         elif callback_data.startswith("room_"):

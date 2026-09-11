@@ -33,8 +33,6 @@ class CallbackRouter:
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает все callback'ы через соответствующие обработчики"""
         query = update.callback_query
-        await query.answer()
-        
         callback_data = query.data
         
         # Определяем тип обработчика по префиксу callback_data
@@ -42,6 +40,10 @@ class CallbackRouter:
         handler = self.handlers.get(handler_key)
         
         if handler:
+            # Не отвечаем на query здесь. Ответ вызывает сам обработчик:
+            # query.answer(...) — для тостов-ошибок, edit_message_text — для
+            # успешных действий. Раньше авто-answer в роутере шёл ДО обработчиков
+            # и глушил все их тосты («❌ ...» никогда не показывались).
             await handler.handle(update, context, callback_data)
         else:
             # Если не нашли обработчик, пробуем навигацию как fallback

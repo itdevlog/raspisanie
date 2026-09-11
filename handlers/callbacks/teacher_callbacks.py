@@ -19,6 +19,8 @@ class TeacherCallbackHandler:
             await self._handle_teacher_pagination(update, context, callback_data)
         elif callback_data == "teacher_search_pages_info":
             await query.answer("Используйте кнопки навигации по страницам")
+        elif callback_data == "teacher_pages_info":
+            await query.answer("Используйте кнопки навигации по страницам")
         elif callback_data.startswith("teacher_search_page_"):
             await self._handle_teacher_search_pagination(update, context, callback_data)
         elif callback_data.startswith("teacher_"):
