@@ -6,6 +6,7 @@ import logging
 from config.schools import SCHOOLS_CONFIG
 from services.status_service import StatusService
 from core.data_loader import DataLoader
+from handlers.common.messaging import log_user_error
 
 # Настройка логгера
 admin_logger = logging.getLogger('admin_panel')
@@ -194,12 +195,11 @@ class AdminCallbackHandler:
             admin_logger.info(f"Admin {user_id} executed force update")
             
         except Exception as e:
-            error_msg = f"❌ Ошибка при принудительном обновлении: {str(e)}"
-            await query.edit_message_text(error_msg)
             admin_logger.error(f"Admin {user_id} failed force update: {e}")
-            
+            error_msg = log_user_error("Admin force update failed", e)
+
             # Показываем панель с ошибкой
-            await self._show_admin_panel(update, context, f"Ошибка: {str(e)}")
+            await self._show_admin_panel(update, context, error_msg)
 
     async def _get_schools_status(self, context: ContextTypes.DEFAULT_TYPE) -> dict:
         """Получает статус всех школ"""
@@ -295,7 +295,7 @@ class AdminCallbackHandler:
             admin_logger.info(f"Admin {user_id} viewed users with classes list")
             
         except Exception as e:
-            error_msg = f"❌ Ошибка при получении списка пользователей: {str(e)}"
+            error_msg = log_user_error("Failed to get users with classes", e)
             # Добавляем клавиатуру и для ошибки
             keyboard = [
                 [InlineKeyboardButton("🔙 Назад в админ-панель", callback_data="admin_refresh_panel")]

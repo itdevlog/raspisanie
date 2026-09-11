@@ -12,6 +12,18 @@ logger = logging.getLogger(__name__)
 
 MAX_MESSAGE_LENGTH = 4096
 
+GENERIC_ERROR_MSG = "❌ Произошла непредвиденная ошибка. Попробуйте позже."
+
+
+def log_user_error(message: str, exc: Exception) -> str:
+    """Логирует реальное исключение и возвращает безопасный текст для пользователя.
+
+    Раньше пользователю показывали `str(e)` (утекли внутренности, e.g. пути к БД).
+    Теперь в лог идёт реальная причина, а в чат — общее сообщение.
+    """
+    logger.error(f"{message} - {exc}", exc_info=exc)
+    return GENERIC_ERROR_MSG
+
 
 async def safe_edit_message(query, text: str, reply_markup=None,
                             parse_mode: Optional[str] = 'Markdown') -> None:

@@ -4,7 +4,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from services.schedule_service import ScheduleService
 from config.schools import SCHOOLS_CONFIG, get_display_name
-from handlers.common.messaging import safe_edit_message, paginate
+from handlers.common.messaging import safe_edit_message, paginate, log_user_error
 from typing import List, Union
 
 # Импортируем новый роутер callback'ов
@@ -197,7 +197,7 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
             await send_text(text, reply_markup)
 
     except Exception as e:
-        error_text = f"❌ Ошибка при загрузке списка классов: {str(e)}"
+        error_text = log_user_error("Failed to load class list", e)
         try:
             await send_text(error_text, InlineKeyboardMarkup([]))
         except Exception:
@@ -322,7 +322,7 @@ async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_
         )
 
     except Exception as e:
-        await safe_edit_message(query, f"❌ Ошибка при загрузке списка классов: {str(e)}")
+        await safe_edit_message(query, log_user_error("Failed to load class list", e))
 
 # ========== ФУНКЦИИ ДЛЯ ИНФОРМАЦИИ И ПОМОЩИ ==========
 
@@ -543,7 +543,7 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
             await send_text(text, reply_markup)
 
     except Exception as e:
-        error_text = f"❌ Ошибка при загрузке списка классов: {str(e)}"
+        error_text = log_user_error("Failed to load class list", e)
         try:
             await send_text(error_text, InlineKeyboardMarkup([]))
         except Exception:
@@ -668,7 +668,7 @@ async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_
         )
 
     except Exception as e:
-        await safe_edit_message(query, f"❌ Ошибка при загрузке списка классов: {str(e)}")
+        await safe_edit_message(query, log_user_error("Failed to load class list", e))
 
 # ========== ФУНКЦИИ ДЛЯ ИНФОРМАЦИИ И ПОМОЩИ ==========
 

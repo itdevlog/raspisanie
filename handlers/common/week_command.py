@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 from services.schedule_service import ScheduleService
-from handlers.common.messaging import reply_long_message
+from handlers.common.messaging import reply_long_message, log_user_error
 
 async def week_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /week <класс> - показывает расписание на неделю"""
@@ -80,7 +80,7 @@ async def week_command_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     
     except Exception as e:
         await update.message.reply_text(
-            f"❌ Произошла ошибка при формировании расписания: {str(e)}",
+            log_user_error("Failed to build week schedule", e),
             parse_mode='Markdown'
         )
     

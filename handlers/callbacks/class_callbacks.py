@@ -3,7 +3,7 @@ from telegram import Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from services.schedule_service import ScheduleService
-from handlers.common.messaging import edit_long_message
+from handlers.common.messaging import edit_long_message, log_user_error
 
 class ClassCallbackHandler:
     """Обработчик callback'ов для работы с классами"""
@@ -93,6 +93,6 @@ class ClassCallbackHandler:
             reply_markup = create_error_keyboard()
 
             await query.edit_message_text(
-                f"❌ Произошла ошибка при загрузке расписания:\n{str(e)}",
+                log_user_error("Error loading schedule", e),
                 reply_markup=reply_markup
             )
