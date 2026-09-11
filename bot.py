@@ -20,7 +20,7 @@ from handlers.common.status import status_handler
 from handlers.common.week_command import week_command_handler
 
 # Импорт обработчиков
-from handlers.start import help_handler, start_handler
+from handlers.start import cancel_handler, help_handler, start_handler
 from services.cache_service import CacheService
 from services.notification_service import NotificationService
 from services.state_service import UserStateService
@@ -153,6 +153,7 @@ class ScheduleBot:
     def setup_handlers(self):
         # Команды
         self.application.add_handler(CommandHandler("start", start_handler))
+        self.application.add_handler(CommandHandler("cancel", cancel_handler))
         self.application.add_handler(CommandHandler("help", help_handler))
         self.application.add_handler(CommandHandler("status", status_handler))
         self.application.add_handler(CommandHandler("settings", settings_handler))

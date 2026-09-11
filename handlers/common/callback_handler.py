@@ -8,7 +8,7 @@ from config.schools import SCHOOLS_CONFIG
 
 # Импортируем новый роутер callback'ов
 from handlers.callbacks import callback_handler as new_callback_handler
-from handlers.common.messaging import log_user_error, paginate, safe_edit_message
+from handlers.common.messaging import log_user_error, paginate, reset_user_flow, safe_edit_message
 from services.schedule_service import ScheduleService
 
 
@@ -88,6 +88,9 @@ async def handle_change_class(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Очищаем выбранный класс
     user_service.clear_user_class(user_id)
+
+    # Сбрасываем залипшие флаги поиска/цифру класса перед новым выбором
+    reset_user_flow(context)
 
     # Всегда используем "today" при смене класса
     await show_class_selection(update, context, "today")

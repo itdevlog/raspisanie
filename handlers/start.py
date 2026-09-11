@@ -7,6 +7,7 @@ from handlers.common.menu_builder import (
     build_main_menu_keyboard,
     build_main_menu_text,
 )
+from handlers.common.messaging import reset_user_flow
 from services.status_service import StatusService
 
 
@@ -42,6 +43,11 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = build_main_menu_text(school_status, current_school_id, current_class, welcome=welcome_text)
 
     await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Сбрасывает текущее действие и возвращает в главное меню."""
+    reset_user_flow(context)
+    await start_handler(update, context)
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help - показывает справку"""

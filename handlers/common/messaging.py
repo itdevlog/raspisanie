@@ -85,6 +85,15 @@ def _mark_chunk(chunk: str, i: int, total: int) -> str:
     return chunk
 
 
+def reset_user_flow(context) -> None:
+    """Полностью сбрасывает временное состояние пользователя (флаги поиска, цифра класса, запросы)."""
+    for key in (
+        'waiting_for_teacher_search', 'waiting_for_room_search',
+        'class_digit', 'teacher_search_query', 'room_search_query',
+    ):
+        context.user_data.pop(key, None)
+
+
 def clear_search_flags(context) -> None:
     """Сбрасывает все «залипающие» флаги ожидания поиска.
 
