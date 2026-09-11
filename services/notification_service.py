@@ -152,7 +152,8 @@ class NotificationService:
             return False
         hour = now.hour
         if start == end:
-            return True
+            # Пустое окно (start == end) считается выключенным, а не «тихим весь день»
+            return False
         if start < end:
             return start <= hour < end
         return hour >= start or hour < end
@@ -161,16 +162,19 @@ class NotificationService:
                             max_attempts: int = 3) -> bool:
         """Отправляет сообщение, пережидая Telegram RetryAfter (429).
 
-        Простой анти-флуд: одному чату не чаще, чем раз в `_min_send_interval`.
+        Анти-флуд: одному чату не чаще, чем раз в `_min_send_interval`.
+        Вместо дропа выжидаем остаток интервала и всё равно отправляем —
+        так не теряются легитимные разные сообщения (замены в нескольких
+        школах, подписчики, админ-получатель). Итоговое ожидание ограничено
+        сверху, чтобы массовая рассылка не залипала надолго.
         """
         last_sent_at = getattr(self, '_last_sent_at', None)
         if last_sent_at is None:
             self._last_sent_at = last_sent_at = {}
-        now = time.monotonic()
         interval = getattr(self, '_min_send_interval', 1.0)
-        if now - last_sent_at.get(chat_id, 0.0) < interval:
-            self.logger.warning(f"Анти-флуд: пропуск сообщения для {chat_id}")
-            return False
+        wait = interval - (time.monotonic() - last_sent_at.get(chat_id, 0.0))
+        if wait > 0:
+            await asyncio.sleep(min(wait, 1.0))
         for attempt in range(max_attempts):
             try:
                 await bot.send_message(chat_id=chat_id, text=text, parse_mode=parse_mode)

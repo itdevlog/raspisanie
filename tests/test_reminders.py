@@ -127,6 +127,50 @@ def test_reminder_loop_dedups_and_respects_toggle(monkeypatch):
     assert len(sent) == 1
 
 
+def test_reminder_loop_two_enabled_users_same_class_both_notified(monkeypatch):
+    db = _make_db()
+    us = UserService(db)
+    us.set_user_class(1, '5а', 'school_133')
+    UserPreferencesService(db).set_notification_settings(1, {'lesson_reminders': True})
+    us.set_user_class(2, '5а', 'school_133')
+    UserPreferencesService(db).set_notification_settings(2, {'lesson_reminders': True})
+
+    updater = object.__new__(BackgroundUpdater)
+    import logging
+    updater.logger = logging.getLogger('test')
+    updater._update_lock = __import__('asyncio').Lock()
+    updater.application = SimpleNamespace(
+        bot_data={
+            'user_service': us,
+            'schools_data': {'school_133': _school_data()},
+        },
+        bot=None,
+    )
+    updater.reminder_service = ReminderService()
+    updater.sent_reminders = {}
+
+    sent = []
+
+    async def _fake_send(bot, chat_id, text, parse_mode='Markdown'):
+        sent.append((chat_id, text))
+        return True
+
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)
+
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
+    monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
+    import asyncio
+    asyncio.run(updater._send_reminders())
+
+    # оба включённых пользователя одного класса получают напоминание
+    assert sorted(uid for uid, _ in sent) == [1, 2]
+    assert len(set(updater.sent_reminders)) == 2
+
+    # повторный проход — дедуп по каждому пользователю
+    asyncio.run(updater._send_reminders())
+    assert len(sent) == 2
+
+
 def test_reminder_loop_skips_quiet_hours_but_dedups(monkeypatch):
     db = _make_db()
     us = UserService(db)

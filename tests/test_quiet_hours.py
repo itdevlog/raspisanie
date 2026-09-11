@@ -45,6 +45,14 @@ def test_quiet_hours_same_day_range():
     assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 6, 0, tzinfo=TZ)) is False
 
 
+def test_quiet_hours_start_equals_end_is_not_quiet():
+    svc = NotificationService.__new__(NotificationService)
+    settings = {'quiet_hours': {'enabled': True, 'start': 22, 'end': 22}}
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 22, 0, tzinfo=TZ)) is False
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 3, 0, tzinfo=TZ)) is False
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 12, 0, tzinfo=TZ)) is False
+
+
 def _make_db() -> FileDB:
     d = tempfile.mkdtemp()
     db = FileDB(os.path.join(d, 'database.json'))
@@ -84,23 +92,34 @@ def _fake_bot():
     return _Bot()
 
 
-async def test_send_message_anti_flood_drops_rapid_repeat(monkeypatch):
+async def test_send_message_anti_flood_paces_without_dropping(monkeypatch):
     svc = NotificationService.__new__(NotificationService)
     svc.logger = __import__('logging').getLogger('test')
     svc._last_sent_at = {}
+    # маленький интервал: проверяем пейсинг, не тормозя тест на 1 c
+    svc._min_send_interval = 0.01
     bot = _fake_bot()
 
     assert await svc._send_message(bot, 42, 'first') is True
-    # второй вызов в пределах 1 c — дроп
-    assert await svc._send_message(bot, 42, 'second') is False
-    assert [m[1] for m in bot.sent] == ['first']
+    # второй вызов в пределах интервала не дропается, а выжидает и уходит
+    assert await svc._send_message(bot, 42, 'second') is True
+    assert [m[1] for m in bot.sent] == ['first', 'second']
 
     # другой чат не задет
     assert await svc._send_message(bot, 43, 'other') is True
+    assert [m[0] for m in bot.sent] == [42, 42, 43]
 
-    # по истечении интервала отправка снова проходит
-    svc._last_sent_at[42] -= 2
-    assert await svc._send_message(bot, 42, 'later') is True
+
+async def test_send_message_no_wait_when_interval_zero():
+    svc = NotificationService.__new__(NotificationService)
+    svc.logger = __import__('logging').getLogger('test')
+    svc._last_sent_at = {}
+    svc._min_send_interval = 0
+    bot = _fake_bot()
+
+    assert await svc._send_message(bot, 42, 'a') is True
+    assert await svc._send_message(bot, 42, 'b') is True
+    assert [m[1] for m in bot.sent] == ['a', 'b']
 
 
 async def test_toggle_quiet_hours_handler_roundtrip():

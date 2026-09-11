@@ -19,8 +19,10 @@ class ReminderService:
     def to_user_classes(users: list[dict]) -> dict:
         """Строит карту `user_id -> (school_id, class_name)` из записей users.
 
-        У пользователя может быть несколько школ; берём выбранный класс для
-        каждой школы, чтобы напоминания работали независимо от `current_school`.
+        У пользователя может быть несколько школ. Напоминание — один target на
+        пользователя, поэтому остаётся класс последней школы в порядке обхода
+        `school_classes` (обычно это текущая/последняя выбранная школа).
+        Пользователи без user_id или без классов пропускаются.
         """
         mapping: dict[int, tuple[str, str]] = {}
         for user in users:
@@ -67,8 +69,10 @@ class ReminderService:
     ) -> list[tuple[int, str, str]]:
         """Как `get_due_reminders`, но добавляет стабильный ключ дедупликации.
 
-        Ключ имеет вид `school:class:ГГГГММДД:номер_урока` и не зависит от
-        текста (число минут в тексте меняется каждую минуту).
+        Ключ имеет вид `user:school:class:ГГГГММДД:номер_урока` и не зависит
+        от текста (число минут в тексте меняется каждую минуту). `user_id`
+        входит в ключ, чтобы напоминания разных пользователей одного класса
+        не «съедали» друг друга при дедупликации.
         """
         reminders: list[tuple[int, str, str]] = []
         if not schools_data or not user_classes or now is None:
@@ -111,7 +115,7 @@ class ReminderService:
             due = self._next_lesson_reminder(school_data, schedule, now, window_minutes)
             if due:
                 text, lesson_num = due
-                key = f"{school_id}:{class_name}:{now.strftime('%Y%m%d')}:{lesson_num}"
+                key = f"{user_id}:{school_id}:{class_name}:{now.strftime('%Y%m%d')}:{lesson_num}"
                 reminders.append((user_id, text, key))
 
         return reminders
