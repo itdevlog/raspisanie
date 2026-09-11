@@ -96,7 +96,13 @@ class TeacherCallbackHandler:
                         await handle_teacher_selection(update, context, teacher_name, schedule_type)
                         return
                     else:
-                        await query.answer("❌ Список результатов поиска устарел")
+                        # Список устарел — перерисовываем актуальные результаты вместо мёртвого тоста
+                        from handlers.teachers.teacher_menu import handle_teacher_search_results
+                        await handle_teacher_search_results(
+                            update, context,
+                            context.user_data.get('teacher_search_query', ''),
+                            state_service.get_user_page(user_id, 'search_teachers', 0)
+                        )
                         return
                 else:
                     await query.answer("❌ Сервис состояния не доступен")
@@ -118,7 +124,12 @@ class TeacherCallbackHandler:
                         await handle_teacher_selection(update, context, teacher_name, schedule_type)
                         return
                     else:
-                        await query.answer("❌ Список преподавателей устарел")
+                        # Список устарел — перерисовываем актуальный полный список вместо мёртвого тоста
+                        from handlers.teachers.teacher_menu import show_all_teachers
+                        await show_all_teachers(
+                            update, context,
+                            state_service.get_user_page(user_id, 'teachers', 0)
+                        )
                         return
                 else:
                     await query.answer("❌ Сервис состояния не доступен")

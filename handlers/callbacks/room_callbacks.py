@@ -96,7 +96,13 @@ class RoomCallbackHandler:
                         await handle_room_selection(update, context, room_name, schedule_type)
                         return
                     else:
-                        await query.answer("❌ Список результатов поиска устарел")
+                        # Список устарел — перерисовываем актуальные результаты вместо мёртвого тоста
+                        from handlers.rooms.room_schedule import handle_room_search_results
+                        await handle_room_search_results(
+                            update, context,
+                            context.user_data.get('room_search_query', ''),
+                            state_service.get_user_page(user_id, 'search_rooms', 0)
+                        )
                         return
                 else:
                     await query.answer("❌ Сервис состояния не доступен")
@@ -118,7 +124,12 @@ class RoomCallbackHandler:
                         await handle_room_selection(update, context, room_name, schedule_type)
                         return
                     else:
-                        await query.answer("❌ Список кабинетов устарел")
+                        # Список устарел — перерисовываем актуальный полный список вместо мёртвого тоста
+                        from handlers.rooms.room_schedule import show_all_rooms
+                        await show_all_rooms(
+                            update, context,
+                            state_service.get_user_page(user_id, 'rooms', 0)
+                        )
                         return
                 else:
                     await query.answer("❌ Сервис состояния не доступен")
