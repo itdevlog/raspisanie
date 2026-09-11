@@ -16,6 +16,26 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает все callback-и от инлайн-клавиатур (перенаправляет в новый роутер)"""
     await new_callback_handler(update, context)
 
+
+def parse_all_classes_page(callback_data: str):
+    """Разбирает 'all_classes_page_{type}_{page}' -> (schedule_type, page).
+
+    Раньше пагинация теряла тип расписания, и после первой страницы
+    список классов молча переключался на «сегодня». Теперь тип кодируется
+    в callback_data.
+    """
+    prefix = 'all_classes_page_'
+    if not callback_data.startswith(prefix):
+        return None
+    rest = callback_data[len(prefix):]
+    schedule_type, sep, page_str = rest.rpartition('_')
+    if not sep or schedule_type not in ('today', 'tomorrow', 'week'):
+        return None
+    try:
+        return schedule_type, int(page_str)
+    except ValueError:
+        return None
+
 # ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ СОЗДАНИЯ КЛАВИАТУР ==========
 
 def create_class_navigation_keyboard(class_name: str, schedule_type: str) -> InlineKeyboardMarkup:
@@ -266,6 +286,7 @@ async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_
                 state_service.set_user_list(user_id, 'all_classes', available_classes)
 
         page, classes_on_page = paginate(available_classes, page, per_page=60)
+        back_schedule = schedule_type or "today"
 
         # Создаем клавиатуру со всеми классами (группируем по цифрам)
         keyboard = []
@@ -293,15 +314,16 @@ async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_
         total_pages = (total_classes + 60 - 1) // 60
         pagination_buttons = []
         if page > 0:
-            pagination_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data=f"all_classes_page_{page-1}"))
+            pagination_buttons.append(InlineKeyboardButton(
+                "◀️ Назад", callback_data=f"all_classes_page_{back_schedule}_{page-1}"))
         pagination_buttons.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="all_classes_pages_info"))
         if page < total_pages - 1:
-            pagination_buttons.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"all_classes_page_{page+1}"))
+            pagination_buttons.append(InlineKeyboardButton(
+                "Вперёд ▶️", callback_data=f"all_classes_page_{back_schedule}_{page+1}"))
         if pagination_buttons:
             keyboard.append(pagination_buttons)
 
         # Кнопки навигации
-        back_schedule = schedule_type or "today"
         keyboard.append([
             InlineKeyboardButton("🔙 Назад", callback_data=f"menu_{back_schedule}"),
             InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
