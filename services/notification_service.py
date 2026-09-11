@@ -208,9 +208,24 @@ class NotificationService:
             if not subscribers:
                 return 0
 
+            # Тихие часы: читаем настройки подписчиков через UserPreferencesService.
+            # Если user_service недоступен — фильтр пропускаем (best-effort).
+            from services.user_preferences import UserPreferencesService
+
+            user_service = context.bot_data.get('user_service')
+            db = getattr(user_service, 'db', None)
+            preferences_service = UserPreferencesService(db) if db is not None else None
+            now = self._now()
+
             sent = 0
             for user_id in subscribers:
                 try:
+                    if preferences_service is not None:
+                        settings = preferences_service.get_notification_settings(user_id)
+                        if self._is_quiet_hours(settings, now):
+                            # Не шлём и не считаем доставленным; сообщение не потребляем
+                            self.logger.info(f"Тихие часы: пропуск уведомления подписчику {user_id}")
+                            continue
                     if await self._send_message(context.bot, user_id, text, parse_mode=parse_mode):
                         sent += 1
                         await asyncio.sleep(0.05)

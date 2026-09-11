@@ -219,6 +219,60 @@ def test_reminder_loop_skips_quiet_hours_but_dedups(monkeypatch):
     assert sent == []
 
 
+def test_reminder_loop_does_not_mark_sent_on_send_failure(monkeypatch):
+    db = _make_db()
+    us = UserService(db)
+    us.set_user_class(1, '5а', 'school_133')
+    UserPreferencesService(db).set_notification_settings(1, {'lesson_reminders': True})
+
+    updater = object.__new__(BackgroundUpdater)
+    import logging
+    updater.logger = logging.getLogger('test')
+    updater._update_lock = __import__('asyncio').Lock()
+    updater.application = SimpleNamespace(
+        bot_data={
+            'user_service': us,
+            'schools_data': {'school_133': _school_data()},
+        },
+        bot=None,
+    )
+    updater.reminder_service = ReminderService()
+    updater.sent_reminders = {}
+
+    async def _fake_send(bot, chat_id, text, parse_mode='Markdown'):
+        return False
+
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)
+
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
+    monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
+    import asyncio
+    asyncio.run(updater._send_reminders())
+
+    # отправка не удалась — ключ не помечен, напоминание не потеряно
+    assert updater.sent_reminders == {}
+
+
+def test_sent_reminders_persist_across_restart(tmp_path, monkeypatch):
+    from config.config import Config
+
+    monkeypatch.setattr(Config, 'DB_PATH', str(tmp_path / 'database.json'), raising=False)
+    updater = object.__new__(BackgroundUpdater)
+    import logging
+    updater.logger = logging.getLogger('test')
+    updater.sent_reminders = {'k1': __import__('time').time()}
+    updater.sent_reminders_file = updater._get_sent_reminders_file()
+    updater._save_sent_reminders()
+
+    restarted = object.__new__(BackgroundUpdater)
+    restarted.logger = logging.getLogger('test')
+    restarted.sent_reminders = {}
+    restarted.sent_reminders_file = restarted._get_sent_reminders_file()
+    restarted._load_sent_reminders()
+
+    assert 'k1' in restarted.sent_reminders
+
+
 def test_lesson_reminders_toggle_roundtrip():
     db = _make_db()
     prefs = UserPreferencesService(db)

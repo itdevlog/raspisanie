@@ -1,6 +1,9 @@
 # core/background_updater.py
 import asyncio
+import hashlib
+import json
 import logging
+import os
 import time
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -28,6 +31,10 @@ class BackgroundUpdater:
         self.reminder_service = ReminderService()
         self._reminder_task = None
         self.sent_reminders: dict[str, float] = {}
+        self.sent_reminders_file = self._get_sent_reminders_file()
+        self._load_sent_reminders()
+        # Дедуп уведомлений подписчиков преподавателей/кабинетов (ключ -> timestamp).
+        self.sent_entity_notifications: dict[str, float] = {}
 
     def start_periodic_updates(self):
         """Запускает периодическое обновление внутри event loop бота"""
@@ -113,11 +120,19 @@ class BackgroundUpdater:
                 settings = preferences_service.get_notification_settings(user_id)
                 if NotificationService._is_quiet_hours(settings, now):
                     self.sent_reminders[key] = time.time()
+                    self._save_sent_reminders()
                     self.logger.info(f"Тихие часы: пропуск напоминания для {user_id}")
                     continue
                 try:
-                    await notification_service._send_message(bot, user_id, text, parse_mode=None)
-                    self.sent_reminders[key] = time.time()
+                    delivered = await notification_service._send_message(
+                        bot, user_id, text, parse_mode=None
+                    )
+                    if delivered:
+                        self.sent_reminders[key] = time.time()
+                        self._save_sent_reminders()
+                    else:
+                        # Реальная ошибка отправки — не помечаем, чтобы повторить позже
+                        self.logger.warning(f"Напоминание {user_id} не доставлено, будет повтор")
                 except Exception as e:
                     self.logger.error(f"Ошибка отправки напоминания {user_id}: {e}")
                 await asyncio.sleep(0.05)
@@ -127,8 +142,57 @@ class BackgroundUpdater:
     def _cleanup_sent_reminders(self):
         """Удаляет ключи напоминаний старше 24 часов."""
         cutoff = time.time() - 24 * 60 * 60
-        for key in [k for k, ts in self.sent_reminders.items() if ts < cutoff]:
+        stale = [k for k, ts in self.sent_reminders.items() if ts < cutoff]
+        for key in stale:
             del self.sent_reminders[key]
+        if stale:
+            self._save_sent_reminders()
+
+    @staticmethod
+    def _get_sent_reminders_file() -> str:
+        """Путь к кэшу отправленных напоминаний в общей data-директории."""
+        db_path = Config().DB_PATH
+        data_dir = os.path.dirname(db_path) or './data'
+        return os.path.join(data_dir, 'sent_reminders.json')
+
+    def _load_sent_reminders(self):
+        """Загружает кэш отправленных напоминаний, отбрасывая записи старше 24 ч.
+
+        Дедуп напоминаний переживает рестарт внутри окна напоминания — иначе
+        бот, перезапущенный за пару минут до урока, прислал бы напоминание снова.
+        """
+        try:
+            if os.path.exists(self.sent_reminders_file):
+                with open(self.sent_reminders_file, encoding='utf-8') as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    self.sent_reminders = {
+                        str(k): float(v) for k, v in data.items()
+                    }
+            self._cleanup_sent_reminders()
+        except Exception as e:
+            self.logger.error(f"Ошибка загрузки кэша напоминаний: {e}")
+            self.sent_reminders = {}
+
+    def _save_sent_reminders(self):
+        """Атомарно сохраняет кэш отправленных напоминаний."""
+        try:
+            path = getattr(self, 'sent_reminders_file', None)
+            if not path:
+                return
+            os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+            tmp = f"{path}.tmp"
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(self.sent_reminders, f, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception as e:
+            self.logger.error(f"Ошибка сохранения кэша напоминаний: {e}")
+
+    def _cleanup_sent_entity_notifications(self):
+        """Удаляет ключи уведомлений подписчиков старше 24 часов."""
+        cutoff = time.time() - 24 * 60 * 60
+        for key in [k for k, ts in self.sent_entity_notifications.items() if ts < cutoff]:
+            del self.sent_entity_notifications[key]
 
     async def _update_loop(self):
         """Цикл обновления внутри event loop с оффлоадингом синхронного IO в to_thread"""
@@ -399,12 +463,31 @@ class BackgroundUpdater:
         except Exception as e:
             self.logger.error(f"Ошибка в проверке обновлений замен: {e}")
 
+    @staticmethod
+    def _entity_exchanges_signature(class_exchanges: list, kind: str, name: str) -> str:
+        """Стабильная подпись замен, ссылающихся на конкретного преподавателя/кабинет."""
+        field = 'new_teacher' if kind == 'teacher' else 'new_room'
+        parts = []
+        for ex in class_exchanges:
+            if (ex.get(field) or '').strip() != name:
+                continue
+            parts.append(
+                f"{ex.get('lesson_num', '')}_{ex.get('new_subject', '')}_"
+                f"{ex.get('new_teacher', '')}_{ex.get('new_room', '')}_{ex.get('is_cancelled', '')}"
+            )
+        return '|'.join(parts)
+
     async def _notify_entity_subscribers(self, context, notification_service, school_id: str,
                                          class_name: str, class_exchanges: list, date) -> None:
         """Best-effort уведомление подписчиков новых преподавателей/кабинетов.
 
         Для каждой замены с непустым `new_teacher`/`new_room` шлём подписчикам
         текст уведомления о замене. Ошибки не влияют на детекцию замен.
+
+        Дедуп за 24 часа: и периодический цикл, и ручной `/check_exchanges`
+        передают полный текущий набор замен, поэтому без ключа подписчики
+        получали бы спам на каждом запуске. Ключ включает подпись замен,
+        ссылающихся на сущность, — новая замена снова уведомит.
         """
         try:
             if not notification_service or not hasattr(notification_service, 'notify_subscribers'):
@@ -414,6 +497,9 @@ class BackgroundUpdater:
             if not text:
                 return
 
+            self._cleanup_sent_entity_notifications()
+            date_str = date.strftime('%Y%m%d') if hasattr(date, 'strftime') else 'unknown'
+
             seen: set[tuple[str, str]] = set()
             for exchange in class_exchanges:
                 for kind, field in (('teacher', 'new_teacher'), ('room', 'new_room')):
@@ -421,10 +507,17 @@ class BackgroundUpdater:
                     if not name or (kind, name) in seen:
                         continue
                     seen.add((kind, name))
+
+                    signature = self._entity_exchanges_signature(class_exchanges, kind, name)
+                    digest = hashlib.md5(signature.encode()).hexdigest()[:8]
+                    key = f"{school_id}:{kind}:{name}:{date_str}:{digest}"
+                    if key in self.sent_entity_notifications:
+                        continue
                     try:
                         await notification_service.notify_subscribers(
                             context, school_id, kind, name, text
                         )
+                        self.sent_entity_notifications[key] = time.time()
                     except Exception as e:
                         self.logger.error(f"Ошибка уведомления подписчиков {kind} {name}: {e}")
         except Exception as e:

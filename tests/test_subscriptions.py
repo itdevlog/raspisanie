@@ -2,6 +2,7 @@
 """Тесты подписок на преподавателей/кабинеты и уведомлений подписчикам."""
 import os
 import tempfile
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +10,8 @@ import pytest
 from database.file_db import FileDB
 from services.notification_service import NotificationService
 from services.subscription_service import SubscriptionService
+from services.user_preferences import UserPreferencesService
+from services.user_service import UserService
 
 
 def _svc():
@@ -173,6 +176,70 @@ async def test_force_check_exchanges_notifies_entity_subscribers(monkeypatch):
     assert len(calls) == 1
     assert calls[0][0] == 'school_133'
     assert calls[0][1] == '5А'
+
+
+@pytest.mark.asyncio
+async def test_notify_subscribers_skips_quiet_hours(monkeypatch):
+    import pytz
+
+    d = tempfile.mkdtemp()
+    db = FileDB(os.path.join(d, 'database.json'))
+    us = UserService(db)
+    UserPreferencesService(db).set_notification_settings(7, {
+        'quiet_hours': {'enabled': True, 'start': 22, 'end': 7},
+    })
+    s = SubscriptionService(db)
+    s.subscribe(7, 'school_133', 'teacher', 'Иванов')
+    s.subscribe(8, 'school_133', 'teacher', 'Иванов')
+
+    bot = _FakeBot()
+    svc = NotificationService.__new__(NotificationService)
+    svc.logger = __import__('logging').getLogger('test')
+    svc._min_send_interval = 0
+    svc._last_sent_at = {}
+    svc.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+    monkeypatch.setattr(
+        svc, '_now',
+        lambda: datetime(2026, 9, 11, 23, 0, tzinfo=pytz.timezone('Asia/Yekaterinburg')),
+        raising=False,
+    )
+
+    context = SimpleNamespace(
+        bot=bot, bot_data={'subscription_service': s, 'user_service': us})
+    count = await svc.notify_subscribers(context, 'school_133', 'teacher', 'Иванов', 'Текст')
+
+    assert count == 1
+    assert [cid for cid, _ in bot.sent] == [8]
+
+
+@pytest.mark.asyncio
+async def test_notify_entity_subscribers_dedups_same_entity_date(monkeypatch):
+    from core.background_updater import BackgroundUpdater
+
+    calls = []
+
+    class _Notif:
+        def _format_exchange_notification(self, class_name, exchanges, date):
+            return 'Замена'
+
+        async def notify_subscribers(self, context, school_id, kind, name, text):
+            calls.append((school_id, kind, name))
+            return 1
+
+    app = SimpleNamespace(bot_data={}, bot=None)
+    updater = BackgroundUpdater(app)
+    date = datetime(2026, 9, 11)
+    exchanges = [{'class_name': '5А', 'new_teacher': 'Иванов', 'new_room': '101'}]
+
+    await updater._notify_entity_subscribers(
+        SimpleNamespace(), _Notif(), 'school_133', '5А', exchanges, date)
+    await updater._notify_entity_subscribers(
+        SimpleNamespace(), _Notif(), 'school_133', '5А', exchanges, date)
+
+    assert calls == [
+        ('school_133', 'teacher', 'Иванов'),
+        ('school_133', 'room', '101'),
+    ]
 
 
 @pytest.mark.asyncio
