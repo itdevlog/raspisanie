@@ -18,9 +18,9 @@ class UserService:
     def set_user_school(self, user_id: int, school_id: str) -> bool:
         """Устанавливает школу для пользователя, сохраняя остальные поля.
 
-        Раньше документ пересобирался по white-list (user_id, current_school,
-        school_classes, created_at), из-за чего терялись notification_settings
-        и любые будущие поля. Теперь — merge поверх существующего документа.
+        Обновляем существующий документ (find → copy → точечные поля), а не собираем
+        его заново: так код не зависит от того, мержит ли бэкенд поля при update_one,
+        и любые будущие поля пользователя гарантированно сохраняются.
         """
         from config.schools import SCHOOLS_CONFIG
         school = SCHOOLS_CONFIG.get(school_id)
