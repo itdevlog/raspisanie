@@ -197,3 +197,8 @@
 ### P2: декоратор @requires_school
 
 - Новый `handlers/common/requires_school.py` — убирает дублирующиеся проверки сервисов/школы; подкладывает в `context` ключи `user_service`, `current_school_id`, `school_data`. Применён к `school_info_handler` и `week_command_handler`; юнит-тесты в `tests/test_requires_school.py`.
+
+### Тесты: exchange round-trip и callback роутинг
+
+- `tests/test_exchange_detector.py` — round-trip JSON строковых ключей урока (п.5), новые замены.
+- `tests/test_callback_router.py` — параметризованные случаи `_get_handler_key` (16 префиксов).

@@ -52,11 +52,7 @@
 
 Есть pytest (39 тестов). Осталось:
 
-- Юнит (чистые функции):
-  - `ExchangeDetector._compare_class_exchanges` с раунд-трипом через `json.dumps/loads` (ловит старую проблему строковых ключей);
-  - роутинг callback-префиксов `_get_handler_key`.
-- Интеграционные (pytest-asyncio + мок): ввод несуществующего класса текстом, клик по результату поиска, двойное нажатие «Обновить», `admin_force_update`.
-- Инструменты: ruff, mypy, CI.
+- Юнит: добавлены `test_exchange_detector.py` (round-trip строковых ключей), `test_callback_router.py` (префиксы). Осталось: интеграционные (pytest-asyncio): ввод несуществующего класса текстом, клик по результату поиска, двойное нажатие «Обновить», `admin_force_update`; инструменты ruff/mypy/CI.
 
 ---
 
