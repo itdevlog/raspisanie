@@ -16,33 +16,33 @@ class UserService:
         return DEFAULT_SCHOOL_ID
 
     def set_user_school(self, user_id: int, school_id: str) -> bool:
-        """Устанавливает школу для пользователя"""
+        """Устанавливает школу для пользователя, сохраняя остальные поля.
+
+        Раньше документ пересобирался по white-list (user_id, current_school,
+        school_classes, created_at), из-за чего терялись notification_settings
+        и любые будущие поля. Теперь — merge поверх существующего документа.
+        """
         from config.schools import SCHOOLS_CONFIG
         school = SCHOOLS_CONFIG.get(school_id)
         if not school or not school.get('active', True):
             return False
 
-        # Получаем текущие данные пользователя
-        user_data = self.users_collection.find_one({'user_id': user_id}) or {}
-
-        # Обновляем только нужные поля
-        update_data = {
-            'user_id': user_id,
-            'current_school': school_id,
-            'updated_at': datetime.now().isoformat()
-        }
-
-        # Сохраняем существующие данные
-        if 'school_classes' in user_data:
-            update_data['school_classes'] = user_data['school_classes']
-        if 'created_at' in user_data:
-            update_data['created_at'] = user_data['created_at']
+        user = self.users_collection.find_one({'user_id': user_id})
+        if user:
+            user_data = user.copy()
         else:
-            update_data['created_at'] = datetime.now().isoformat()
+            user_data = {
+                'user_id': user_id,
+                'school_classes': {},
+                'created_at': datetime.now().isoformat(),
+            }
+
+        user_data['current_school'] = school_id
+        user_data['updated_at'] = datetime.now().isoformat()
 
         self.users_collection.update_one(
             {'user_id': user_id},
-            update_data,
+            user_data,
             upsert=True
         )
         return True
