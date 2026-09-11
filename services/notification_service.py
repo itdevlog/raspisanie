@@ -252,6 +252,10 @@ class NotificationService:
             is_cancelled = exchange.get('is_cancelled', False)
 
             # Формируем строку урока
+            if exchange.get('removed'):
+                lesson_line = f"↩️ {lesson_num}. {original_subject} — *замена снята*"
+                message.append(lesson_line)
+                continue
             if is_cancelled:
                 lesson_line = f"❌ {lesson_num}. {original_subject} - *ОТМЕНЕНО*"
             else:

@@ -170,10 +170,18 @@ class ExchangeDetector:
             try:
                 # Единый формат ключа — строка
                 key = str(int(lesson_num_str))
+                formatted = self._format_exchange_for_notification(
+                    class_name, {'lesson_num': key, 'data': exchange_data,
+                                 'is_cancelled': exchange_data.get('s') == 'F'},
+                    school_data, date
+                )
+                # timestamp — datetime, не сериализуется в JSON-кэш замен
+                formatted.pop('timestamp', None)
                 exchanges[key] = {
                     'lesson_num': key,
                     'data': exchange_data,
-                    'is_cancelled': exchange_data.get('s') == 'F'
+                    'is_cancelled': exchange_data.get('s') == 'F',
+                    'formatted': formatted
                 }
             except (ValueError, KeyError) as e:
                 self.logger.warning(f"Error parsing exchange for class {class_name}, lesson {lesson_num_str}: {e}")
@@ -196,6 +204,21 @@ class ExchangeDetector:
                 )
                 if formatted_exchange:
                     new_exchanges.append(formatted_exchange)
+
+        # Симметричный diff: замены, исчезнувшие из текущего состояния
+        for lesson_num, previous_exchange in previous.items():
+            if lesson_num in current:
+                continue
+            formatted = previous_exchange.get('formatted') or {}
+            new_exchanges.append({
+                'class_name': class_name,
+                'lesson_num': int(lesson_num),
+                'removed': True,
+                'original_subject': formatted.get('original_subject', f'Урок {lesson_num}'),
+                'new_subject': '', 'new_teacher': '', 'new_room': '',
+                'is_cancelled': False,
+                'timestamp': date,
+            })
 
         return new_exchanges
 
