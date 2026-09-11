@@ -17,6 +17,22 @@ admin_logger = logging.getLogger('admin_panel')
 class AdminCallbackHandler:
     """Обработчик callback'ов для админ-панели"""
 
+    def __init__(self):
+        self._refresh_lock = asyncio.Lock()
+
+    def _invalidate_data(self, context: ContextTypes.DEFAULT_TYPE):
+        """Единая инвалидация после ручной замены schools_data."""
+        updater = context.bot_data.get('background_updater')
+        if updater and hasattr(updater, '_on_data_replaced'):
+            updater._on_data_replaced()
+        else:
+            cache_service = context.bot_data.get('cache_service')
+            if cache_service:
+                cache_service.clear()
+            notification_service = context.bot_data.get('notification_service')
+            if notification_service and hasattr(notification_service, 'reset_user_class_index'):
+                notification_service.reset_user_class_index()
+
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает admin_* callback'ы"""
         query = update.callback_query
@@ -146,34 +162,40 @@ class AdminCallbackHandler:
         query = update.callback_query
         user_id = update.effective_user.id
 
-        await query.edit_message_text("🔄 *Обновление данных всех школ...*\n\nЭто может занять несколько секунд.", parse_mode='Markdown')
+        if self._refresh_lock.locked():
+            await query.answer("⏳ Обновление уже выполняется")
+            return
 
-        chat_id = update.effective_chat.id if update.effective_chat else None
-        loader = DataLoader()
-        # Оффлоадим синхронные HTTP-запросы в отдельный поток, чтобы не блокировать event loop
-        if chat_id:
-            schools_data = await self._typing_until(chat_id, context, asyncio.to_thread(loader.load_all_schools_data))
-        else:  # pragma: no cover
-            schools_data = await asyncio.to_thread(loader.load_all_schools_data)
+        async with self._refresh_lock:
+            await query.edit_message_text("🔄 *Обновление данных всех школ...*\n\nЭто может занять несколько секунд.", parse_mode='Markdown')
 
-        if schools_data:
-            context.bot_data['schools_data'] = schools_data
-            admin_logger.info(f"Admin {user_id} manually refreshed all schools data")
+            chat_id = update.effective_chat.id if update.effective_chat else None
+            loader = DataLoader()
+            # Оффлоадим синхронные HTTP-запросы в отдельный поток, чтобы не блокировать event loop
+            if chat_id:
+                schools_data = await self._typing_until(chat_id, context, asyncio.to_thread(loader.load_all_schools_data))
+            else:  # pragma: no cover
+                schools_data = await asyncio.to_thread(loader.load_all_schools_data)
 
-            total_count = len([s for s in SCHOOLS_CONFIG.values() if s.get('active', True)])
-            # Считаем «успешно обновлёнными» только загруженные школы со свежими данными
-            status_service = StatusService(schools_data)
-            fresh_count = sum(
-                1 for sid in schools_data
-                if "Актуально" in status_service.get_school_status(sid)['status']
-            )
-            await self._show_admin_panel(
-                update, context,
-                f"✅ Обновлено {fresh_count}/{total_count} школ (свежих данных)"
-            )
-        else:
-            admin_logger.error(f"Admin {user_id} failed to refresh schools data")
-            await self._show_admin_panel(update, context, "❌ Не удалось обновить данные школ")
+            if schools_data:
+                context.bot_data['schools_data'] = schools_data
+                self._invalidate_data(context)
+                admin_logger.info(f"Admin {user_id} manually refreshed all schools data")
+
+                total_count = len([s for s in SCHOOLS_CONFIG.values() if s.get('active', True)])
+                # Считаем «успешно обновлёнными» только загруженные школы со свежими данными
+                status_service = StatusService(schools_data)
+                fresh_count = sum(
+                    1 for sid in schools_data
+                    if "Актуально" in status_service.get_school_status(sid)['status']
+                )
+                await self._show_admin_panel(
+                    update, context,
+                    f"✅ Обновлено {fresh_count}/{total_count} школ (свежих данных)"
+                )
+            else:
+                admin_logger.error(f"Admin {user_id} failed to refresh schools data")
+                await self._show_admin_panel(update, context, "❌ Не удалось обновить данные школ")
 
     async def _refresh_school(self, update: Update, context: ContextTypes.DEFAULT_TYPE, school_id: str):
         """Обновляет данные конкретной школы"""
@@ -185,23 +207,29 @@ class AdminCallbackHandler:
             await query.answer("❌ Школа не найдена")
             return
 
-        school_name = school_config.get('name', school_id)
-        await query.edit_message_text(f"🔄 *Обновление данных {school_name}...*", parse_mode='Markdown')
+        if self._refresh_lock.locked():
+            await query.answer("⏳ Обновление уже выполняется")
+            return
 
-        loader = DataLoader()
-        # Оффлоадим синхронный HTTP-запрос в отдельный поток, чтобы не блокировать event loop
-        school_data = await asyncio.to_thread(loader.load_school_data, school_config)
+        async with self._refresh_lock:
+            school_name = school_config.get('name', school_id)
+            await query.edit_message_text(f"🔄 *Обновление данных {school_name}...*", parse_mode='Markdown')
 
-        if school_data:
-            if 'schools_data' not in context.bot_data:
-                context.bot_data['schools_data'] = {}
-            context.bot_data['schools_data'][school_id] = school_data
+            loader = DataLoader()
+            # Оффлоадим синхронный HTTP-запрос в отдельный поток, чтобы не блокировать event loop
+            school_data = await asyncio.to_thread(loader.load_school_data, school_config)
 
-            admin_logger.info(f"Admin {user_id} manually refreshed school {school_id}")
-            await self._show_admin_panel(update, context, f"✅ {school_name} обновлена")
-        else:
-            admin_logger.error(f"Admin {user_id} failed to refresh school {school_id}")
-            await self._show_admin_panel(update, context, f"❌ Не удалось обновить {school_name}")
+            if school_data:
+                if 'schools_data' not in context.bot_data:
+                    context.bot_data['schools_data'] = {}
+                context.bot_data['schools_data'][school_id] = school_data
+                self._invalidate_data(context)
+
+                admin_logger.info(f"Admin {user_id} manually refreshed school {school_id}")
+                await self._show_admin_panel(update, context, f"✅ {school_name} обновлена")
+            else:
+                admin_logger.error(f"Admin {user_id} failed to refresh school {school_id}")
+                await self._show_admin_panel(update, context, f"❌ Не удалось обновить {school_name}")
 
     async def _force_update(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Принудительное обновление данных всех школ"""
@@ -221,10 +249,17 @@ class AdminCallbackHandler:
             # Выполняем обновление
             chat_id = update.effective_chat.id if update.effective_chat else None
             if chat_id:
-                await self._typing_until(
+                ran = await self._typing_until(
                     chat_id, context, background_updater._perform_update())
             else:  # pragma: no cover
-                await background_updater._perform_update()
+                ran = await background_updater._perform_update()
+
+            if not ran:
+                await self._show_admin_panel(
+                    update, context,
+                    "⏳ Обновление уже выполняется в фоне. Дождитесь завершения."
+                )
+                return
 
             # Получаем обновленный статус школ
             schools_status = await self._get_schools_status(context)

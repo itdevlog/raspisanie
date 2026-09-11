@@ -86,13 +86,18 @@ class BackgroundUpdater:
         if notification_service and hasattr(notification_service, 'reset_user_class_index'):
             notification_service.reset_user_class_index()
 
-    async def _perform_update(self):
-        """Обёртка с блокировкой: не допускает одновременный запуск обновлений."""
+    async def _perform_update(self) -> bool:
+        """Обёртка с блокировкой: не допускает одновременный запуск обновлений.
+
+        Возвращает True, если обновление реально выполнялось, и False, если
+        был пропуск из-за уже идущего обновления.
+        """
         if self._update_lock.locked():
             self.logger.warning("Обновление уже выполняется — пропуск повторного запуска")
-            return
+            return False
         async with self._update_lock:
             await self._perform_update_locked()
+        return True
 
     async def _perform_update_locked(self):
         """Выполняет обновление данных и проверяет замены"""
