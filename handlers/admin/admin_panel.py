@@ -9,19 +9,23 @@ _admin_handler = AdminCallbackHandler()
 
 
 async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команды /admin и /stats: делегирует в единую реализацию AdminCallbackHandler."""
+    """Команда /admin: делегирует в единую реализацию AdminCallbackHandler."""
     user_id = update.effective_user.id
 
     if not _is_admin(user_id, context):
         await update.message.reply_text("❌ У вас нет прав доступа к админ-панели")
         return
 
-    args = getattr(context, 'args', None)
-    if args and args[0] == 'stats':
-        await _admin_handler._show_statistics(update, context)
-        return
-
     await _admin_handler.show_panel(update, context)
+
+
+async def stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /stats: статистика пользователей."""
+    user_id = update.effective_user.id
+    if not _is_admin(user_id, context):
+        await update.message.reply_text("❌ У вас нет прав доступа к админ-панели")
+        return
+    await _admin_handler._show_statistics(update, context)
 
 
 def _is_admin(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -35,4 +39,4 @@ def _is_admin(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
 def setup_admin_handlers(application):
     """Регистрирует обработчики админ-панели"""
     application.add_handler(CommandHandler("admin", admin_panel_handler))
-    application.add_handler(CommandHandler("stats", admin_panel_handler))
+    application.add_handler(CommandHandler("stats", stats_handler))

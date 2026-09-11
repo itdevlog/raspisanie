@@ -13,6 +13,7 @@ from services.status_service import StatusService
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start - показывает главное меню"""
+    reset_user_flow(context)
     user = update.effective_user
     user_service = context.bot_data.get('user_service')
     schools_data = context.bot_data.get('schools_data', {})

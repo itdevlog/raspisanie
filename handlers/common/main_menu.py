@@ -3,14 +3,13 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from handlers.common.menu_builder import build_main_menu_keyboard, build_main_menu_text
-from handlers.common.messaging import clear_search_flags
+from handlers.common.messaging import reset_user_flow
 from services.status_service import StatusService
 
 
 async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает главное меню с инлайн-клавиатурой"""
-    clear_search_flags(context)
-    context.user_data.pop('class_digit', None)
+    reset_user_flow(context)
     user_id = update.effective_user.id
     user_service = context.bot_data.get('user_service')
 

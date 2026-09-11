@@ -25,11 +25,6 @@ class ClassCallbackHandler:
         schedule_type = parts[1]  # today, tomorrow, week
         class_name = '_'.join(parts[2:])  # на случай, если в названии класса есть _
 
-        # Дополнительная проверка: если class_name содержит "digit", это ошибка
-        if "digit" in class_name:
-            await query.answer("❌ Ошибка выбора класса")
-            return
-
         await self.handle_class_selection(update, context, class_name, schedule_type)
 
     async def handle_class_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE,  # ← УБРАТЬ нижнее подчеркивание
@@ -54,9 +49,6 @@ class ClassCallbackHandler:
 
         # Сохраняем класс для текущей школы пользователя
         user_service.set_user_class(user_id, class_name, current_school_id)
-
-        # Сохраняем тип расписания для будущего использования
-        context.user_data['last_schedule_type'] = schedule_type
 
         # Показываем сообщение о загрузке
         await query.edit_message_text("🔄 Загружаем расписание...")

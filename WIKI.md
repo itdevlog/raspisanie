@@ -85,7 +85,7 @@ Telegram-бот для просмотра школьного расписани�
 | [handlers/common/requires_school.py](handlers/common/requires_school.py) | Декоратор `@requires_school` — убирает дублирующиеся проверки сервисов/школы. |
 | [services/status_service.py](services/status_service.py) | Проверяет актуальность данных по времени экспорта из Nikasoft. |
 | [services/state_service.py](services/state_service.py) | Временное хранилище состояний пользователей (FSM-подобное). |
-| [handlers/start.py](handlers/start.py) | `/start` и `/help`. |
+| [handlers/start.py](handlers/start.py) | `/start`, `/help` и `/cancel`. |
 | [handlers/common/main_menu.py](handlers/common/main_menu.py) | Отрисовка главного меню. |
 | [handlers/common/callback_handler.py](handlers/common/callback_handler.py) | **Активный** callback-роутер. Делегирует в `CallbackRouter` из `handlers/callbacks/__init__.py`. Регистрируется в `bot.py` через `CallbackQueryHandler(callback_handler)`. `show_class_selection` работает и из callback, и из текстового ввода. |
 | [handlers/callbacks/__init__.py](handlers/callbacks/__init__.py) | Реализация `CallbackRouter` и 5 специализированных обработчиков (`ClassCallbackHandler`, `TeacherCallbackHandler`, `RoomCallbackHandler`, `AdminCallbackHandler`, `NavigationCallbackHandler`). |

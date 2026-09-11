@@ -10,6 +10,7 @@ from config.schools import SCHOOLS_CONFIG
 from core.data_loader import DataLoader
 from handlers.common.messaging import log_user_error
 from services.status_service import StatusService, status_icon
+from services.text_utils import escape_markdown
 
 # Настройка логгера
 admin_logger = logging.getLogger('admin_panel')
@@ -83,21 +84,28 @@ class AdminCallbackHandler:
 
     async def _show_statistics(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показывает статистику пользователей (для /stats)."""
-        user_service = context.bot_data.get('user_service')
-        users = user_service.get_users_with_classes() if user_service else []
-        total = len(users)
-        by_school = {}
-        for u in users:
-            sid = u.get('current_school', '—')
-            by_school[sid] = by_school.get(sid, 0) + 1
-        lines = ["📊 *Статистика*\n", f"👥 Пользователей с классами: *{total}*", ""]
-        for sid, cnt in sorted(by_school.items()):
-            lines.append(f"• {sid}: {cnt}")
-        text = "\n".join(lines)
-        if getattr(update, 'callback_query', None):
-            await update.callback_query.edit_message_text(text, parse_mode='Markdown')
-        else:
-            await update.message.reply_text(text, parse_mode='Markdown')
+        try:
+            user_service = context.bot_data.get('user_service')
+            users = user_service.get_users_with_classes() if user_service else []
+            total = len(users)
+            by_school = {}
+            for u in users:
+                sid = u.get('current_school', '—')
+                by_school[sid] = by_school.get(sid, 0) + 1
+            lines = ["📊 *Статистика*\n", f"👥 Пользователей с классами: *{total}*", ""]
+            for sid, cnt in sorted(by_school.items()):
+                lines.append(f"• {escape_markdown(str(sid))}: {cnt}")
+            text = "\n".join(lines)
+            if getattr(update, 'callback_query', None):
+                await update.callback_query.edit_message_text(text, parse_mode='Markdown')
+            else:
+                await update.message.reply_text(text, parse_mode='Markdown')
+        except Exception as e:
+            error_msg = log_user_error("Failed to show statistics", e)
+            if getattr(update, 'callback_query', None):
+                await update.callback_query.edit_message_text(error_msg)
+            else:
+                await update.message.reply_text(error_msg)
 
     async def _show_admin_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE, message_text: str = None):
         """Показывает админ-панель"""
