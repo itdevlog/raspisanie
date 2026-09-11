@@ -21,6 +21,7 @@ class BackgroundUpdater:
         self.logger = logging.getLogger(__name__)
         self.moscow_tz = get_timezone()
         self._update_task = None
+        self._update_lock = asyncio.Lock()
 
     def start_periodic_updates(self):
         """Запускает периодическое обновление внутри event loop бота"""
@@ -68,7 +69,32 @@ class BackgroundUpdater:
 
         self.logger.info("🔴 Цикл фонового обновления остановлен")
 
+    @staticmethod
+    def _merge_schools_data(old: dict, new: dict) -> dict:
+        """Свежие данные поверх last-known-good: не потерять школу при сбое загрузки."""
+        merged = dict(old or {})
+        merged.update(new or {})
+        return merged
+
+    def _on_data_replaced(self):
+        """Единая реакция на замену schools_data: сброс кэша расписания и индекса уведомлений."""
+        cache_service = self.application.bot_data.get('cache_service')
+        if cache_service:
+            cache_service.clear()
+            self.logger.info("Кэш расписания очищен после обновления данных")
+        notification_service = self.application.bot_data.get('notification_service')
+        if notification_service and hasattr(notification_service, 'reset_user_class_index'):
+            notification_service.reset_user_class_index()
+
     async def _perform_update(self):
+        """Обёртка с блокировкой: не допускает одновременный запуск обновлений."""
+        if self._update_lock.locked():
+            self.logger.warning("Обновление уже выполняется — пропуск повторного запуска")
+            return
+        async with self._update_lock:
+            await self._perform_update_locked()
+
+    async def _perform_update_locked(self):
         """Выполняет обновление данных и проверяет замены"""
         try:
             self.logger.info("🔄 Начало фонового обновления данных...")
@@ -78,23 +104,16 @@ class BackgroundUpdater:
             new_schools_data = await asyncio.to_thread(self.data_loader.load_all_schools_data)
 
             if new_schools_data:
-                # Атомарно обновляем данные
-                self.application.bot_data['schools_data'] = new_schools_data
+                # Мержим свежие данные поверх last-known-good, чтобы школы,
+                # чья загрузка не удалась, не исчезали до следующего цикла
+                merged = self._merge_schools_data(old_schools_data, new_schools_data)
+                self.application.bot_data['schools_data'] = merged
 
-                # Инвалидируем кэш расписания — иначе пользователи до TTL (10 мин)
-                # видели бы старое расписание после обновления данных
-                cache_service = self.application.bot_data.get('cache_service')
-                if cache_service:
-                    cache_service.clear()
-                    self.logger.info("Кэш расписания очищен после обновления данных")
-
-                # Сброс индекса пользователей уведомлений (классы могли измениться)
-                notification_service = self.application.bot_data.get('notification_service')
-                if notification_service and hasattr(notification_service, 'reset_user_class_index'):
-                    notification_service.reset_user_class_index()
+                # Единая инвалидация: кэш расписания + индекс уведомлений
+                self._on_data_replaced()
 
                 # Проверяем замены
-                await self._check_exchange_updates(old_schools_data, new_schools_data)
+                await self._check_exchange_updates(old_schools_data, merged)
 
                 # Анализ изменений
                 updated_schools = []
