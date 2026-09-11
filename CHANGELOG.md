@@ -16,6 +16,19 @@
 - **Валидация несуществующей школы + сброс флагов поиска** — выбор несуществующей школы отклоняется, «залипшие» флаги `waiting_for_*` сбрасываются при входе в меню (`handlers/schools/school_selection.py`, `handlers/common/messaging.py`).
 - **Общий текст ошибки** — глобальный обработчик использует `GENERIC_ERROR_MSG` вместо дублирующего литерала (`bot.py`, `handlers/common/messaging.py`).
 
+### Фаза 2 — надёжность и консистентность (P1)
+
+- **`FileDB` сообщает об ошибках записи** — `_save_data()` и операции `Collection` (`insert_one`/`update_one`/`delete_one`) теперь возвращают `bool`; ошибка логируется с `exc_info=True` и не проглатывается молча. `_save_data` работает и с «голым» именем файла без директории (`os.path.dirname(...) or '.'`) (`database/file_db.py`).
+- **Общий `escape_markdown`** — новый хелпер `services/text_utils.py` (экранирует `_ * [ ] ( ) \``); `BaseScheduleService._escape_markdown` делегирует ему, а динамический текст прогоняется через него в уведомлениях (`notification_service`), поиске (`entity_menu`), информации о школе (`school_info`) и главном меню (`menu_builder`). Метки inline-кнопок не экранируются (`ff84ff6`).
+- **Пакетные настройки уведомлений** — `UserService.get_notification_settings_batch(school_id)` строит `{user_id: enabled}` одним проходом; `NotificationService` строит `_settings_for_school` вместе с индексом `(school_id, класс) → [user_id]` и фильтрует получателей через `get_users_for_exchange`, убирая линейный `find_one` на каждого получателя (`services/user_service.py`, `services/notification_service.py`).
+- **Частичная загрузка не теряет школы** — `BackgroundUpdater._merge_schools_data` накладывает свежие данные поверх last-known-good; `_perform_update` сериализован `asyncio.Lock` (повторный запуск сообщает о пропуске) и вызывает единый хук `_on_data_replaced()` (сброс кэша расписания + индекса уведомлений) вместо дублирующих блоков (`core/background_updater.py`).
+- **Ручной refresh админа** — `_refresh_all_schools`/`_refresh_school` используют `_invalidate_data()` (делегирует в `_on_data_replaced`) и защищены `_refresh_lock` от наложений; «Принудительное обновление» честно сообщает, если обновление уже идёт (`handlers/callbacks/admin_callbacks.py`).
+- **`RetryAfter` и троттлинг** — `NotificationService._send_message` пережидает Telegram `RetryAfter` (429) и повторяет; broadcast троттлится паузой `asyncio.sleep(0.05)` между отправками (`services/notification_service.py`).
+- **`DataLoader`: один слой ретраев + сессия на вызов** — `load_school_data` передаёт `max_retries=1` в `get_current_filename`/`download_schedule_data` (ретрай остаётся только на внешнем уровне); `load_all_schools_data` использует локальную `requests.Session` и закрывает её в `finally` (`core/data_loader.py`).
+- **mypy-аннотация** — `Optional[str]` для `_index_loaded_for_school` вместо неявного `None` (`services/notification_service.py`).
+
+> Сознательно отложено: параллельная загрузка школ через `Semaphore` не реализована — `load_all_schools_data` уже уходит из event loop через `asyncio.to_thread`, а усложнение ради часовой задачи с двумя школами неоправданно. Нарезка недельного сообщения уже покрыта `handlers/common/messaging.py`.
+
 ### PR «Fix critical bugs» `80434ed`
 
 - `AttributeError` на `self.moscow_tz` в `log_update_activity` — `updatelog.txt` теперь заполняется (`core/background_updater.py`).
