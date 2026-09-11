@@ -2,7 +2,8 @@
 
 > Всё исправленное убрано отсюда и перенесено в [CHANGELOG.md](CHANGELOG.md).
 
-> ✅ 11.09: декоратор `@requires_school` создан (`handlers/common/requires_school.py`) и применён к `school_info_handler`, `week_command_handler`; юнит-тесты `tests/test_requires_school.py`. Внутри методов-классов (class_callbacks и др.) и хендлеров, работающих и без выбранной школы (start/main_menu), проверки оставлены осознанно.
+> ✅ 11.09 (завершающий блок): декоратор `@requires_school` (применён к school_info/week_command); индикатор «печатает...» в админ-операциях; счётчик свежих школ; интеграционные mock-тесты (3); инструменты ruff (чистый) + mypy (конфиг) + CI; `requirements-dev.txt`. Итого 64 теста.
+> Решено НЕ трогать на живой системе (рискованно): `FileDB` deferred-write, `data_loader` ETag — оставлены внизу как отдельные задачи.
 > Аудит от 03.09.2026, стек: python-telegram-bot 20.7, requests, pytz, JSON-БД.
 > Приоритеты: 🔴 P0 — падения/потеря данных, 🟠 P1 — некорректное поведение, 🟡 P2 — качество и поддержка.
 
