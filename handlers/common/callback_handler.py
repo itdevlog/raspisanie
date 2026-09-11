@@ -382,6 +382,352 @@ async def handle_school_info(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает показ справки через меню"""
     query = update.callback_query
+
+    from handlers.common.menu_builder import HELP_TEXT, build_help_keyboard
+
+    help_text = HELP_TEXT
+    reply_markup = build_help_keyboard()
+
+    return await safe_edit_message(query, help_text, reply_markup=reply_markup)
+
+def create_error_keyboard() -> InlineKeyboardMarkup:
+    """Создает клавиатуру для сообщений об ошибках"""
+    keyboard = [
+        [InlineKeyboardButton("🔙 Назад", callback_data="main_menu"),
+         InlineKeyboardButton("⚙️ Настройки", callback_data="menu_settings")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# ========== ФУНКЦИИ ДЛЯ РАБОТЫ С КЛАССАМИ ==========
+
+async def handle_change_class(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает смену класса"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    user_service = context.bot_data.get('user_service')
+    
+    if not user_service:
+        await query.edit_message_text("❌ Сервис не доступен")
+        return
+    
+    # Очищаем выбранный класс
+    user_service.clear_user_class(user_id)
+    
+    # Всегда используем "today" при смене класса
+    await show_class_selection(update, context, "today")
+
+async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, schedule_type: str):
+    """Показывает меню выбора класса с сначала цифрой, потом буквой"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    user_service = context.bot_data.get('user_service')
+    schools_data = context.bot_data.get('schools_data', {})
+
+    async def send_text(text: str, reply_markup: InlineKeyboardMarkup):
+        if query:
+            try:
+                await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+            except BadRequest as e:
+                if "not modified" in str(e).lower():
+                    return
+                raise
+        else:
+            await update.effective_message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+
+    if not user_service or not schools_data:
+        await send_text("❌ Сервис не доступен", InlineKeyboardMarkup([]))
+        return
+
+    # Получаем выбранную школу пользователя
+    current_school_id = user_service.get_user_school(user_id)
+    school_data = schools_data.get(current_school_id)
+
+    if not school_data:
+        await send_text("❌ Данные для вашей школы не загружены", InlineKeyboardMarkup([]))
+        return
+
+    try:
+        schedule_service = ScheduleService(school_data)
+        available_classes = schedule_service.get_available_classes()
+
+        if not available_classes:
+            await send_text("❌ Нет доступных классов в расписании", InlineKeyboardMarkup([]))
+            return
+        
+        # Получаем название текущей школы для отображения
+        school_config = None
+        for school in SCHOOLS_CONFIG.values():
+            if school['id'] == current_school_id:
+                school_config = school
+                break
+        
+        school_name = school_config['name'] if school_config else "Неизвестно"
+        type_text = {
+            "today": "на сегодня",
+            "tomorrow": "на завтра", 
+            "week": "на неделю"
+        }
+        
+        # Если нет callback_data с цифрой, показываем выбор цифры (1-11) - ИНЛАЙН-КНОПКАМИ
+        if not context.user_data.get('class_digit'):
+            # Создаем клавиатуру с цифрами 1-11
+            keyboard = []
+            row = []
+            
+            for digit in range(1, 12):  # 1-11
+                # Проверяем, есть ли классы с этой цифрой (ровно с цифрой, а не с десятком)
+                has_classes = any(_class_matches_digit(cls, digit) for cls in available_classes)
+                if has_classes:
+                    row.append(InlineKeyboardButton(str(digit), callback_data=f"class_digit_{digit}_{schedule_type}"))
+                    if len(row) == 4:  # 4 кнопки в ряду
+                        keyboard.append(row)
+                        row = []
+            
+            if row:  # Добавим оставшиеся кнопки
+                keyboard.append(row)
+            
+            # Кнопка "Все классы сразу"
+            keyboard.append([InlineKeyboardButton("📋 Все классы сразу", callback_data=f"show_all_{schedule_type}")])
+            
+            # Кнопка возврата в главное меню
+            keyboard.append([InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            text = (
+                f"📚 *{school_name}*\n"
+                f"Выберите класс *{type_text[schedule_type]}*\n\n"
+                f"Сначала выберите цифру класса:"
+            )
+            
+            await send_text(text, reply_markup)
+
+        else:
+            # Показываем буквы для выбранной цифры - ИНЛАЙН-КНОПКАМИ
+            class_digit = context.user_data['class_digit']
+            class_letters = _get_class_letters_for_digit(available_classes, int(class_digit))
+
+            if not class_letters:
+                if query:
+                    await query.answer("❌ Нет классов с этой цифрой")
+                return
+            
+            keyboard = []
+            row = []
+            
+            for letter in class_letters:
+                class_name = f"{class_digit}{letter}"
+                row.append(InlineKeyboardButton(class_name, callback_data=f"class_{schedule_type}_{class_name}"))
+                if len(row) == 4:  # 4 кнопки в ряду
+                    keyboard.append(row)
+                    row = []
+            
+            if row:  # Добавим оставшиеся кнопки
+                keyboard.append(row)
+            
+            # Кнопки навигации
+            keyboard.append([
+                InlineKeyboardButton("🔙 К выбору цифры", callback_data=f"clear_digit_{schedule_type}"),
+                InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+            ])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            text = (
+                f"📚 *{school_name}*\n"
+                f"Выберите класс *{type_text[schedule_type]}*\n\n"
+                f"Цифра: *{class_digit}*\n"
+                f"Выберите букву:"
+            )
+
+            await send_text(text, reply_markup)
+
+    except Exception as e:
+        error_text = f"❌ Ошибка при загрузке списка классов: {str(e)}"
+        try:
+            await send_text(error_text, InlineKeyboardMarkup([]))
+        except Exception:
+            pass
+
+def _class_matches_digit(class_name: str, digit: int) -> bool:
+    """True, если класс начинается с ровно этой цифры, за которой идёт БУКВА.
+
+    Сравнение по сегментам, а не по `startswith`: цифра «1» не должна матчить
+    класс «11а» (это отдельная цифра/десяток). Иначе кнопка «1» показывалась
+    даже когда классов вида «1x» нет.
+    """
+    s = str(digit)
+    if not class_name.startswith(s):
+        return False
+    rest = class_name[len(s):]
+    return bool(rest) and not rest[0].isdigit()
+
+
+def _get_class_letters_for_digit(available_classes: List[str], digit: int) -> List[str]:
+    """Получает список букв для указанной цифры класса"""
+    letters = set()
+    for class_name in available_classes:
+        if _class_matches_digit(class_name, digit):
+            # Извлекаем букву (все что после цифры)
+            letter = class_name[len(str(digit)):]
+            if letter:  # Убедимся что буква не пустая
+                letters.add(letter)
+    
+    return sorted(list(letters))
+
+async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_TYPE, schedule_type: str, page: int = 0):
+    """Показывает полный список классов постранично (альтернативный способ).
+
+    При 60+ классах одностраничная клавиатура упиралась бы в лимит 100 кнопок,
+    поэтому список классов кэшируется в state_service и разбивается на страницы
+    (кнопки-номера «◀️ Назад/Вперёд ▶️» через all_classes_page_N).
+    """
+    query = update.callback_query
+    user_id = update.effective_user.id
+    user_service = context.bot_data.get('user_service')
+    schools_data = context.bot_data.get('schools_data', {})
+
+    if not user_service or not schools_data:
+        await query.edit_message_text("❌ Сервис не доступен")
+        return
+
+    # Получаем выбранную школу пользователя
+    current_school_id = user_service.get_user_school(user_id)
+    school_data = schools_data.get(current_school_id)
+
+    if not school_data:
+        await query.edit_message_text("❌ Данные для вашей школы не загружены")
+        return
+
+    try:
+        schedule_service = ScheduleService(school_data)
+        available_classes = schedule_service.get_available_classes()
+
+        state_service = context.bot_data.get('state_service')
+        if state_service:
+            # Актуализируем кэш списка классов при первичном вызове (schedule_type != None)
+            if schedule_type is not None:
+                state_service.set_user_list(user_id, 'all_classes', available_classes)
+
+        page, classes_on_page = paginate(available_classes, page, per_page=60)
+
+        # Создаем клавиатуру со всеми классами (группируем по цифрам)
+        keyboard = []
+
+        # Группируем классы текущей страницы по цифрам
+        classes_by_digit = {}
+        for class_name in classes_on_page:
+            digit = ''.join(filter(str.isdigit, class_name))
+            if digit:
+                classes_by_digit.setdefault(digit, []).append(class_name)
+
+        # Кнопки классов сгруппированы по цифрам
+        for digit in sorted(classes_by_digit.keys(), key=int):
+            row = []
+            for class_name in sorted(classes_by_digit[digit]):
+                row.append(InlineKeyboardButton(class_name, callback_data=f"class_{schedule_type or 'today'}_{class_name}"))
+                if len(row) == 3:
+                    keyboard.append(row)
+                    row = []
+            if row:
+                keyboard.append(row)
+
+        # Пагинация
+        total_classes = len(available_classes)
+        total_pages = (total_classes + 60 - 1) // 60
+        pagination_buttons = []
+        if page > 0:
+            pagination_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data=f"all_classes_page_{page-1}"))
+        pagination_buttons.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="all_classes_pages_info"))
+        if page < total_pages - 1:
+            pagination_buttons.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"all_classes_page_{page+1}"))
+        if pagination_buttons:
+            keyboard.append(pagination_buttons)
+
+        # Кнопки навигации
+        back_schedule = schedule_type or "today"
+        keyboard.append([
+            InlineKeyboardButton("🔙 Назад", callback_data=f"menu_{back_schedule}"),
+            InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
+        ])
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        type_text = {
+            "today": "на сегодня",
+            "tomorrow": "на завтра",
+            "week": "на неделю"
+        }
+
+        await safe_edit_message(
+            query,
+            f"📚 Все классы *{type_text[back_schedule]}*:\n\n"
+            f"*Всего классов:* {total_classes}\n"
+            f"*Страница:* {page+1}/{total_pages}",
+            reply_markup=reply_markup
+        )
+
+    except Exception as e:
+        await safe_edit_message(query, f"❌ Ошибка при загрузке списка классов: {str(e)}")
+
+# ========== ФУНКЦИИ ДЛЯ ИНФОРМАЦИИ И ПОМОЩИ ==========
+
+async def handle_school_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает показ информации о школе через меню"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    user_service = context.bot_data.get('user_service')
+    schools_data = context.bot_data.get('schools_data', {})
+    
+    if not user_service or not schools_data:
+        await query.edit_message_text("❌ Сервис не доступен")
+        return
+    
+    # Получаем выбранную школу пользователя
+    current_school_id = user_service.get_user_school(user_id)
+    school_data = schools_data.get(current_school_id)
+    
+    if not school_data:
+        await query.edit_message_text("❌ Данные не загружены")
+        return
+    
+    school_name = get_display_name(current_school_id, school_data)
+    city = school_data.get('CITY_NAME', 'Неизвестно')
+    export_date = school_data.get('EXPORT_DATE', 'Неизвестно')
+    export_time = school_data.get('EXPORT_TIME', 'Неизвестно')
+    
+    # Статистика
+    classes_count = len(school_data.get('CLASSES', {}))
+    teachers_count = len(school_data.get('TEACHERS', {}))
+    subjects_count = len(school_data.get('SUBJECTS', {}))
+    rooms_count = len(school_data.get('ROOMS', {}))
+    
+    info_text = (
+        f"🏫 *{school_name}*\n"
+        f"📍 {city}\n\n"
+        f"📊 *Статистика:*\n"
+        f"• Классов: {classes_count}\n"
+        f"• Преподавателей: {teachers_count}\n"
+        f"• Предметов: {subjects_count}\n"
+        f"• Кабинетов: {rooms_count}\n\n"
+        f"🕒 *Данные обновлены:*\n"
+        f"{export_date} {export_time}\n\n"
+        f"🔗 *Сайт школы:*\n"
+        f"{school_data.get('HOMEPAGE_URL', 'Не указан')}"
+    )
+    
+    # Добавляем кнопку возврата
+    keyboard = [
+        [InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu"),
+         InlineKeyboardButton("⚙️ Настройки", callback_data="menu_settings")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(info_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает показ справки через меню"""
+    query = update.callback_query
     
     help_text = (
         "📚 *Помощь по боту расписания*\n\n"

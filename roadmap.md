@@ -51,8 +51,8 @@
 ### Дублирование кода (главная проблема поддержки)
 
 1. **`teacher_menu.py` ↔ `room_schedule.py` — ~90% совпадений** (423 и 437 строк): меню, поиск, пагинация. → ✅ **исправлено 11.09**: вынесено в `handlers/common/entity_menu.py::EntityMenuHandler` (параметризуется `EntityConfig`); `teacher_menu.py`/`room_schedule.py` стали тонкими обёртками (~60 строк каждая) с прежней публичной API.
-2. **Главное меню** — `start.py:44-104` ↔ `main_menu.py:31-101`. Вынести в `build_main_menu()`.
-3. **Текст помощи** — `start.py:110-146` ↔ `callback_handler.py:339-378` (уже расходятся по содержанию). Один `HELP_TEXT`.
+2. **Главное меню** — `start.py:44-104` ↔ `main_menu.py:31-101`. → ✅ **исправлено 11.09**: вынесено в `handlers/common/menu_builder.py` (`build_main_menu_keyboard`/`build_main_menu_text`/`resolve_school_name`); `start.py` и `main_menu.py` используют общий построитель.
+3. **Текст помощи** — `start.py:110-146` ↔ `callback_handler.py:339-378` (уже расходятся по содержанию). → ✅ **исправлено 11.09**: единые `HELP_TEXT` и `build_help_keyboard()` в `menu_builder.py`; оба хендлера используют их.
 4. **Поиск школы по id** — 6 мест. Одна функция `get_school_by_id()`.
 5. **Пагинация** — реализация унифицирована в `EntityMenuHandler` (teacher/room) и `handle_show_all_classes`; `messaging::paginate` существует как общий хелпер. Осталось: подключить в оставшихся местах, если такие найдутся.
 6. **Проверки `if not user_service or not schools_data`** — 20+ повторов. Декоратор `@requires_school`.

@@ -125,3 +125,10 @@
 
 - Удалён мёртвый `database/models/user_school.py` (модель нигде не использовалась; логика школы/класса — в `UserService`).
 - `state_service` переведён на отдельный долгий кэш (24 ч) вместо общего `CacheService(ttl=600)` — индексные кнопки учителей/кабинетов/классов больше не «протухают» через 10 минут и не стираются при инвалидации кэша расписания.
+
+### P2: единые построители главного меню и справки
+
+- `handlers/common/menu_builder.py` — общие `build_main_menu_keyboard`/`build_main_menu_text`/`resolve_school_name`/`HELP_TEXT`/`build_help_keyboard`.
+- `start.py` и `main_menu.py` используют общий построитель меню (дубль убран).
+- `start.py::help_handler` и `callback_handler.py::handle_help` используют единый `HELP_TEXT` (тексты больше не расходятся).
+- Юнит-тесты `tests/test_menu_builder.py`.
