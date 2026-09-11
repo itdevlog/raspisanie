@@ -40,6 +40,14 @@
 
 > Сознательно отложено в Фазе 3 (записано в [roadmap.md](roadmap.md)): слой данных `UserRepository`/`TypedDict` и инъекция часов (clock) не реализованы — это крупные сквозные рефакторинги с низкой пользовательской ценностью.
 
+### Фаза 4 — новый функционал
+
+- **Уведомления о снятии замен** — детектор распознаёт, когда у класса пропала единственная замена (`Fix: detect removal when a class's only exchange disappears`), а уведомление по такой позиции формируется как `↩️ N. <предмет> — *замена снята*` вместо нового варианта (`services/notification_service.py`, `services/exchange_detector.py`).
+- **Подписки на преподавателей и кабинеты** — новый `SubscriptionService` (коллекция `subscriptions`, документ на пару `user_id`+`school_id` со списком `items`): `subscribe`/`unsubscribe`/`is_subscribed`/`get_subscriptions`/`get_subscribers`. В расписании преподавателя/кабинета появляется кнопка «🔔 Подписаться»/«🔕 Отписаться»; `NotificationService.notify_subscribers` рассылает подписчикам уведомления о заменах; активные подписки перечислены в `/settings` с кнопкой отписки (`services/subscription_service.py`, `handlers/common/entity_menu.py`, `handlers/common/settings.py`).
+- **Напоминания об уроках** — новый чистый `ReminderService` вычисляет уроки, начинающиеся в ближайшее окно, и тексты «через N мин начнётся урок …»; отправкой занимается отдельный цикл `BackgroundUpdater._reminder_loop` (`asyncio.create_task`, без новых зависимостей — `JobQueue`/APScheduler не подключались). Дедуп — стабильный ключ `user:school:class:дата:номер_урока` на 24 ч. Тумблер `⏰ Напоминания об уроках` в `/settings` (`services/reminder_service.py`, `core/background_updater.py`, `handlers/common/settings.py`).
+- **Тихие часы и анти-флуд** — `NotificationService._is_quiet_hours` учитывает интервал через полночь (по умолчанию 22–7) и не шлёт уведомления в это окно; `_send_message` не дропает сообщения, а выжидает остаток интервала анти-флуда (сверху ограничен), продолжая пережидать `RetryAfter`. Тумблер `🌙 Тихие часы` в `/settings` (`services/notification_service.py`, `services/user_preferences.py`).
+- **Смещение недели и helper «текущий/следующий урок»** — `_get_week_schedule(..., week_offset)` и `ScheduleService.get_class_schedule_week(..., week_offset)` умеют строить соседние недели, а `BaseScheduleService.get_next_lesson` возвращает текущий или ближайший урок по `LESSON_TIMES`. Пользовательских команд/кнопок под это не добавлено — только внутренние хелперы (`services/base_schedule_service.py`, `services/schedule_service.py`).
+
 ### PR «Fix critical bugs» `80434ed`
 
 - `AttributeError` на `self.moscow_tz` в `log_update_activity` — `updatelog.txt` теперь заполняется (`core/background_updater.py`).
