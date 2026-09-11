@@ -2,24 +2,13 @@ from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 from services.schedule_service import ScheduleService
 from handlers.common.messaging import reply_long_message, log_user_error
+from handlers.common.requires_school import requires_school
 
+@requires_school
 async def week_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /week <класс> - показывает расписание на неделю"""
-    user = update.effective_user
-    user_service = context.bot_data.get('user_service')
-    schools_data = context.bot_data.get('schools_data', {})
-    
-    if not user_service or not schools_data:
-        await update.message.reply_text("❌ Сервис не доступен")
-        return
-    
-    # Получаем выбранную школу пользователя
-    current_school_id = user_service.get_user_school(user.id)
-    school_data = schools_data.get(current_school_id)
-    
-    if not school_data:
-        await update.message.reply_text("❌ Данные для вашей школы не загружены")
-        return
+    school_data = context.school_data
+    user_service = context.user_service
     
     # Создаем сервис ОДИН РАЗ
     schedule_service = ScheduleService(school_data)

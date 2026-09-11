@@ -193,3 +193,7 @@
 ### P2: «Список устарел» перерисовывает актуальный список
 
 - teacher/room callbacks при устаревшем списке (поиск или полный) вместо тоста перерисовывают актуальный список через `handle_*_search_results`/`show_all_*`.
+
+### P2: декоратор @requires_school
+
+- Новый `handlers/common/requires_school.py` — убирает дублирующиеся проверки сервисов/школы; подкладывает в `context` ключи `user_service`, `current_school_id`, `school_data`. Применён к `school_info_handler` и `week_command_handler`; юнит-тесты в `tests/test_requires_school.py`.

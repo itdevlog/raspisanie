@@ -1,6 +1,8 @@
 # Roadmap — что осталось сделать
 
 > Всё исправленное убрано отсюда и перенесено в [CHANGELOG.md](CHANGELOG.md).
+
+> ✅ 11.09: декоратор `@requires_school` создан (`handlers/common/requires_school.py`) и применён к `school_info_handler`, `week_command_handler`; юнит-тесты `tests/test_requires_school.py`. Внутри методов-классов (class_callbacks и др.) и хендлеров, работающих и без выбранной школы (start/main_menu), проверки оставлены осознанно.
 > Аудит от 03.09.2026, стек: python-telegram-bot 20.7, requests, pytz, JSON-БД.
 > Приоритеты: 🔴 P0 — падения/потеря данных, 🟠 P1 — некорректное поведение, 🟡 P2 — качество и поддержка.
 
@@ -22,9 +24,6 @@
 
 ## 3. 🟡 Улучшения (P2)
 
-### Дублирование кода (главная проблема поддержки)
-
-- **Декоратор `@requires_school`** — проверки `if not user_service or not schools_data` повторяются в 20+ обработчиках. Вынести в декоратор (прокидывает `user_service`, `school_data`, `current_school_id`).
 
 ### UX
 
