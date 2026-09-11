@@ -1,6 +1,6 @@
 # 📚 Wiki: Telegram-бот расписания занятий
 
-> Дата создания: 2026-09-10, последнее обновление: 2026-09-11  
+> Дата создания: 2026-09-10, последнее обновление: 2026-09-11 (после большого рефакторинга)
 > Назначение: единая точка знаний о проекте. Если что-то здесь не описано — это баг документации, дополняй.
 
 ---
@@ -52,8 +52,10 @@ Telegram-бот для просмотра школьного расписани�
 ### 2.1 Главные потоки выполнения
 
 1. **Пользовательский поток**: Telegram → `handlers/` → `services/` → ответ пользователю.
-2. **Фоновый поток**: `core/background_updater.py` раз в 30 минут загружает свежие данные и проверяет замены.
+2. **Фоновый поток**: `core/background_updater.py` раз в `UPDATE_INTERVAL` (по умолчанию 3600 c = 1 ч, читается из конфига) загружает свежие данные и проверяет замены.
 3. **Поток данных**: `core/data_loader.py` → `bot_data['schools_data']` → все `services` работают с этим словарём.
+
+> ✅ 11.09: интервал теперь берётся из `Config.UPDATE_INTERVAL`, а не хардкодится.
 
 ---
 
@@ -67,8 +69,7 @@ Telegram-бот для просмотра школьного расписани�
 | [core/data_loader.py](core/data_loader.py) | Скачивает JS-файл расписания с Nikasoft и парсит его в Python-словарь. |
 | [core/background_updater.py](core/background_updater.py) | Фоновый поток обновления данных и детекции замен. |
 | [database/file_db.py](database/file_db.py) | Простая JSON-обёртка «как MongoDB»: коллекции, `find`, `insert`, `update`. |
-| [database/models/user_school.py](database/models/user_school.py) | Модель `UserSchool` (сейчас не используется). |
-| [services/base_schedule_service.py](services/base_schedule_service.py) | Базовый класс с общей логикой форматирования расписания. |
+| [services/base_schedule_service.py](services/base_schedule_service.py) | Базовый класс с общей логикой форматирования расписания и единым экранированием `_escape_markdown`. |
 | [services/schedule_service.py](services/schedule_service.py) | Расписание классов: сегодня, завтра, неделя. |
 | [services/teacher_service.py](services/teacher_service.py) | Расписание преподавателей. |
 | [services/room_service.py](services/room_service.py) | Расписание кабинетов. |
@@ -77,7 +78,11 @@ Telegram-бот для просмотра школьного расписани�
 | [services/notification_service.py](services/notification_service.py) | Отправляет уведомления о заменах пользователям и админам. |
 | [services/user_service.py](services/user_service.py) | Работа с пользователями: школа, класс, настройки уведомлений. |
 | [services/user_preferences.py](services/user_preferences.py) | Альтернативный слой настроек поверх `FileDB`. Используется в `background_updater._get_admin_notification_settings` для настроек админов. Частично пересекается с `UserService` по API, но хранит данные в отдельной коллекции `user_preferences`. |
-| [services/cache_service.py](services/cache_service.py) | In-memory кэш с TTL (10 минут по умолчанию). |
+| [services/cache_service.py](services/cache_service.py) | In-memory кэш с TTL, потокобезопасный (`RLock`), с лимитом размера `max_entries` (вытеснение самых старых) и честной статистикой. |
+| [handlers/common/entity_menu.py](handlers/common/entity_menu.py) | Параметризованный `EntityMenuHandler` — общая логика меню/поиска/пагинации для учителей и кабинетов. |
+| [handlers/common/menu_builder.py](handlers/common/menu_builder.py) | Единые построители главного меню (`build_main_menu_keyboard`/`text`) и справки (`HELP_TEXT`). |
+| [handlers/common/messaging.py](handlers/common/messaging.py) | Разбивка длинных сообщений ≤4096, `safe_edit_message`, `log_user_error`, `clear_search_flags`, `paginate`. |
+| [handlers/common/requires_school.py](handlers/common/requires_school.py) | Декоратор `@requires_school` — убирает дублирующиеся проверки сервисов/школы. |
 | [services/status_service.py](services/status_service.py) | Проверяет актуальность данных по времени экспорта из Nikasoft. |
 | [services/state_service.py](services/state_service.py) | Временное хранилище состояний пользователей (FSM-подобное). |
 | [handlers/start.py](handlers/start.py) | `/start` и `/help`. |
@@ -89,19 +94,18 @@ Telegram-бот для просмотра школьного расписани�
 | [handlers/callbacks/room_callbacks.py](handlers/callbacks/room_callbacks.py) | Callback'и кабинетов. |
 | [handlers/callbacks/navigation_callbacks.py](handlers/callbacks/navigation_callbacks.py) | Навигация: главное меню, смена класса/школы, настройки. |
 | [handlers/callbacks/admin_callbacks.py](handlers/callbacks/admin_callbacks.py) | Админ-панель и callback'и администратора. |
-| [handlers/admin/admin_panel.py](handlers/admin/admin_panel.py) | Содержит `admin_panel_handler`, `admin_callback_handler`, `setup_admin_handlers`. **Команды `/admin` и `/stats` регистрируются именно здесь** через `setup_admin_handlers(application)` (вызов в `bot.py:127`, реализация в `admin_panel.py:300-303`). Функция `admin_callback_handler` нигде не вызывается — мёртвый код. |
+| [handlers/admin/admin_panel.py](handlers/admin/admin_panel.py) | Содержит только живой код команд `/admin` и `/stats` (`admin_panel_handler`, `setup_admin_handlers`, построители панели). Мёртвый callback-код удалён 11.09 — callback'и админки живут в `handlers/callbacks/admin_callbacks.py`. |
 | [handlers/common/class_schedule.py](handlers/common/class_schedule.py) | Обработка текстового ввода класса. |
 | [handlers/common/week_command.py](handlers/common/week_command.py) | `/week <класс>` — недельное расписание. **Зарегистрирована** в `bot.py` с 11.09.2026. |
 | [handlers/common/school_info.py](handlers/common/school_info.py) | Информация о школе. Команда `/school` зарегистрирована в `bot.py` с 11.09.2026. |
 | [handlers/common/status.py](handlers/common/status.py) | Команда `/status`. |
 | [handlers/common/settings.py](handlers/common/settings.py) | Команда `/settings`. |
-| [handlers/common/school_info.py](handlers/common/school_info.py) | Информация о школе. |
 | [handlers/schools/school_selection.py](handlers/schools/school_selection.py) | Выбор школы. |
-| [handlers/teachers/teacher_menu.py](handlers/teachers/teacher_menu.py) | Меню и расписание учителей. |
-| [handlers/rooms/room_schedule.py](handlers/rooms/room_schedule.py) | Меню и расписание кабинетов. |
-| [logs/](logs/) | Лог-файлы. |
+| [handlers/teachers/teacher_menu.py](handlers/teachers/teacher_menu.py) | Тонкая обёртка над `EntityMenuHandler` (меню и расписание учителей). |
+| [handlers/rooms/room_schedule.py](handlers/rooms/room_schedule.py) | Тонкая обёртка над `EntityMenuHandler` (меню и расписание кабинетов). |
+| [logs/](logs/) | Лог-файлы (ротируемые): `bot.log`, `admin.log`, stdout. |
 | [data/](data/) | JSON база и кэш-файлы. |
-| [cache/](cache/) | Зарезервировано, но **пусто**. Переменная `CACHE_PATH` в `.env` в текущей версии не используется ни одним сервисом. |
+| [cache/](cache/) | Зарезервировано; `CACHE_PATH` объявлен в конфиге, но не используется сервисами. |
 
 ---
 
@@ -124,11 +128,11 @@ Telegram-бот для просмотра школьного расписани�
 6. `background_updater.start_periodic_updates()` запускает фоновую задачу через `post_init` (после старта event loop, до polling).
 7. `application.run_polling()` блокирует основной поток и начинает слушать Telegram.
 
-> ⚠️ **Хрупкость инициализации**: `BackgroundUpdater` создаётся в `bot.py:36` **до** построения `Application` (с `application=None`); ссылка на `application` устанавливается позже в `bot.py:44` и дублируется в `bot_data['background_updater']` (строка 45). До этого момента любое использование `self.application` в `__init__` упало бы с `AttributeError`.
+> ⚠️ **Инициализация**: `BackgroundUpdater` создаётся в `bot.py` **до** построения `Application` (с `application=None`); ссылка на `application` устанавливается позже и дублируется в `bot_data['background_updater']`. До этого момента использование `self.application` в `__init__` упало бы с `AttributeError`.
 
-> ⚠️ **Интервал жёстко задан**: `core/background_updater.py` устанавливает `update_interval = 1800` (30 минут). `Config.UPDATE_INTERVAL` (по умолчанию 3600) **не используется** (см. §13).
+> ✅ **Интервал из конфига**: `BackgroundUpdater.update_interval = Config.UPDATE_INTERVAL` (по умолчанию 3600 c = 1 ч). Жёсткий `1800` убран (см. §13).
 
-> ⚠️ **Фоновое обновление стартует из `post_init`** (см. `bot.py:_post_init`), т.е. гарантированно внутри запущенного event loop — `asyncio.create_task` здесь корректен.
+> ✅ **Фоновое обновление стартует из `post_init`** (`.post_init(self._post_init)`), т.е. гарантированно внутри запущенного event loop — `asyncio.create_task` здесь корректен, синхронные HTTP-запросы оффлоадятся через `asyncio.to_thread`.
 
 ### 4.1 Что находится в `application.bot_data`
 
@@ -142,7 +146,7 @@ Telegram-бот для просмотра школьного расписани�
 | `cache_service` | In-memory кэш TTL | `schedule_service` |
 | `notification_service` | Отправка уведомлений | `background_updater`, `admin_callbacks` |
 | `schools_config` | `SCHOOLS_CONFIG` | Везде |
-| `state_service` | Временные состояния | `class_schedule`, `teacher_menu`, `room_schedule` |
+| `state_service` | Временные состояния (на отдельном долгом кэше, 24 ч) — списки для пагинации/индексных кнопок не протухают за 10 мин | `class_schedule`, `teacher_menu`, `room_schedule` |
 | `exchange_detector` | `ExchangeDetector` (детекция замен) | `background_updater` |
 | `background_updater` | `BackgroundUpdater` | `admin_callbacks`, `force_check_exchanges` |
 | `schools_data` | Распарсенные данные школ | Все сервисы расписания |
@@ -171,11 +175,11 @@ Telegram-бот для просмотра школьного расписани�
 
 [core/background_updater.py](core/background_updater.py):
 
-- Интервал: 1800 сек (30 мин), захардкожен.
+- Интервал: `Config.UPDATE_INTERVAL` (по умолчанию 3600 c = 1 ч).
 - Работает внутри основного event loop (`asyncio.create_task`), а не в отдельном `threading.Thread`.
 - Засыпает через `asyncio.sleep`, не блокируя polling.
 - Синхронные HTTP-запросы `requests` оффлоадятся в отдельный поток через `asyncio.to_thread(...)`.
-- Загружает новые данные, заменяет `bot_data['schools_data']`, проверяет замены, при необходимости уведомляет админов.
+- Загружает новые данные, заменяет `bot_data['schools_data']`, очищает кэш расписания, проверяет замены, при необходимости уведомляет админов.
 
 > ✅ **Исправлено 11.09.2026**: `self.moscow_tz` инициализирован в `BackgroundUpdater.__init__` (`core/background_updater.py`) — `log_update_activity()` работает, `updatelog.txt` заполняется. Дополнительно: дублирующийся `stop()` удалён; фейковый контекст `context = ContextTypes.DEFAULT_TYPE` (мутация класса PTB) заменён на `SimpleNamespace` в `_make_context()`; синхронные HTTP-запросы `requests` во всех async-путях (`_perform_update` + админ-callback'и) оффлоадятся через `asyncio.to_thread(...)`.
 
@@ -419,8 +423,8 @@ LOG_FILE=./logs/bot.log
 ADMIN_LOG_FILE=./logs/admin.log
 ```
 
-> ⚠️ **`UPDATE_INTERVAL` не используется** — в `background_updater.py:16` жёстко 1800 сек.
-> ⚠️ **`CACHE_PATH` не используется** — папка `cache/` пуста, ни один сервис её не читает и не пишет. Переменная оставлена в `.env` для обратной совместимости.
+> ✅ **`UPDATE_INTERVAL` используется** — `BackgroundUpdater` берёт интервал из `Config.UPDATE_INTERVAL` (по умолчанию 3600 c = 1 ч).
+> ⚠️ **`CACHE_PATH` не используется** — папка `cache/` пуста, переменная оставлена для обратной совместимости.
 
 ---
 
@@ -438,10 +442,12 @@ ADMIN_LOG_FILE=./logs/admin.log
 | Уведомления не приходят | 0 доставок помечали ключ отправленным | [services/notification_service.py](services/notification_service.py) (исправлено) |
 | Поиск учителя даёт не того | Индексы применяются к неправильному списку | [handlers/teachers/teacher_menu.py](handlers/teachers/teacher_menu.py), [handlers/callbacks/teacher_callbacks.py](handlers/callbacks/teacher_callbacks.py) |
 | Бот зависает на обновлении из админки | Синхронный `requests` в async-обработчике — **исправлено 11.09**: `asyncio.to_thread` в `admin_callbacks.py` и `admin_panel.py` | [handlers/callbacks/admin_callbacks.py](handlers/callbacks/admin_callbacks.py) |
-| Сообщение не уходит | Markdown экранирование сломано или >4096 символов | [services/base_schedule_service.py](services/base_schedule_service.py), соответствующий handler |
+| Сообщение не уходит | Markdown экранирование сломано или >4096 символов — **исправлено 11.09**: единый `_escape_markdown` + нарезка в `messaging` | [services/base_schedule_service.py](services/base_schedule_service.py), [handlers/common/messaging.py](handlers/common/messaging.py) |
 | Ввод несуществующего класса текстом падал с «непредвиденной ошибкой» | `show_class_selection` не умел работать без `callback_query` — **исправлено 11.09** | [handlers/common/callback_handler.py](handlers/common/callback_handler.py) |
-| Повторное нажатие кнопки даёт «непредвиденную ошибку» | `Message is not modified` — **исправлено 11.09** в `class_callbacks`, `main_menu`, `callback_handler`; в `teacher_menu`/`room_schedule`/`school_info` — ещё открыто | соответствующий handler |
+| Повторное нажатие кнопки даёт «непредвиденную ошибку» | `Message is not modified` — **исправлено 11.09** во всех рендер-путях через `safe_edit_message`/`edit_long_message` | [handlers/common/messaging.py](handlers/common/messaging.py), [handlers/common/entity_menu.py](handlers/common/entity_menu.py) |
 | `FileDB.delete_one` удалял все совпадающие документы, а не один | — **исправлено 11.09** | [database/file_db.py](database/file_db.py) |
+| Битый `database.json` перезатирался пустым при первой записи | — **исправлено 11.09**: сохраняется копия `.corrupt` (с ротацией `.corrupt.N`) | [database/file_db.py](database/file_db.py) |
+| Поиск учителя/кабинета выдавал чужого | Индексы поиска применялись к полному списку; кириллица в `callback_data` >64 байт — **исправлено 11.09** | [handlers/callbacks/teacher_callbacks.py](handlers/callbacks/teacher_callbacks.py), [handlers/callbacks/room_callbacks.py](handlers/callbacks/room_callbacks.py) |
 
 ---
 
@@ -452,8 +458,10 @@ ADMIN_LOG_FILE=./logs/admin.log
 - [ ] Любая работа с `FileDB` должна учитывать потокобезопасность.
 - [ ] Новые callback_data не должны превышать 64 байта (ограничение Telegram).
 - [ ] Длинные сообщения (>4096) нужно нарезать.
-- [ ] Не оставляй `print()` в production-коде — используй `logger`. ✅ 11.09: все `print()` заменены на `logger` (см. CHANGELOG).
-- [ ] Обновляй этот Wiki при значимых изменениях.
+- [x] Не оставляй `print()` в production-коде — используй `logger` (✅ все заменены на `logger`).
+- [ ] Проверяй, что callback_data ≤ 64 байта.
+- [ ] Длинные сообщения (>4096) нарезай через `messaging.split_long_message`.
+- [ ] Обновляй этот Wiki и CHANGELOG при значимых изменениях.
 
 ---
 
@@ -461,36 +469,22 @@ ADMIN_LOG_FILE=./logs/admin.log
 
 См. [roadmap.md](roadmap.md) — там «что осталось сделать» с приоритетами P0/P1/P2; [CHANGELOG.md](CHANGELOG.md) — что уже сделано.
 
-Кратко:
-1. ✅ Исправить глубокие копии при заменах.
-2. ✅ Исправить поиск класса по точному совпадению.
-3. ✅ Исправить формат ключей уроков (`day{lesson:02d}`) для уроков 10+.
-4. ✅ Исправить `background_updater` в `bot_data`.
-5. ✅ Исправить сохранение уведомлений только при успешной доставке.
-6. ✅ Сделать `FileDB` потокобезопасным и атомарным.
-7. ✅ Починить детектор замен: унифицировать строковые ключи.
-8. ✅ Перевести фоновое обновление с `threading` на `asyncio` + `to_thread`.
-9. ✅ **11.09**: `BackgroundUpdater.moscow_tz`, `SimpleNamespace`-контекст, дубли `stop()`.
-10. ✅ **11.09**: `FileDB.delete_one` (один документ), дубли `get_collection`, `print`→`logger`.
-11. ✅ **11.09**: блокирующий IO в админ-callback'ах → `asyncio.to_thread`.
-12. ✅ **11.09**: `/week` и `/school` зарегистрированы; проверка `TELEGRAM_TOKEN` при старте.
-13. ✅ **11.09**: `show_class_selection` из текстового ввода; `Message is not modified` (частично).
-14. ✅ **11.09**: `CacheService.delete/delete_prefix`, реальная очистка `state_service`; `clear_school_cache` с сохранением.
-15. ✅ **11.09**: `__init__.py` во всех пакетах.
-16. ⬜ Вынести общую логику учителей/кабинетов в базовый класс.
-17. ⬜ Унифицировать главное меню и help-текст.
+> ✅ **Основной аудит фактически закрыт 11.09.** Краткий список сделанного (подробности — в CHANGELOG):
+>
+> - **Критическое (P0)**: битый `database.json` → бэкап `.corrupt`; нарезка сообщений ≤4096; поиск учителей/кабинетов (чужие индексы + 64-байт callback); матчинг цифры класса («1» не матчит «11а»); `Message is not modified` во всех путях.
+> - **P1**: двойной `query.answer()`; залипающие флаги поиска; утечка `class_digit`; TTL-кнопки; удалён мёртвый `UserSchool`; экранирование до бизнес-логики (замены учителей/кабинетов); `ExchangeService` в цикле.
+> - **Рефакторинг/качество (P2)**: `EntityMenuHandler` (учителя/кабинеты — из дублей 913→500), `menu_builder`+`HELP_TEXT`, `is_admin`, `get_school_by_id`, `TIMEZONE`, `str(e)`→лог, мёртвый код, `ADMIN_LOG_FILE`, O(N) индекс получателей, TTL кэша уведомлений, `CacheService` (потокобезопасность + лимит), `@requires_school`, индикатор «печатает...», счётчик свежих школ.
+> - **Инструменты/тесты**: pytest (64 теста: юнит + интеграционные моки), ruff (чистый), mypy (конфиг), CI-воркфлоу, `requirements-dev.txt`.
 
 ### 16.1 Открытый техдолг (P2)
 
 > Полный актуальный список «что осталось» — см. [roadmap.md](roadmap.md); всё сделанное — в [CHANGELOG.md](CHANGELOG.md). Здесь — кратко, что ещё открыто:
 
-1. **Решить судьбу `database/models/user_school.py`** — либо удалить, либо интегрировать в `UserService` (сейчас модель нигде не используется).
-2. **Уточнить источник настроек уведомлений** в `_get_admin_notification_settings` — сейчас берётся только у первого `ADMIN_IDS`, остальные игнорируются (противоречие дефолтов между `UserService` и `UserPreferencesService` — частично устранено 11.09, но системы остались разными).
-3. **Удалить неиспользуемую `CACHE_PATH`** из `.env` либо начать её использовать.
-4. **Экранирование до бизнес-логики** — `room_service.py`/`teacher_service.py`: `class_name` экранируется и сравнивается с «чистыми» именами → замены для учителей/кабинетов не находятся.
-5. **Недостающие пункты** — детали и остальные открытые места: см. [roadmap.md](roadmap.md).
+1. **`FileDB` перезаписывает весь JSON на каждую операцию** — грязная запись (deferred) или переход на `sqlite3`. Сознательно не трогается на живой системе.
+2. **`data_loader` ETag/If-Modified-Since** — не перекачивать данные при отсутствии изменений (метод `close()` уже добавлен).
+3. **Архитектурные** (крупные, по желанию): `JobQueue` вместо ручного цикла; `ConversationHandler` вместо FSM-флагов; `UserRepository`; `render.py` (HTML) вместо разрозненного экранирования; `@dataclass` конфиг + `SCHOOLS_CONFIG` в JSON; строгая типизация (mypy); единый `Services`-объект вместо `context.bot_data.get(...)`.
 
-> ✅ **Закрыто 11.09** (подробности — в CHANGELOG): `print()`→`logger`, `UPDATE_INTERVAL`/`MAX_RETRIES`, дубли `admin_panel.py`↔`admin_callbacks.py`, кнопки-заглушки, нарезка >4096, поиск учителей/кабинетов, залипающие флаги, битый `database.json` (`.corrupt`), инвалидация кэша расписания, детектор замен «сегодня+завтра», дефолты уведомлений, `Message is not modified`, пагинация «Все классы», матчинг цифры класса (p.11), валидация `.env`.
+> Открытых критических/серьёзных багов (P0/P1) нет.
 
 ---
 
