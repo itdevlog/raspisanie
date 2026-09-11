@@ -97,7 +97,10 @@ class RoomService(BaseScheduleService):
                             'r': list(raw_lesson_data.get('r', []))
                         }
                         raw_class_name = self.school_data.get('CLASSES', {}).get(class_id, 'Неизвестно')
-                        class_name = raw_class_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+                        # Используем ЧИСТОЕ имя класса для поиска замен: эскапирование
+                        # только для отображения, а _find_class_id сравнивает с «чистыми»
+                        # именами из CLASSES. Экранированная версия здесь ломала бы поиск.
+                        class_name = raw_class_name
 
                         # Применяем замены для этого класса
                         class_lesson = [{

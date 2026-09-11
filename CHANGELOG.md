@@ -105,3 +105,8 @@
 - `split_long_message` переписан без потерь (`''.join(chunks) == text`).
 - `requirements.txt` очищен от закомментированных мёртвых зависимостей.
 - `.gitignore` покрывает `.venv-test/`, `data/`, `logs/`, `cache/`.
+
+### P1: неполное экранирование Markdown + замены для учителей/кабинетов
+
+- `BaseScheduleService._escape_markdown` — единый хелпер экранирования legacy Markdown (`_ * [ ] ( ) \``); применён во всех 6 местах (`base_schedule_service.py`) — раньше `[ ] ( )` не экранировались → сообщения с такими символами не уходили.
+- `teacher_service`/`room_service`: для `apply_exchanges_to_schedule` и хранения имени используется ЧИСТОЕ `class_name` — раньше экранированное имя сравнивалось с чистыми именами в `_find_class_id`, из-за чего замены для расписаний учителей/кабинетов не находились.

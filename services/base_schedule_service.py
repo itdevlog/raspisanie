@@ -10,6 +10,17 @@ class BaseScheduleService:
     Содержит общую логику для teacher_service, room_service, schedule_service
     """
     
+    @staticmethod
+    def _escape_markdown(text: str) -> str:
+        """Экранирует спецсимволы legacy Markdown.
+
+        Помимо `*`/`_`/`` ` `` экранируем `[ ] ( )` — без них сообщение
+        с именем/названием, содержащим эти символы, не уйдёт (Can't parse entities).
+        """
+        for ch in ('_', '*', '[', ']', '(', ')', '`'):
+            text = text.replace(ch, '\\' + ch)
+        return text
+
     def __init__(self, school_data: Dict):
         self.school_data = school_data
         self.exchange_service = ExchangeService(school_data)
@@ -64,7 +75,7 @@ class BaseScheduleService:
         day_name = self._get_day_name(date)
         
         # Экранируем специальные символы Markdown
-        safe_entity_name = entity_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+        safe_entity_name = self._escape_markdown(entity_name)
         
         type_icons = {
             'class': '📅',
@@ -88,7 +99,7 @@ class BaseScheduleService:
         for subject_id in lesson_data['data'].get('s', []):
             subject_name = self.school_data.get('SUBJECTS', {}).get(subject_id, '?')
             # Экранируем специальные символы Markdown в названии предмета
-            subject_name = subject_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+            subject_name = self._escape_markdown(subject_name)
             if subject_name not in subjects:
                 subjects.append(subject_name)
         
@@ -97,7 +108,7 @@ class BaseScheduleService:
         for teacher_id in lesson_data['data'].get('t', []):
             teacher_name = self.school_data.get('TEACHERS', {}).get(teacher_id, '?')
             # Экранируем специальные символы Markdown в имени преподавателя
-            teacher_name = teacher_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+            teacher_name = self._escape_markdown(teacher_name)
             if teacher_name not in teachers:
                 teachers.append(teacher_name)
         
@@ -106,7 +117,7 @@ class BaseScheduleService:
         for room_id in lesson_data['data'].get('r', []):
             room_name = self.school_data.get('ROOMS', {}).get(room_id, '?')
             # Экранируем специальные символы Markdown в названии кабинета
-            room_name = room_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+            room_name = self._escape_markdown(room_name)
             if room_name not in rooms:
                 rooms.append(room_name)
         
@@ -209,7 +220,7 @@ class BaseScheduleService:
             }
             type_name = type_names.get(entity_type, '')
             # Экранируем специальные символы Markdown в названии сущности
-            safe_entity_name = entity_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+            safe_entity_name = self._escape_markdown(entity_name)
             return f"📅 *Недельное расписание {type_name} {safe_entity_name}*\n\n❌ Нет занятий на учебные дни этой недели"
         
         week_start = current_monday.strftime('%d.%m.%Y')
@@ -223,7 +234,7 @@ class BaseScheduleService:
         icon = type_icons.get(entity_type, '📅')
         
         # Экранируем специальные символы Markdown в названии сущности
-        safe_entity_name = entity_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+        safe_entity_name = self._escape_markdown(entity_name)
         
         week_header = f"{icon} *Недельное расписание {safe_entity_name}*\n*{week_start} - {week_end}*"
         return f"{week_header}\n\n" + "\n\n".join(week_schedule)
