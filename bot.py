@@ -13,6 +13,7 @@ from database.file_db import FileDB
 from handlers.admin.admin_panel import setup_admin_handlers
 from handlers.common.callback_handler import callback_handler
 from handlers.common.class_schedule import class_schedule_handler
+from handlers.common.messaging import GENERIC_ERROR_MSG
 from handlers.common.school_info import school_info_handler
 from handlers.common.settings import settings_handler
 from handlers.common.status import status_handler
@@ -191,9 +192,7 @@ class ScheduleBot:
 
             # Уведомление пользователю
             if update and update.effective_message:
-                await update.effective_message.reply_text(
-                    "❌ Произошла непредвиденная ошибка. Попробуйте позже."
-                )
+                await update.effective_message.reply_text(GENERIC_ERROR_MSG)
 
         except Exception as e:
             self.logger.error(f"Error in error handler: {e}")
