@@ -1,6 +1,6 @@
 # 📚 Wiki: Telegram-бот расписания занятий
 
-> Дата создания: 2026-09-10  
+> Дата создания: 2026-09-10, последнее обновление: 2026-09-11  
 > Назначение: единая точка знаний о проекте. Если что-то здесь не описано — это баг документации, дополняй.
 
 ---
@@ -82,7 +82,7 @@ Telegram-бот для просмотра школьного расписани�
 | [services/state_service.py](services/state_service.py) | Временное хранилище состояний пользователей (FSM-подобное). |
 | [handlers/start.py](handlers/start.py) | `/start` и `/help`. |
 | [handlers/common/main_menu.py](handlers/common/main_menu.py) | Отрисовка главного меню. |
-| [handlers/common/callback_handler.py](handlers/common/callback_handler.py) | **Активный** callback-роутер. Делегирует в `CallbackRouter` из `handlers/callbacks/__init__.py`. Регистрируется в `bot.py:130` через `CallbackQueryHandler(callback_handler)`. |
+| [handlers/common/callback_handler.py](handlers/common/callback_handler.py) | **Активный** callback-роутер. Делегирует в `CallbackRouter` из `handlers/callbacks/__init__.py`. Регистрируется в `bot.py` через `CallbackQueryHandler(callback_handler)`. `show_class_selection` работает и из callback, и из текстового ввода. |
 | [handlers/callbacks/__init__.py](handlers/callbacks/__init__.py) | Реализация `CallbackRouter` и 5 специализированных обработчиков (`ClassCallbackHandler`, `TeacherCallbackHandler`, `RoomCallbackHandler`, `AdminCallbackHandler`, `NavigationCallbackHandler`). |
 | [handlers/callbacks/class_callbacks.py](handlers/callbacks/class_callbacks.py) | Callback'и классов. |
 | [handlers/callbacks/teacher_callbacks.py](handlers/callbacks/teacher_callbacks.py) | Callback'и учителей. |
@@ -91,7 +91,8 @@ Telegram-бот для просмотра школьного расписани�
 | [handlers/callbacks/admin_callbacks.py](handlers/callbacks/admin_callbacks.py) | Админ-панель и callback'и администратора. |
 | [handlers/admin/admin_panel.py](handlers/admin/admin_panel.py) | Содержит `admin_panel_handler`, `admin_callback_handler`, `setup_admin_handlers`. **Команды `/admin` и `/stats` регистрируются именно здесь** через `setup_admin_handlers(application)` (вызов в `bot.py:127`, реализация в `admin_panel.py:300-303`). Функция `admin_callback_handler` нигде не вызывается — мёртвый код. |
 | [handlers/common/class_schedule.py](handlers/common/class_schedule.py) | Обработка текстового ввода класса. |
-| [handlers/common/week_command.py](handlers/common/week_command.py) | `/week` — не зарегистрирована. |
+| [handlers/common/week_command.py](handlers/common/week_command.py) | `/week <класс>` — недельное расписание. **Зарегистрирована** в `bot.py` с 11.09.2026. |
+| [handlers/common/school_info.py](handlers/common/school_info.py) | Информация о школе. Команда `/school` зарегистрирована в `bot.py` с 11.09.2026. |
 | [handlers/common/status.py](handlers/common/status.py) | Команда `/status`. |
 | [handlers/common/settings.py](handlers/common/settings.py) | Команда `/settings`. |
 | [handlers/common/school_info.py](handlers/common/school_info.py) | Информация о школе. |
@@ -108,8 +109,8 @@ Telegram-бот для просмотра школьного расписани�
 
 Последовательность в [bot.py](bot.py):
 
-1. `Config()` читает `.env`.
-2. Создаётся `Application.builder().token(...).build()`.
+1. `Config()` читает `.env`; если `TELEGRAM_TOKEN` не задан — понятная ошибка вместо падения внутри PTB.
+2. Создаётся `Application.builder().token(...).post_init(...).connect_timeout(30)...build()`.
 3. `setup_services()` создаёт сервисы и кладёт их в `application.bot_data`:
    - `user_service`
    - `db`
@@ -119,13 +120,15 @@ Telegram-бот для просмотра школьного расписани�
    - `exchange_detector`
    - `schools_config`
 4. `load_schools_data()` вызывает `DataLoader.load_all_schools_data()` — синхронно загружает данные всех школ.
-5. `setup_handlers()` регистрирует обработчики команд и callback.
-6. `background_updater.start_periodic_updates()` запускает фоновый поток.
+5. `setup_handlers()` регистрирует обработчики команд и callback. Команды: `/start`, `/help`, `/status`, `/settings`, `/week <класс>`, `/school`, `/admin`, `/stats`, `/check_exchanges`.
+6. `background_updater.start_periodic_updates()` запускает фоновую задачу через `post_init` (после старта event loop, до polling).
 7. `application.run_polling()` блокирует основной поток и начинает слушать Telegram.
 
 > ⚠️ **Хрупкость инициализации**: `BackgroundUpdater` создаётся в `bot.py:36` **до** построения `Application` (с `application=None`); ссылка на `application` устанавливается позже в `bot.py:44` и дублируется в `bot_data['background_updater']` (строка 45). До этого момента любое использование `self.application` в `__init__` упало бы с `AttributeError`.
 
-> ⚠️ **Интервал жёстко задан**: `core/background_updater.py:16` устанавливает `update_interval = 1800` (30 минут). `Config.UPDATE_INTERVAL` (по умолчанию 3600) **не используется** (см. §13).
+> ⚠️ **Интервал жёстко задан**: `core/background_updater.py` устанавливает `update_interval = 1800` (30 минут). `Config.UPDATE_INTERVAL` (по умолчанию 3600) **не используется** (см. §13).
+
+> ⚠️ **Фоновое обновление стартует из `post_init`** (см. `bot.py:_post_init`), т.е. гарантированно внутри запущенного event loop — `asyncio.create_task` здесь корректен.
 
 ### 4.1 Что находится в `application.bot_data`
 
@@ -134,7 +137,7 @@ Telegram-бот для просмотра школьного расписани�
 | Ключ | Что хранится | Кто использует |
 |------|-------------|----------------|
 | `user_service` | Работа с пользователями | Все handlers |
-| `db` | `FileDB` (потокобезопасный, атомарная запись) | `user_service`, `admin_callbacks` |
+| `db` | `FileDB` (потокобезопасный, атомарная запись, `delete_one` удаляет ровно один документ) | `user_service`, `admin_callbacks` |
 | `config` | Объект `Config` (`.env`-настройки) | `notification_service`, `settings` |
 | `cache_service` | In-memory кэш TTL | `schedule_service` |
 | `notification_service` | Отправка уведомлений | `background_updater`, `admin_callbacks` |
@@ -174,7 +177,7 @@ Telegram-бот для просмотра школьного расписани�
 - Синхронные HTTP-запросы `requests` оффлоадятся в отдельный поток через `asyncio.to_thread(...)`.
 - Загружает новые данные, заменяет `bot_data['schools_data']`, проверяет замены, при необходимости уведомляет админов.
 
-> ⚠️ **Техдолг**: `self.moscow_tz` упоминается в `log_update_activity` (`core/background_updater.py:178`), но **не инициализируется** в `BackgroundUpdater.__init__` — вызов метода упадёт с `AttributeError`. На практике метод сейчас не вызывается из других мест, но это мина замедленного действия.
+> ✅ **Исправлено 11.09.2026**: `self.moscow_tz` инициализирован в `BackgroundUpdater.__init__` (`core/background_updater.py`) — `log_update_activity()` работает, `updatelog.txt` заполняется. Дополнительно: дублирующийся `stop()` удалён; фейковый контекст `context = ContextTypes.DEFAULT_TYPE` (мутация класса PTB) заменён на `SimpleNamespace` в `_make_context()`; синхронные HTTP-запросы `requests` во всех async-путях (`_perform_update` + админ-callback'и) оффлоадятся через `asyncio.to_thread(...)`.
 
 ---
 
@@ -434,10 +437,11 @@ ADMIN_LOG_FILE=./logs/admin.log
 | Уведомления дублируются | JSON-ключи уроков стали строками | [services/exchange_detector.py](services/exchange_detector.py) |
 | Уведомления не приходят | 0 доставок помечали ключ отправленным | [services/notification_service.py](services/notification_service.py) (исправлено) |
 | Поиск учителя даёт не того | Индексы применяются к неправильному списку | [handlers/teachers/teacher_menu.py](handlers/teachers/teacher_menu.py), [handlers/callbacks/teacher_callbacks.py](handlers/callbacks/teacher_callbacks.py) |
-| Бот зависает на обновлении | Синхронный `requests` в async-обработчике | [core/background_updater.py](core/background_updater.py) — `asyncio.to_thread` для `load_all_schools_data()` |
+| Бот зависает на обновлении из админки | Синхронный `requests` в async-обработчике — **исправлено 11.09**: `asyncio.to_thread` в `admin_callbacks.py` и `admin_panel.py` | [handlers/callbacks/admin_callbacks.py](handlers/callbacks/admin_callbacks.py) |
 | Сообщение не уходит | Markdown экранирование сломано или >4096 символов | [services/base_schedule_service.py](services/base_schedule_service.py), соответствующий handler |
-| `AttributeError: 'BackgroundUpdater' object has no attribute 'moscow_tz'` при `log_update_activity` | Поле `moscow_tz` не инициализировано в `__init__` | [core/background_updater.py:11-18, 178](core/background_updater.py) |
-| `bot_data['background_updater']` пуст в хендлерах | `bot.py:36` создаёт `BackgroundUpdater(None)` до `Application`; ссылка ставится в `bot.py:44-45` | [bot.py:36-45](bot.py) |
+| Ввод несуществующего класса текстом падал с «непредвиденной ошибкой» | `show_class_selection` не умел работать без `callback_query` — **исправлено 11.09** | [handlers/common/callback_handler.py](handlers/common/callback_handler.py) |
+| Повторное нажатие кнопки даёт «непредвиденную ошибку» | `Message is not modified` — **исправлено 11.09** в `class_callbacks`, `main_menu`, `callback_handler`; в `teacher_menu`/`room_schedule`/`school_info` — ещё открыто | соответствующий handler |
+| `FileDB.delete_one` удалял все совпадающие документы, а не один | — **исправлено 11.09** | [database/file_db.py](database/file_db.py) |
 
 ---
 
@@ -466,21 +470,32 @@ ADMIN_LOG_FILE=./logs/admin.log
 6. ✅ Сделать `FileDB` потокобезопасным и атомарным.
 7. ✅ Починить детектор замен: унифицировать строковые ключи.
 8. ✅ Перевести фоновое обновление с `threading` на `asyncio` + `to_thread`.
-9. Вынести общую логику учителей/кабинетов в базовый класс.
-10. Унифицировать главное меню и help-текст.
+9. ✅ **11.09**: `BackgroundUpdater.moscow_tz`, `SimpleNamespace`-контекст, дубли `stop()`.
+10. ✅ **11.09**: `FileDB.delete_one` (один документ), дубли `get_collection`, `print`→`logger`.
+11. ✅ **11.09**: блокирующий IO в админ-callback'ах → `asyncio.to_thread`.
+12. ✅ **11.09**: `/week` и `/school` зарегистрированы; проверка `TELEGRAM_TOKEN` при старте.
+13. ✅ **11.09**: `show_class_selection` из текстового ввода; `Message is not modified` (частично).
+14. ✅ **11.09**: `CacheService.delete/delete_prefix`, реальная очистка `state_service`; `clear_school_cache` с сохранением.
+15. ✅ **11.09**: `__init__.py` во всех пакетах.
+16. ⬜ Вынести общую логику учителей/кабинетов в базовый класс.
+17. ⬜ Унифицировать главное меню и help-текст.
 
 ### 16.1 Открытый техдолг (P2)
 
-1. **Заменить `print()` на `logger`** в `bot.py`, `core/data_loader.py`, `core/background_updater.py` — десятки вызовов дублируют логирование, идут в stdout в обход `logging.basicConfig` (с `filename=self.config.LOG_FILE`).
-2. **Инициализировать `self.moscow_tz`** в `BackgroundUpdater.__init__` (`core/background_updater.py:11-18`) или удалить неиспользуемый `log_update_activity` (`core/background_updater.py:174-181`).
-3. **Использовать `Config.UPDATE_INTERVAL`** вместо хардкода 1800 в `core/background_updater.py:16`.
-4. **Удалить мёртвый импорт `admin_callback_handler`** в `bot.py:24` (используется только `admin_panel_handler` и `setup_admin_handlers`).
-5. **Удалить дубликат `FileDB.get_collection`** (`database/file_db.py:60-66`).
-6. **Решить судьбу `database/models/user_school.py`** — либо удалить, либо интегрировать в `UserService` (сейчас модель нигде не используется).
-7. **Передать `Config` в `BackgroundUpdater.__init__`** и убрать post-construction monkey-patching в `bot.py:36-44`.
-8. **Уточнить источник настроек уведомлений** в `_get_admin_notification_settings` — сейчас берётся только у первого `ADMIN_IDS`, остальные игнорируются.
-9. **Удалить неиспользуемую `CACHE_PATH`** из `.env` (и `cache/` из репозитория) либо начать её использовать.
-10. **Удалить дублирующиеся/мёртвые callback-функции** (`admin_callback_handler` в `admin_panel.py`, `week_command_handler` в `week_command.py` — импортируется, но не регистрируется).
+1. **Заменить `print()` на `logger`** в `bot.py`, `core/data_loader.py`, `core/background_updater.py` (`database/file_db.py` — ✅ сделано 11.09).
+2. **Использовать `Config.UPDATE_INTERVAL`** вместо хардкода 1800 в `core/background_updater.py`.
+3. **Удалить дубликат кода между `admin_panel.py` и `admin_callbacks.py`** — callback-часть `admin_panel.py` мертва; живой код там: `setup_admin_handlers` (регистрация `/admin`, `/stats`). Требует слияния, не простого удаления.
+4. **Решить судьбу `database/models/user_school.py`** — либо удалить, либо интегрировать в `UserService` (сейчас модель нигде не используется).
+5. **Передать `Config` в `BackgroundUpdater.__init__`** и убрать post-construction monkey-patching в `bot.py:36-44`.
+6. **Уточнить источник настроек уведомлений** в `_get_admin_notification_settings` — сейчас берётся только у первого `ADMIN_IDS`, остальные игнорируются. Плюс **две независимые системы настроек** (`UserService.notification_settings` vs `UserPreferencesService`) с противоречащими дефолтами.
+7. **Удалить неиспользуемую `CACHE_PATH`** из `.env` (и `cache/` из репозитория) либо начать её использовать.
+8. **Кнопки-заглушки** `teacher_pages_info` / `room_search_pages_info` не обрабатываются — `room_search_pages_info` уходит в `_handle_room_selection` и пытается загрузить кабинет «info». Использовать `callback_data="noop"`.
+9. **Нарезка сообщений >4096** символов (сегодня+завтра, недельное расписание) — `BadRequest: Message is too long`.
+10. **Поиск учителей/кабинетов**: индексы результатов поиска применяются к полному списку; `callback_data` с кириллицей превышает 64 байта (см. roadmap.md п.10).
+11. **Залипающие флаги** `waiting_for_teacher_search` / `waiting_for_room_search` — сбрасывать при навигации или перейти на `ConversationHandler`.
+12. **Битый `database.json`** перезатирается пустым при первой записи — сохранять `.corrupt`-копию (roadmap.md п.4).
+13. **Кэш расписания не инвалидируется** после фонового обновления — до 10 минут старые данные (TTL).
+14. **`print()` в `handlers/schools/school_selection.py:89`** и другие остатки.
 
 ---
 

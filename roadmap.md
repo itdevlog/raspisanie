@@ -3,6 +3,31 @@
 > Полный аудит проекта от 03.09.2026. ~2700 строк Python, стек: python-telegram-bot 20.7, requests, pytz, JSON-БД.
 > Приоритеты: 🔴 P0 — падения/потеря данных, 🟠 P1 — некорректное поведение, 🟡 P2 — качество и поддержка.
 
+## 0. Статус на 11.09.2026 (после PR «Fix critical bugs»)
+
+**Исправлено (коммит `80434ed`):**
+
+| Что | Где |
+|-----|-----|
+| `AttributeError` на `self.moscow_tz` в `log_update_activity` — updatelog.txt теперь заполняется | `core/background_updater.py` |
+| Хак `context = ContextTypes.DEFAULT_TYPE` (мутация класса PTB) → заменён на `SimpleNamespace` | `core/background_updater.py` |
+| Дублирующийся метод `stop()` | `core/background_updater.py` |
+| Краш `show_class_selection` при вводе несуществующего класса текстом (`query=None`) | `handlers/common/callback_handler.py` |
+| Блокирующий sync-IO в админ-callback'ах → `asyncio.to_thread` (бот больше не замирает при обновлении из админки) | `handlers/callbacks/admin_callbacks.py`, `handlers/admin/admin_panel.py` |
+| `FileDB.delete_one` удалял ВСЕ подходящие документы, а не один | `database/file_db.py` |
+| Дублирующийся `FileDB.get_collection`, `except (…, Exception)` → `(json.JSONDecodeError, OSError)`, `print` → `logger` | `database/file_db.py` |
+| Команды `/week` и `/school` не были зарегистрированы | `bot.py` |
+| Понятная ошибка при незаданном `TELEGRAM_TOKEN` вместо падения внутри PTB | `bot.py` |
+| `ExchangeDetector.clear_school_cache` не сохранял файл (возвращалось после рестарта); мусорный лог в `clear_cache` | `services/exchange_detector.py` |
+| `Message is not modified` уходит в error handler → тихо игнорируется (частично: `main_menu`, `class_callbacks`, `callback_handler`; в `teacher_menu`/`room_schedule`/`school_info` — ещё нет) | `handlers/common/main_menu.py`, `handlers/callbacks/class_callbacks.py` |
+| Заголовок с датой для «Сегодня/Завтра» (классы/преподаватели/кабинеты) | `services/schedule_service.py`, `services/teacher_service.py`, `services/room_service.py` |
+| `CacheService.delete/delete_prefix`; `state_service.clear_user_state` реально удаляет ключи (была утечка: значения ставились в `None`) | `services/cache_service.py`, `services/state_service.py` |
+| Недостающие `__init__.py` во всех пакетах (11 шт.) | `config/`, `core/`, `database/`, `handlers/*`, `services/` |
+
+**Ещё исправлено ранее** (до аудита, отражено в WIKI §8, §16): глубокие копии замен, строковые ключи уроков, `sent_count > 0`, потокобезопасный `FileDB`, `bot_data['background_updater']`, `asyncio` в фоновом обновлении.
+
+**Осталось открытым** — см. таблицы ниже, прежде всего: п.4 (битый `database.json`), п.9 (нарезка 4096), п.10 (поиск учителей/кабинетов — чужие индексы), двойной `query.answer()`, заливающие флаги поиска, две системы настроек уведомлений, дубли `admin_panel.py` ↔ `admin_callbacks.py`, `print` → `logger`.
+
 ---
 
 ## 1. 🔴 Критические баги (P0)
@@ -12,30 +37,30 @@
 | # | Место | Проблема | Исправление |
 |---|-------|----------|-------------|
 | 1 | `services/exchange_service.py:39,48,52,56` | Неглубокая копия `lesson.copy()` при применении замен → мутируется **вложенный** `lesson['data']`, общий с `bot_data['schools_data']`. Исходное расписание перезаписывается кодами замен, замены применяются повторно, сравнение old/new в апдейтере даёт ложные срабатывания | Копировать глубоко: `updated_lesson = {**lesson, 'data': {**lesson['data']}}` |
-| 2 | `core/background_updater.py:245-247, 308-311` | `context = ContextTypes.DEFAULT_TYPE` — атрибуты присваиваются **классу**, а не объекту. Глобальная мутация, гонка со всеми апдейтами | Передавать `application`/`bot` аргументами в `notify_exchange_updates` (изменить сигнатуру) |
-| 3 | `core/background_updater.py:193` | `log_update_activity()` использует несуществующий `self.moscow_tz` → `AttributeError` глотается, `updatelog.txt` **никогда не заполняется** | Определить `self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')` в `__init__` |
+| 2 | `core/background_updater.py` | `context = ContextTypes.DEFAULT_TYPE` — атрибуты присваиваются **классу**, а не объекту. Глобальная мутация, гонка со всеми апдейтами | ✅ **исправлено 11.09**: `SimpleNamespace(application, bot_data, bot)` в `_make_context()` |
+| 3 | `core/background_updater.py:193` | `log_update_activity()` использует несуществующий `self.moscow_tz` → `AttributeError` глотается, `updatelog.txt` **никогда не заполняется** | ✅ **исправлено 11.09**: `self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')` в `__init__` |
 | 4 | `database/file_db.py:17-19, 35-38` | При битом `database.json` загрузка возвращает `{}`, и первая же запись **перезаписывает файл пустым** — полная потеря пользователей. Запись не атомарна | При ошибке сохранять `database.json.corrupt`; писать через temp-файл + `os.replace()` |
-| 5 | `services/exchange_detector.py:86,90,147-148, 26` | Ключи-`int` (номер урока) после JSON-раунд-трипа становятся `str` → `previous.get(lesson_num)` всегда `None` → **после каждого рестарта все замены рассылаются повторно** | Сравнивать ключи как строки: `previous.get(str(lesson_num))` |
-| 6 | `services/notification_service.py:147-150` | Уведомление помечается отправленным даже при 0 успешных доставок → замена **теряется навсегда**, если Telegram был недоступен | `if sent_count > 0: _mark_notification_sent(...)` |
+| 5 | `services/exchange_detector.py:86,90,147-148, 26` | Ключи-`int` (номер урока) после JSON-раунд-трипа становятся `str` → `previous.get(lesson_num)` всегда `None` → **после каждого рестарта все замены рассылаются повторно** | ✅ сделано ранее: сравнение ключей как строк |
+| 6 | `services/notification_service.py:147-150` | Уведомление помечается отправленным даже при 0 успешных доставок → замена **теряется навсегда**, если Telegram был недоступен | ✅ сделано ранее: `if sent_count > 0: _mark_notification_sent(...)` |
 
 ### Падения в обработчиках
 
-| # | Место | Проблема | Исправление |
-|---|-------|----------|-------------|
-| 7 | `bot.py:45` | `background_updater` не кладётся в `bot_data` → админ-кнопка «Принудительное обновление» **всегда падает** (`admin_callbacks.py:173` получает `None`) | Добавить `bot_data['background_updater'] = self.background_updater` |
-| 8 | `handlers/common/class_schedule.py:92` → `callback_handler.py:144,187` | Ввод несуществующего класса текстом: `show_class_selection` вызывает `query.edit_message_text` при `query=None` → `AttributeError`, пользователь видит «непредвиденная ошибка» | Ветвиться: `if update.callback_query: edit else: reply_text` |
-| 9 | `handlers/common/class_schedule.py:99-103` | «Сегодня + завтра» одним сообщением без проверки длины → на старших классах `BadRequest: Message is too long` (>4096). То же для недельного расписания (`week_command.py:78`, `class_callbacks.py:83`, `teacher_menu.py:156`, `room_schedule.py:158`) | Нарезка сообщений по 4096 или отправка частями |
-| 10 | `handlers/teachers/teacher_menu.py:364, 378` и `handlers/rooms/room_schedule.py:378, 392` | **Два бага поиска:** (а) индексы из поиска применяются к полному списку (`teacher_callbacks.py:84` читает `'teachers'` вместо `'search_teachers'`) → клик по результату даёт **чужого** учителя/кабинет; (б) `callback_data=f"teacher_search_{запрос}_{page}"` с кириллицей превышает лимит 64 байта → поиск «зависает» | Кодировать источник списка в callback (`teacher_today_sidx_N`) и читать соответствующий список; запрос поиска хранить в `user_data`, не в callback_data |
-| 11 | `handlers/common/callback_handler.py:120` | Проверка наличия классов по префиксу: цифра `1` матчится и с `11а` → кнопка «1» показывается, даже если классов `1x` нет | Сравнивать сегменты, а не префикс целиком |
-| 12 | `services/schedule_service.py:131`, `exchange_service.py:65` | Поиск класса по подстроке: `"5"` матчится с `"10Б"` → расписание/замены могут примениться **не к тому классу** | Точное сравнение + нормализация, либо явный `class_id` |
-| 13 | `services/schedule_service.py:115`, `room_service.py:86`, `teacher_service.py:86` | Ключ урока `f"{day_num}0{lesson_num}"` даёт `"4010"` для дня 4/урока 10 — конфликт форматов при `LESSONSINDAY > 9` (дефолт 12) | Явный формат `f"{day_num}{lesson_num:02d}"` |
+| # | Место | Проблема | Исправление | Статус |
+|---|-------|----------|-------------|--------|
+| 7 | `bot.py:45` | `background_updater` не кладётся в `bot_data` → админ-кнопка «Принудительное обновление» **всегда падает** (`admin_callbacks.py:173` получает `None`) | Добавить `bot_data['background_updater'] = self.background_updater` | ✅ сделано ранее |
+| 8 | `handlers/common/class_schedule.py:92` → `callback_handler.py` | Ввод несуществующего класса текстом: `show_class_selection` вызывает `query.edit_message_text` при `query=None` → `AttributeError` | Ветвиться: `if update.callback_query: edit else: reply_text` | ✅ **исправлено 11.09** |
+| 9 | `handlers/common/class_schedule.py:99-103` | «Сегодня + завтра» одним сообщением без проверки длины → на старших классах `BadRequest: Message is too long` (>4096). То же для недельного расписания (`week_command.py:78`, `class_callbacks.py:83`, `teacher_menu.py:156`, `room_schedule.py:158`) | Нарезка сообщений по 4096 или отправка частями | ❌ открыто |
+| 10 | `handlers/teachers/teacher_menu.py:364, 378` и `handlers/rooms/room_schedule.py:378, 392` | **Два бага поиска:** (а) индексы из поиска применяются к полному списку (`teacher_callbacks.py:84` читает `'teachers'` вместо `'search_teachers'`) → клик по результату даёт **чужого** учителя/кабинет; (б) `callback_data=f"teacher_search_{запрос}_{page}"` с кириллицей превышает лимит 64 байта → поиск «зависает» | Кодировать источник списка в callback (`teacher_today_sidx_N`) и читать соответствующий список; запрос поиска хранить в `user_data`, не в callback_data | ❌ открыто |
+| 11 | `handlers/common/callback_handler.py:120` | Проверка наличия классов по префиксу: цифра `1` матчится и с `11а` → кнопка «1» показывается, даже если классов `1x` нет | Сравнивать сегменты, а не префикс целиком | ❌ открыто |
+| 12 | `services/schedule_service.py:131`, `exchange_service.py:65` | Поиск класса по подстроке: `"5"` матчится с `"10Б"` → расписание/замены могут примениться **не к тому классу** | Точное сравнение + нормализация, либо явный `class_id` | ✅ сделано ранее |
+| 13 | `services/schedule_service.py:115`, `room_service.py:86`, `teacher_service.py:86` | Ключ урока `f"{day_num}0{lesson_num}"` даёт `"4010"` для дня 4/урока 10 — конфликт форматов при `LESSONSINDAY > 9` (дефолт 12) | Явный формат `f"{day_num}{lesson_num:02d}"` | ✅ сделано ранее |
 
 ### Блокировка event loop
 
-| # | Место | Проблема | Исправление |
-|---|-------|----------|-------------|
-| 14 | `core/background_updater.py:96`, `admin_callbacks.py:122-123,150-151` | Синхронный `requests` (`load_all_schools_data`, до минут с ретраями) вызывается прямо в async-обработчиках → **весь бот перестаёт отвечать** всем пользователям | `await asyncio.to_thread(loader.load_all_schools_data)` |
-| 15 | `core/background_updater.py:57-59` | Приватный `application.update_queue._loop` + поток стартует до `run_polling()` | Перейти на `application.job_queue.run_repeating()` (устраняет заодно #2, #16) |
+| # | Место | Проблема | Исправление | Статус |
+|---|-------|----------|-------------|--------|
+| 14 | `core/background_updater.py:96`, `admin_callbacks.py:122-123,150-151` | Синхронный `requests` (`load_all_schools_data`, до минут с ретраями) вызывается прямо в async-обработчиках → **весь бот перестаёт отвечать** всем пользователям | `await asyncio.to_thread(loader.load_all_schools_data)` | ✅ **исправлено 11.09** (в т.ч. в `admin_panel.py`) |
+| 15 | `core/background_updater.py:57-59` | Приватный `application.update_queue._loop` + поток стартует до `run_polling()` | Перейти на `application.job_queue.run_repeating()` (устраняет заодно #2, #16) | ✅ сделано ранее (asyncio.create_task); JobQueue — рекомендация на будущее |
 
 ---
 
@@ -44,7 +69,7 @@
 ### Telegram-протокол
 
 - **Двойной `query.answer()`** — `handlers/callbacks/__init__.py:36` отвечает на query сразу, поэтому все тосты об ошибках внутри обработчиков (`class_callbacks.py:17,31`, `room_callbacks.py:25,49`, `teacher_callbacks.py:25,49,61`, `navigation_callbacks.py:35,37,112`) **не показываются вообще**. Отвечать в роутере только если обработчик не ответил.
-- **`Message is not modified`** — повторное нажатие «Обновить»/«Назад» уходит в error handler с «непредвиденной ошибкой» (`class_callbacks.py:83`, `teacher_menu.py:156,267`, `room_schedule.py:158,274`, `main_menu.py:101`, `school_info.py:59`, `callback_handler.py:144,187,270`). Обработано только в админ-панели.
+- **`Message is not modified`** — повторное нажатие «Обновить»/«Назад» уходит в error handler с «непредвиденной ошибкой» (`class_callbacks.py:83`, `teacher_menu.py:156,267`, `room_schedule.py:158,274`, `main_menu.py:101`, `school_info.py:59`, `callback_handler.py:144,187,270`). Обработано только в админ-панели. → ✅ **частично исправлено 11.09** (`class_callbacks`, `main_menu`, `callback_handler`); в `teacher_menu`, `room_schedule`, `school_info` — ещё открыто.
 - **Кнопки-заглушки без обработчика** — `teacher_menu.py:240,380`, `room_schedule.py:247,394` (`*_pages_info`) → «Неизвестная команда навигации». Использовать `callback_data="noop"`.
 - **Обрезка Markdown посередине** — `admin_panel.py:278-279`, `admin_callbacks.py:278-279` (`text[:4000]`) ломает `*...*`/`` `...` `` → `Can't parse entities`. Обрезать по границе строки.
 - **Неполное экранирование** — `base_schedule_service.py:67,91,100,109`: не экранируются `[`, `]`, `(`, `)` для legacy Markdown → сообщение не уйдёт.
@@ -61,7 +86,7 @@
 
 - **Детектор смотрит только «сегодня»** — `background_updater.py:216`, `exchange_detector.py:126`: замены на завтра/неделю не обнаруживаются; после полуночи вчерашние исчезают. Дата в заголовке уведомления подменяется текущей (`notification_service.py:99`).
 - **Две независимые системы настроек уведомлений** — `user_service.py:100-150` vs `user_preferences.py:12-19`, дефолты противоречат друг другу (`False` vs `True`). Унифицировать.
-- **`clear_school_cache` не сохраняет файл** — `exchange_detector.py:264-267`: после рестарта «очищенное» возвращается.
+- **`clear_school_cache` не сохраняет файл** — `exchange_detector.py:264-267`: после рестарта «очищенное» возвращается. → ✅ **исправлено 11.09** (теперь вызывает `save_cache()`).
 - **Экранирование до бизнес-логики** — `room_service.py:95-96,106`, `teacher_service.py:95-96,479`: `class_name` экранируется и затем сравнивается с «чистыми» именами → замены не находятся.
 - **`ExchangeService` создаётся в цикле** — `exchange_detector.py:102`: на каждую школу каждый тик.
 
@@ -75,9 +100,9 @@
 
 ### Мёртвый код (удалить)
 
-- `handlers/admin/admin_panel.py` — целиком дубликат `admin_callbacks.py`, **никогда не регистрируется** (регистрируется только `callback_handler`). Опасен: правки легко вносить не в тот файл.
-- `handlers/common/week_command.py` — импортируется (`bot.py:18`), но команда `/week` **не регистрируется** и не работает.
-- `callback_handler.py:282-333` (`handle_school_info`), `class_schedule.py:36-41` (флаг `waiting_for_teacher`), `navigation_callbacks.py:69-76,114-122` (недостижимые ветки), закомментированный блок `notification_service.py:247-317`, заглушка `_get_user_service:242-245`, `UserSchool`, `['order']` в конфиге школ.
+- `handlers/admin/admin_panel.py` — **частично** дублирует `admin_callbacks.py` (callback-часть мерт­ва, но `setup_admin_handlers` регистрирует `/admin`, `/stats` — живой код). Требует аккуратного слияния, а не простого удаления. → открыто
+- `handlers/common/week_command.py` — команда `/week` **не регистрировалась**. → ✅ **исправлено 11.09**: `/week` и `/school` зарегистрированы в `bot.py`.
+- `callback_handler.py:282-333` (`handle_school_info`), `class_schedule.py:36-41` (флаг `waiting_for_teacher`), `navigation_callbacks.py:69-76,114-122` (недостижимые ветки), закомментированный блок `notification_service.py:247-317`, заглушка `_get_user_service:242-245`, `UserSchool`, `['order']` в конфиге школ. → открыто
 
 ---
 
@@ -153,15 +178,17 @@
 
 ## 6. Порядок работ (предлагаемый)
 
-| Этап | Что | Закрывает |
-|------|-----|-----------|
-| **1. Стабилизация** (первый PR) | Баги п.1, 3, 4, 5, 6, 7 — мутация данных, потеря БД, дубли уведомлений, мёртвый апдейт-лог, кнопка админа | Самые опасные дефекты, ~30 мин работы |
-| **2. Отзывчивость** | П.14, 15 + JobQueue вместо потока | Бот не «замерзает» |
-| **3. Telegram-протокол** | Двойной answer, `Message is not modified`, нарезка 4096, callback_data 64 байт, кнопки-заглушки | Тосты, падения на кликах |
-| **4. Поиск и состояния** | П.10, заливание флагов, `class_digit`, TTL-кнопки | Корректный поиск учителей/кабинетов |
-| **5. Замены** | Строковые ключи, завтра/неделя, две системы настроек, инвалидация кэша | Достоверные уведомления |
-| **6. Чистка** | Мёртвый код (`admin_panel.py`, `week_command.py`, `UserSchool`), дублирование, `print`→logging, `RotatingFileHandler` | Поддерживаемость |
-| **7. Тесты и инструменты** | pytest, ruff, mypy, CI | Регрессии |
+| Этап | Что | Закрывает | Статус |
+|------|-----|-----------|--------|
+| **1. Стабилизация** | Баги п.1, 3, 4, 5, 6, 7 — мутация данных, потеря БД, дубли уведомлений, мёртвый апдейт-лог, кнопка админа | П.1, 3, 5, 6, 7 ✅ сделаны (п.3, 5, 6, 7 — ранее; п.2 частично); **п.4 (битый database.json) — ещё открыт** | 🟡 частично |
+| **2. Отзывчивость** | П.14, 15 + JobQueue вместо потока | П.14 ✅ **исправлено 11.09** (в т.ч. admin callbacks); JobQueue — рекомендация | 🟡 частично |
+| **3. Telegram-протокол** | Двойной answer, `Message is not modified` (✅ частично), нарезка 4096, callback_data 64 байт, кнопки-заглушки | Тосты, падения на кликах | ❌ открыто |
+| **4. Поиск и состояния** | П.10, заливание флагов, `class_digit`, TTL-кнопки | Корректный поиск учителей/кабинетов | ❌ открыто |
+| **5. Замены** | Строковые ключи (✅ ранее), завтра/неделя, две системы настроек, инвалидация кэша | Достоверные уведомления | ❌ открыто |
+| **6. Чистка** | Мёртвый код (`admin_panel.py` — слияние, `UserSchool`), дублирование, `print`→logging (`file_db.py` ✅), `RotatingFileHandler` | Поддерживаемость | 🟡 частично |
+| **7. Тесты и инструменты** | pytest, ruff, mypy, CI | Регрессии | ❌ открыто |
+
+> **11.09.2026**: выполнен этап 2 целиком (в рамках текущей архитектуры) и часть этапа 1 (п.8), этапа 3 (Message is not modified — 3 файла) и этапа 6 (FileDB: дубли/логирование; /week и /school зарегистрированы; __init__.py во всех пакетах). Добавлен smoke-тест импортов и unit-проверки `delete_one`/`log_update_activity`/`clear_user_state` (временно, вне репозитория — нужен pytest, см. этап 7).
 
 ---
 
