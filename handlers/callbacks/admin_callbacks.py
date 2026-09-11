@@ -1,6 +1,7 @@
 # handlers/callbacks/admin_callbacks.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from telegram.constants import ChatAction
 import asyncio
 import logging
 from config.schools import SCHOOLS_CONFIG
@@ -113,16 +114,45 @@ class AdminCallbackHandler:
         
         return InlineKeyboardMarkup(keyboard)
 
+    @staticmethod
+    async def _typing_until(chat_id: int, context, coro):
+        """Показывает «печатает...» и выполняет coro, периодически подогревая индикатор."""
+        import asyncio
+
+        async def _show():
+            while not done:
+                try:
+                    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+                except Exception:
+                    pass
+                await asyncio.sleep(3)
+
+        done = False
+        task = asyncio.ensure_future(_show())
+        try:
+            result = await coro
+            return result
+        finally:
+            done = True
+            try:
+                task.cancel()
+            except Exception:
+                pass
+
     async def _refresh_all_schools(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет данные всех школ"""
         query = update.callback_query
         user_id = update.effective_user.id
-        
+
         await query.edit_message_text("🔄 *Обновление данных всех школ...*\n\nЭто может занять несколько секунд.", parse_mode='Markdown')
 
+        chat_id = update.effective_chat.id if update.effective_chat else None
         loader = DataLoader()
         # Оффлоадим синхронные HTTP-запросы в отдельный поток, чтобы не блокировать event loop
-        schools_data = await asyncio.to_thread(loader.load_all_schools_data)
+        if chat_id:
+            schools_data = await self._typing_until(chat_id, context, asyncio.to_thread(loader.load_all_schools_data))
+        else:  # pragma: no cover
+            schools_data = await asyncio.to_thread(loader.load_all_schools_data)
         
         if schools_data:
             context.bot_data['schools_data'] = schools_data
@@ -180,7 +210,12 @@ class AdminCallbackHandler:
                 return
             
             # Выполняем обновление
-            await background_updater._perform_update()
+            chat_id = update.effective_chat.id if update.effective_chat else None
+            if chat_id:
+                await self._typing_until(
+                    chat_id, context, background_updater._perform_update())
+            else:  # pragma: no cover
+                await background_updater._perform_update()
             
             # Получаем обновленный статус школ
             schools_status = await self._get_schools_status(context)

@@ -202,3 +202,7 @@
 
 - `tests/test_exchange_detector.py` — round-trip JSON строковых ключей урока (п.5), новые замены.
 - `tests/test_callback_router.py` — параметризованные случаи `_get_handler_key` (16 префиксов).
+
+### P2: индикатор «печатает...» в долгих админ-операциях
+
+- `admin_callbacks._typing_until` — периодически шлёт `ChatAction.TYPING`, пока выполняется длинная задача; применён в «Обновить все школы» и «Принудительное обновление».
