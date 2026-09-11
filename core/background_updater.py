@@ -229,7 +229,9 @@ class BackgroundUpdater:
                 for school_id, school_data in new_schools_data.items():
                     try:
                         self.logger.info(f"Проверка замен для школы {school_id} на {date_str}")
-                        new_exchanges = exchange_detector.detect_exchanges(school_id, school_data, today)
+                        new_exchanges = await asyncio.to_thread(
+                            exchange_detector.detect_exchanges, school_id, school_data, today, False
+                        )
 
                         if new_exchanges:
                             self.logger.info(f"Найдено {len(new_exchanges)} новых замен для школы {school_id} на {date_str}")
@@ -257,10 +259,19 @@ class BackgroundUpdater:
                                 self.logger.info(f"Notification result for class {class_name}: {result}")
 
                                 # Логируем активность обновления
-                                self.log_update_activity(f"Отправлено {len(class_exchanges)} уведомлений для класса {class_name} в школе {school_id} на {date_str}, результат: {result}")
+                                await asyncio.to_thread(
+                                    self.log_update_activity,
+                                    f"Отправлено {len(class_exchanges)} уведомлений для класса {class_name} в школе {school_id} на {date_str}, результат: {result}",
+                                )
 
                     except Exception as e:
                         self.logger.error(f"Ошибка проверки замен для школы {school_id}: {e}")
+
+            # Один общий flush кэша замен за цикл (а не запись на каждую школу/дату)
+            try:
+                await asyncio.to_thread(exchange_detector.save_cache)
+            except Exception as e:
+                self.logger.error(f"Ошибка сохранения кэша замен: {e}")
 
         except Exception as e:
             self.logger.error(f"Ошибка в проверке обновлений замен: {e}")
