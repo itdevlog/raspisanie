@@ -7,8 +7,9 @@ from handlers.start import cancel_handler
 
 def _context():
     return SimpleNamespace(
-        user_data={'waiting_for_teacher_search': True, 'class_digit': '5',
-                   'teacher_search_query': 'Ив', 'room_search_query': '101'},
+        user_data={'waiting_for_teacher_search': True, 'waiting_for_room_search': True,
+                   'class_digit': '5', 'teacher_search_query': 'Ив',
+                   'room_search_query': '101'},
         bot_data={
             'user_service': SimpleNamespace(
                 get_user_school=lambda uid: 'school_133',
