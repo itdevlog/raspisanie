@@ -180,3 +180,7 @@
 
 - В `EntityMenuHandler::select` добавлена кнопка «🔄 Обновить» (перерисовка текущего расписания).
 - Новые юнит-тесты: `test_exchange_service.py` (точный матчинг класса, нет мутации входных данных), `test_file_db.py` (битый файл → `.corrupt`, upsert, delete_one, round-trip).
+
+### P2: убран лишний `ExchangeService` в детекторе замен
+
+- `_get_current_exchanges`/`_get_class_exchanges` больше не создают/не принимают неиспользуемый `ExchangeService` (данные извлекаются напрямую из `school_data`) — меньше мусорных объектов на каждый тик.

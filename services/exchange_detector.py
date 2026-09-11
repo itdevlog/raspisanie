@@ -5,7 +5,6 @@ import pytz
 import logging
 import json
 import os
-from services.exchange_service import ExchangeService
 from config.config import Config, get_timezone
 
 class ExchangeDetector:
@@ -106,7 +105,6 @@ class ExchangeDetector:
     def _get_current_exchanges(self, school_data: Dict, date: datetime) -> Dict[str, Dict]:
         """Получает текущие замены для всех классов"""
         exchanges = {}
-        exchange_service = ExchangeService(school_data)
         
         # Получаем все классы школы
         classes = school_data.get('CLASSES', {})
@@ -114,9 +112,7 @@ class ExchangeDetector:
         for class_id, class_name in classes.items():
             try:
                 # Получаем замены для класса
-                class_exchanges = self._get_class_exchanges(
-                    exchange_service, class_name, class_id, date, school_data  # ДОБАВЛЕН school_data
-                )
+                class_exchanges = self._get_class_exchanges(class_name, class_id, date, school_data)
                 if class_exchanges:
                     exchanges[class_name] = class_exchanges
             except Exception as e:
@@ -124,8 +120,7 @@ class ExchangeDetector:
         
         return exchanges
     
-    def _get_class_exchanges(self, exchange_service: ExchangeService,
-                           class_name: str, class_id: str, date: datetime, school_data: Dict) -> Dict:
+    def _get_class_exchanges(self, class_name: str, class_id: str, date: datetime, school_data: Dict) -> Dict:
         """Получает замены для конкретного класса. lesson_num всегда строка."""
         date_str = date.strftime('%d.%m.%Y')
 
