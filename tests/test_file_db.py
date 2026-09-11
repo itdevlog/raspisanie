@@ -47,3 +47,29 @@ def test_persist_round_trip():
     db.get_collection('users').insert_one({'user_id': 42, 'current_school': 'school_133'})
     # перечитываем из файла
     assert FileDB(db_path).data['users'][0]['user_id'] == 42
+
+
+def test_save_data_returns_true_on_success():
+    db_path = _mkdb()
+    db = FileDB(db_path)
+    assert db._save_data() is True
+
+
+def test_update_one_returns_false_when_save_fails(monkeypatch):
+    db_path = _mkdb()
+    db = FileDB(db_path)
+    col = db.get_collection('users')
+    monkeypatch.setattr(db, '_save_data', lambda: False)
+    assert col.update_one({'user_id': 1}, {'user_id': 1, 'name': 'A'}, upsert=True) is False
+
+
+def test_bare_filename_does_not_crash():
+    d = tempfile.mkdtemp()
+    cwd = os.getcwd()
+    try:
+        os.chdir(d)
+        db = FileDB('database.json')
+        col = db.get_collection('users')
+        assert col.insert_one({'user_id': 7}) is True
+    finally:
+        os.chdir(cwd)

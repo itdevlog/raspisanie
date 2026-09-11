@@ -46,12 +46,12 @@ class FileDB:
         except OSError as e:
             logger.error(f"Failed to back up corrupt database {self.db_path}: {e}")
 
-    def _save_data(self):
-        """Атомарно сохраняет данные в файл через временный файл и rename"""
+    def _save_data(self) -> bool:
+        """Атомарно сохраняет данные. Возвращает False при ошибке (не глотает её молча)."""
         try:
-            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-            # Пишем во временный файл в той же директории, чтобы rename был атомарным
             dir_name = os.path.dirname(self.db_path) or '.'
+            os.makedirs(dir_name, exist_ok=True)
+            # Пишем во временный файл в той же директории, чтобы rename был атомарным
             fd, temp_path = tempfile.mkstemp(dir=dir_name, prefix='.file_db_tmp_', suffix='.json')
             try:
                 with os.fdopen(fd, 'w', encoding='utf-8') as f:
@@ -61,8 +61,10 @@ class FileDB:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
                 raise
+            return True
         except Exception as e:
-            logger.error(f"Error saving database: {e}")
+            logger.error(f"Error saving database: {e}", exc_info=True)
+            return False
 
     @staticmethod
     def _json_serializer(obj):
@@ -111,22 +113,21 @@ class Collection:
             return [self._clean_document(doc) for doc in self.db.data[self.name]
                     if all(doc.get(k) == v for k, v in query.items())]
 
-    def insert_one(self, document: dict):
-        """Вставляет один документ"""
+    def insert_one(self, document: dict) -> bool:
+        """Вставляет один документ; возвращает False, если запись на диск не удалась."""
         clean_doc = self._clean_document(document)
         with self.db._lock:
             self.db.data[self.name].append(clean_doc)
-            self.db._save_data()
+            return self.db._save_data()
 
-    def update_one(self, query: dict, update: dict, upsert: bool = False):
-        """Обновляет один документ"""
+    def update_one(self, query: dict, update: dict, upsert: bool = False) -> bool:
+        """Обновляет один документ; возвращает False, если запись на диск не удалась."""
         with self.db._lock:
             for doc in self.db.data[self.name]:
                 if all(doc.get(k) == v for k, v in query.items()):
                     clean_update = self._clean_document(update)
                     doc.update(clean_update)
-                    self.db._save_data()
-                    return
+                    return self.db._save_data()
 
             # Если документ не найден и upsert=True, создаем новый
             if upsert:
@@ -135,16 +136,17 @@ class Collection:
                 new_doc.update(clean_update)
                 clean_doc = self._clean_document(new_doc)
                 self.db.data[self.name].append(clean_doc)
-                self.db._save_data()
+                return self.db._save_data()
+            return False
 
-    def delete_one(self, query: dict):
-        """Удаляет один документ"""
+    def delete_one(self, query: dict) -> bool:
+        """Удаляет один документ; возвращает False, если запись на диск не удалась."""
         with self.db._lock:
             for i, doc in enumerate(self.db.data[self.name]):
                 if all(doc.get(k) == v for k, v in query.items()):
                     del self.db.data[self.name][i]
-                    self.db._save_data()
-                    return
+                    return self.db._save_data()
+            return False
 
     def _clean_document(self, document: dict) -> dict:
         """Очищает документ от несериализуемых объектов"""
