@@ -184,3 +184,8 @@
 ### P2: убран лишний `ExchangeService` в детекторе замен
 
 - `_get_current_exchanges`/`_get_class_exchanges` больше не создают/не принимают неиспользуемый `ExchangeService` (данные извлекаются напрямую из `school_data`) — меньше мусорных объектов на каждый тик.
+
+### P2: кнопка «Отмена» поиска + ограничение длины запроса
+
+- `EntityMenuHandler::search_input` — кнопка «❌ Отмена» (`{p}_search_cancel` → снимает флаг и возвращает в меню), маршрутизация в teacher/room callbacks.
+- `class_schedule.py` — запрос поиска ограничен 80 символами (было без лимита).

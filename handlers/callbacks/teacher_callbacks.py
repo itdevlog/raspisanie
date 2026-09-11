@@ -13,6 +13,9 @@ class TeacherCallbackHandler:
             await self._handle_teacher_menu(update, context)
         elif callback_data == "teacher_search_input":
             await self._handle_teacher_search_input(update, context)
+        elif callback_data == "teacher_search_cancel":
+            from handlers.teachers.teacher_menu import teacher_menu_handler
+            await teacher_menu_handler(update, context)
         elif callback_data == "teacher_show_all":
             await self._handle_show_all_teachers(update, context)
         elif callback_data.startswith("teacher_show_all_"):

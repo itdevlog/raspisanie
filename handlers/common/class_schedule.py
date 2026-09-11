@@ -10,7 +10,18 @@ async def class_schedule_handler(update: Update, context: ContextTypes.DEFAULT_T
     schools_data = context.bot_data.get('schools_data', {})
     
     message_text = update.message.text.strip()
-    
+
+    # Ограничиваем длину запроса поиска (учитель/кабинет), чтобы не грузить огромные строки
+    if (context.user_data.get('waiting_for_room_search')
+            or context.user_data.get('waiting_for_teacher_search')) \
+            and len(message_text) > 80:
+        del context.user_data['waiting_for_room_search']
+        context.user_data.pop('waiting_for_teacher_search', None)
+        await update.message.reply_text(
+            "❌ Слишком длинный запрос (максимум 80 символов). Вернитесь в поиск и попробуйте ещё раз."
+        )
+        return
+
     # Если пользователь ввел номер кабинета для поиска
     if context.user_data.get('waiting_for_room_search'):
         # Очищаем флаг

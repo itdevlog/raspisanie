@@ -285,7 +285,10 @@ class EntityMenuHandler:
         query = update.callback_query
         context.user_data[f'waiting_for_{self.p}_search'] = True
 
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"menu_{self.p}")]]
+        keyboard = [
+            [InlineKeyboardButton("❌ Отмена", callback_data=f"{self.p}_search_cancel")],
+            [InlineKeyboardButton("🔙 Назад", callback_data=f"menu_{self.p}")],
+        ]
         text = (
             f"🔍 *{self.cfg.menu_title}*\n\n"
             f"{self.cfg.search_input_hint}:\n"
@@ -293,6 +296,11 @@ class EntityMenuHandler:
         )
         return await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard),
                                              parse_mode='Markdown')
+
+    async def search_cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Отменяет поиск: снимает флаг ожидания и возвращает в меню сущности."""
+        clear_search_flags(context)
+        return await self.menu(update, context)
 
     async def search_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                              search_query: str, page: int = 0):
