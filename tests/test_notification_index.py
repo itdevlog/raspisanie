@@ -80,6 +80,24 @@ def test_reset_user_class_index():
     assert svc._user_class_index == {}
 
 
+def test_get_notification_settings_batch():
+    import os
+    import tempfile
+
+    from database.file_db import FileDB
+    from services.user_service import UserService
+
+    d = tempfile.mkdtemp()
+    us = UserService(FileDB(os.path.join(d, 'database.json')))
+    us.set_user_class(1, '5а', 'school_133')
+    us.set_user_class(2, '5а', 'school_133')
+    us.set_user_notification_settings(2, False, 'school_133')
+
+    batch = us.get_notification_settings_batch('school_133')
+    assert batch[1] is True
+    assert batch[2] is False
+
+
 def test_notification_ttl_cleanup():
     import time
 

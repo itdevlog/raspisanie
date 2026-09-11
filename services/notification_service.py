@@ -26,6 +26,8 @@ class NotificationService:
          # Кэш индекса (school_id, class_lower) -> [user_id], строится один раз за цикл
          self._user_class_index: dict[tuple, list[int]] = {}
          self._index_loaded_for_school: str = None
+         # Настройки уведомлений {user_id: enabled} для текущей школы, строится вместе с индексом
+         self._settings_for_school: dict[int, bool] = {}
 
     def _build_user_class_index(self, user_service, school_id: str):
         """Один проход по всем пользователям: (school_id, класс) -> [user_id].
@@ -36,10 +38,12 @@ class NotificationService:
         try:
             users_collection = user_service.db.get_collection('users')
             idx: dict[tuple, list[int]] = {}
+            self._settings_for_school = {}
             for user_data in users_collection.find():
                 user_id = user_data.get('user_id')
                 if not user_id:
                     continue
+                self._settings_for_school[user_id] = (user_data.get('notification_settings') or {}).get(school_id, True)
                 school_classes = user_data.get('school_classes') or {}
                 class_name = school_classes.get(school_id)
                 if class_name:
@@ -58,10 +62,17 @@ class NotificationService:
             self._build_user_class_index(user_service, school_id)
         return self._user_class_index.get((school_id, class_name.lower()), [])
 
+    def get_users_for_exchange(self, school_id: str, class_name: str) -> list[int]:
+        """Получатели класса, у которых уведомления включены для школы."""
+        candidates = self._user_class_index.get((school_id, class_name.lower()), [])
+        settings = getattr(self, '_settings_for_school', {}) or {}
+        return [uid for uid in candidates if settings.get(uid, True)]
+
     def reset_user_class_index(self):
         """Сбрасывает индекс (например, после обновления данных)."""
         self._user_class_index = {}
         self._index_loaded_for_school = None
+        self._settings_for_school = {}
 
     def _get_users_by_class(self, user_service, school_id: str, class_name: str) -> list[int]:
         """Получает пользователей, следящих за классом (с индексом)."""
@@ -142,8 +153,9 @@ class NotificationService:
                 self.logger.error("User service not available for exchange notifications")
                 return False
 
-            # Получаем пользователей, которые следят за этим классом
-            users = self._get_users_by_class(user_service, school_id, class_name)
+            # Строим индекс (настройки + классы) и берём только тех, у кого уведомления включены
+            self._get_users_by_class(user_service, school_id, class_name)
+            users = self.get_users_for_exchange(school_id, class_name)
             self.logger.info(f"Найдено {len(users)} пользователей, следящих за классом {class_name} в школе {school_id}")
             if not users:
                 self.logger.info(f"No users found for class {class_name} in school {school_id}")
@@ -171,31 +183,19 @@ class NotificationService:
                 self.logger.info(f"Notification already sent for {notification_key}")
                 return False
 
-            # Отправляем уведомления только тем пользователям, у которых включены уведомления
+            # Получатели уже отфильтрованы по настройкам уведомлений в get_users_for_exchange
             sent_count = 0
             for user_id in users:
                 try:
-                    # Проверяем настройки уведомлений пользователя
-                    notifications_enabled = user_service.get_user_notification_settings(user_id, school_id)
-                    self.logger.info(f"User {user_id} notification setting for school {school_id}: {notifications_enabled}")
-                    if not notifications_enabled:
-                        self.logger.info(f"Notifications disabled for user {user_id}, skipping notification")
-                        continue
-                    else:
-                        self.logger.info(f"Notifications enabled for user {user_id}, sending notification")
-
-                    try:
-                        await context.bot.send_message(
-                            chat_id=user_id,
-                            text=notification_text,
-                            parse_mode='Markdown'
-                        )
-                        sent_count += 1
-                        self.logger.info(f"Exchange notification sent to user {user_id}")
-                    except Exception as e:
-                        self.logger.error(f"Failed to send message to user {user_id}: {e}")
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text=notification_text,
+                        parse_mode='Markdown'
+                    )
+                    sent_count += 1
+                    self.logger.info(f"Exchange notification sent to user {user_id}")
                 except Exception as e:
-                    self.logger.error(f"Error processing user {user_id} for exchange notification: {e}")
+                    self.logger.error(f"Failed to send message to user {user_id}: {e}")
 
             # Сохраняем в кэш отправленных уведомлений ТОЛЬКО если что-то действительно отправлено
             if sent_count > 0:
