@@ -27,6 +27,10 @@ class NavigationCallbackHandler:
             await self._handle_school_selection(update, context, callback_data)
         elif callback_data.startswith("show_all_"):
             await self._handle_show_all_classes(update, context, callback_data)
+        elif callback_data.startswith("all_classes_page_"):
+            await self._handle_show_all_classes(update, context, callback_data)
+        elif callback_data == "all_classes_pages_info":
+            await query.answer("Используйте кнопки навигации по страницам")
         elif callback_data.startswith("clear_digit_"):
             await self._handle_clear_digit(update, context, callback_data)
         elif callback_data.startswith("class_digit_"):
@@ -85,9 +89,15 @@ class NavigationCallbackHandler:
     async def _handle_show_all_classes(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает показ всех классов"""
         from handlers.common.callback_handler import handle_show_all_classes
-        
-        schedule_type = callback_data.replace("show_all_", "")
-        await handle_show_all_classes(update, context, schedule_type)
+        try:
+            if callback_data.startswith("all_classes_page_"):
+                page = int(callback_data.replace("all_classes_page_", ""))
+                await handle_show_all_classes(update, context, None, page)
+            else:
+                schedule_type = callback_data.replace("show_all_", "")
+                await handle_show_all_classes(update, context, schedule_type, 0)
+        except ValueError:
+            await update.callback_query.answer("❌ Ошибка страницы")
     
     async def _handle_clear_digit(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает очистку выбранной цифры класса"""

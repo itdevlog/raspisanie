@@ -4,7 +4,8 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from services.schedule_service import ScheduleService
 from config.schools import SCHOOLS_CONFIG, get_display_name
-from typing import List
+from handlers.common.messaging import safe_edit_message, paginate
+from typing import List, Union
 
 # Импортируем новый роутер callback'ов
 from handlers.callbacks import callback_handler as new_callback_handler
@@ -214,77 +215,100 @@ def _get_class_letters_for_digit(available_classes: List[str], digit: int) -> Li
     
     return sorted(list(letters))
 
-async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_TYPE, schedule_type: str):
-    """Показывает полный список классов (альтернативный способ)"""
+async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_TYPE, schedule_type: str, page: int = 0):
+    """Показывает полный список классов постранично (альтернативный способ).
+
+    При 60+ классах одностраничная клавиатура упиралась бы в лимит 100 кнопок,
+    поэтому список классов кэшируется в state_service и разбивается на страницы
+    (кнопки-номера «◀️ Назад/Вперёд ▶️» через all_classes_page_N).
+    """
     query = update.callback_query
     user_id = update.effective_user.id
     user_service = context.bot_data.get('user_service')
     schools_data = context.bot_data.get('schools_data', {})
-    
+
     if not user_service or not schools_data:
         await query.edit_message_text("❌ Сервис не доступен")
         return
-    
+
     # Получаем выбранную школу пользователя
     current_school_id = user_service.get_user_school(user_id)
     school_data = schools_data.get(current_school_id)
-    
+
     if not school_data:
         await query.edit_message_text("❌ Данные для вашей школы не загружены")
         return
-    
+
     try:
         schedule_service = ScheduleService(school_data)
         available_classes = schedule_service.get_available_classes()
-        
+
+        state_service = context.bot_data.get('state_service')
+        if state_service:
+            # Актуализируем кэш списка классов при первичном вызове (schedule_type != None)
+            if schedule_type is not None:
+                state_service.set_user_list(user_id, 'all_classes', available_classes)
+
+        page, classes_on_page = paginate(available_classes, page, per_page=60)
+
         # Создаем клавиатуру со всеми классами (группируем по цифрам)
         keyboard = []
-        
-        # Группируем классы по цифрам
+
+        # Группируем классы текущей страницы по цифрам
         classes_by_digit = {}
-        for class_name in available_classes:
-            # Извлекаем цифру из названия класса
+        for class_name in classes_on_page:
             digit = ''.join(filter(str.isdigit, class_name))
             if digit:
-                if digit not in classes_by_digit:
-                    classes_by_digit[digit] = []
-                classes_by_digit[digit].append(class_name)
-        
-        # Создаем строки с кнопками, сгруппированные по цифрам
+                classes_by_digit.setdefault(digit, []).append(class_name)
+
+        # Кнопки классов сгруппированы по цифрам
         for digit in sorted(classes_by_digit.keys(), key=int):
             row = []
             for class_name in sorted(classes_by_digit[digit]):
-                row.append(InlineKeyboardButton(class_name, callback_data=f"class_{schedule_type}_{class_name}"))
-                if len(row) == 3:  # 3 кнопки в ряду
+                row.append(InlineKeyboardButton(class_name, callback_data=f"class_{schedule_type or 'today'}_{class_name}"))
+                if len(row) == 3:
                     keyboard.append(row)
                     row = []
-            if row:  # Добавим оставшиеся кнопки в ряду
+            if row:
                 keyboard.append(row)
-        
+
+        # Пагинация
+        total_classes = len(available_classes)
+        total_pages = (total_classes + 60 - 1) // 60
+        pagination_buttons = []
+        if page > 0:
+            pagination_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data=f"all_classes_page_{page-1}"))
+        pagination_buttons.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="all_classes_pages_info"))
+        if page < total_pages - 1:
+            pagination_buttons.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"all_classes_page_{page+1}"))
+        if pagination_buttons:
+            keyboard.append(pagination_buttons)
+
         # Кнопки навигации
+        back_schedule = schedule_type or "today"
         keyboard.append([
-            InlineKeyboardButton("🔙 К выбору цифры", callback_data=f"menu_{schedule_type}"),
-            InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu"),
-            InlineKeyboardButton("⚙️ Настройки", callback_data="menu_settings")
+            InlineKeyboardButton("🔙 Назад", callback_data=f"menu_{back_schedule}"),
+            InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
         ])
-        
+
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         type_text = {
             "today": "на сегодня",
             "tomorrow": "на завтра",
             "week": "на неделю"
         }
-        
-        await query.edit_message_text(
-            f"📚 Все классы *{type_text[schedule_type]}*:\n\n"
-            f"*Всего классов:* {len(available_classes)}",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
+
+        await safe_edit_message(
+            query,
+            f"📚 Все классы *{type_text[back_schedule]}*:\n\n"
+            f"*Всего классов:* {total_classes}\n"
+            f"*Страница:* {page+1}/{total_pages}",
+            reply_markup=reply_markup
         )
-        
+
     except Exception as e:
-        await query.edit_message_text(f"❌ Ошибка при загрузке списка классов: {str(e)}")
+        await safe_edit_message(query, f"❌ Ошибка при загрузке списка классов: {str(e)}")
 
 # ========== ФУНКЦИИ ДЛЯ ИНФОРМАЦИИ И ПОМОЩИ ==========
 

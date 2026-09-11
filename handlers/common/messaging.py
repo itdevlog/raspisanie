@@ -81,6 +81,25 @@ def clear_search_flags(context) -> None:
         context.user_data.pop(flag, None)
 
 
+def paginate(items: List[str], page: int, per_page: int = 30) -> tuple:
+    """Разбивает список на страницы; возвращает (страница, список_на_странице).
+
+    Нормализует page в допустимые границы (0..total_pages-1), чтобы избежать
+    пустых/несуществующих страниц.
+    """
+    total = len(items)
+    total_pages = (total + per_page - 1) // per_page if total else 1
+
+    if page < 0:
+        page = 0
+    elif total_pages > 0 and page >= total_pages:
+        page = max(total_pages - 1, 0)
+
+    start = page * per_page
+    end = min(start + per_page, total)
+    return page, items[start:end]
+
+
 async def edit_long_message(
     update, context, query, text: str,
     reply_markup=None, parse_mode: Optional[str] = 'Markdown',

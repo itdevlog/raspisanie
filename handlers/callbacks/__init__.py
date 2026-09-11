@@ -68,6 +68,8 @@ class CallbackRouter:
             return 'school'
         elif callback_data.startswith('show_all_'):
             return 'show_all'
+        elif callback_data.startswith('all_classes_page_'):
+            return 'show_all'
         elif callback_data.startswith('clear_digit_'):
             return 'clear_digit'
         elif callback_data.startswith('toggle_notifications_'):
