@@ -343,7 +343,7 @@ class EntityMenuHandler:
             on_page = found[start_index:end_index]
 
             if not state_service:
-                return await update.message.reply_text("❌ Сервис временно не доступен")
+                return await self._edit_or_reply(update, context, "❌ Сервис временно не доступен")
 
             context.user_data[self.cfg.search_query_key] = search_query
             state_service.set_user_list(user_id, self.cfg.state_search_key, found)
