@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 
 from config.config import Config, get_timezone
 from config.schools import get_display_name
+from services.text_utils import escape_markdown
 
 
 class NotificationService:
@@ -223,7 +224,7 @@ class NotificationService:
         day_name = self._get_day_name(date)
 
         message = [
-            f"🔄 *{class_name.upper()} - {day_name}, {date_str}*",
+            f"🔄 *{escape_markdown(class_name.upper())} - {day_name}, {date_str}*",
             "",
             "📝 *Новые замены в расписании:*",
             ""
@@ -232,10 +233,10 @@ class NotificationService:
         # Добавляем информацию о заменах
         for exchange in exchanges:
             lesson_num = exchange.get('lesson_num', '?')
-            original_subject = exchange.get('original_subject', 'Неизвестно')
-            new_subject = exchange.get('new_subject', '')
-            new_teacher = exchange.get('new_teacher', '')
-            new_room = exchange.get('new_room', '')
+            original_subject = escape_markdown(exchange.get('original_subject', 'Неизвестно'))
+            new_subject = escape_markdown(exchange.get('new_subject', ''))
+            new_teacher = escape_markdown(exchange.get('new_teacher', ''))
+            new_room = escape_markdown(exchange.get('new_room', ''))
             is_cancelled = exchange.get('is_cancelled', False)
 
             # Формируем строку урока

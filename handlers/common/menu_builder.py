@@ -8,16 +8,18 @@ start.py и main_menu.py раньше дублировали построени�
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from config.schools import SCHOOLS_CONFIG
+from services.text_utils import escape_markdown
 
 
 def build_main_menu_keyboard(current_class: str | None) -> InlineKeyboardMarkup:
     """Клавиатура главного меню; меняется в зависимости от того, выбран ли класс."""
     if current_class:
+        safe_class = escape_markdown(current_class)
         rows = [
             [
-                InlineKeyboardButton(f"📅 {current_class} - Сегодня", callback_data=f"class_today_{current_class}"),
-                InlineKeyboardButton(f"📆 {current_class} - Завтра", callback_data=f"class_tomorrow_{current_class}"),
-                InlineKeyboardButton(f"🗓️ {current_class} - Неделя", callback_data=f"class_week_{current_class}"),
+                InlineKeyboardButton(f"📅 {safe_class} - Сегодня", callback_data=f"class_today_{current_class}"),
+                InlineKeyboardButton(f"📆 {safe_class} - Завтра", callback_data=f"class_tomorrow_{current_class}"),
+                InlineKeyboardButton(f"🗓️ {safe_class} - Неделя", callback_data=f"class_week_{current_class}"),
             ],
             [
                 InlineKeyboardButton("👨‍🏫 Преподаватель", callback_data="menu_teacher"),
@@ -70,7 +72,7 @@ def build_main_menu_text(school_status, current_school_id: str | None,
     if welcome:
         text += "\n\n"
     text += "🏠 *Главное меню*\n\n"
-    text += f"🏫 Текущая школа: *{school_name}*\n"
+    text += f"🏫 Текущая школа: *{escape_markdown(school_name)}*\n"
 
     if current_school_id and school_status:
         if school_status['loaded']:
@@ -80,7 +82,7 @@ def build_main_menu_text(school_status, current_school_id: str | None,
             text += "📊 Статус: ❌ Данные не загружены\n"
 
     if current_class:
-        text += f"📚 Текущий класс: *{current_class}*\n"
+        text += f"📚 Текущий класс: *{escape_markdown(current_class)}*\n"
 
     text += "\nВыберите нужный пункт:"
     return text

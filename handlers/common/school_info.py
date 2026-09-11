@@ -4,6 +4,7 @@ from telegram.ext import ContextTypes
 from config.schools import get_display_name
 from handlers.common.messaging import safe_edit_message
 from handlers.common.requires_school import requires_school
+from services.text_utils import escape_markdown
 
 
 @requires_school
@@ -23,17 +24,17 @@ async def school_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     rooms_count = len(school_data.get('ROOMS', {}))
 
     info_text = (
-        f"🏫 *{school_name}*\n"
-        f"📍 {city}\n\n"
+        f"🏫 *{escape_markdown(school_name)}*\n"
+        f"📍 {escape_markdown(str(city))}\n\n"
         f"📊 *Статистика:*\n"
         f"• Классов: {classes_count}\n"
         f"• Преподавателей: {teachers_count}\n"
         f"• Предметов: {subjects_count}\n"
         f"• Кабинетов: {rooms_count}\n\n"
         f"🕒 *Данные обновлены:*\n"
-        f"{export_date} {export_time}\n\n"
+        f"{escape_markdown(str(export_date))} {escape_markdown(str(export_time))}\n\n"
         f"🔗 *Сайт школы:*\n"
-        f"{school_data.get('HOMEPAGE_URL', 'Не указан')}"
+        f"{escape_markdown(str(school_data.get('HOMEPAGE_URL', 'Не указан')))}"
     )
 
     # Создаем клавиатуру только для callback (в команде /school не нужна)

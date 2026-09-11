@@ -17,6 +17,7 @@ from telegram.ext import ContextTypes
 from config.schools import SCHOOLS_CONFIG
 from handlers.common.messaging import clear_search_flags, edit_long_message
 from services.state_service import UserStateService
+from services.text_utils import escape_markdown
 
 
 @dataclass
@@ -322,7 +323,7 @@ class EntityMenuHandler:
 
             if not found:
                 context.user_data.pop(self.cfg.search_query_key, None)
-                text = f"❌ {self.cfg.label_plural.capitalize()} со '{search_query}' не найдены"
+                text = f"❌ {self.cfg.label_plural.capitalize()} со '{escape_markdown(search_query)}' не найдены"
                 keyboard = [
                     [InlineKeyboardButton("🔍 Попробовать снова", callback_data=f"{self.p}_search_input")],
                     [InlineKeyboardButton("🔙 Назад", callback_data=f"menu_{self.p}")],
@@ -379,7 +380,7 @@ class EntityMenuHandler:
             ])
 
             text = (
-                f"🔍 *Результаты поиска:* '{search_query}'\n\n"
+                f"🔍 *Результаты поиска:* '{escape_markdown(search_query)}'\n\n"
                 f"*Найдено:* {total} {self.cfg.label_plural}\n"
                 f"*Показано:* {start_index+1}-{end_index}\n\n"
                 f"Выберите {self.cfg.label_singular}:"

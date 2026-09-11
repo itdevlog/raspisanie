@@ -13,14 +13,9 @@ class BaseScheduleService:
 
     @staticmethod
     def _escape_markdown(text: str) -> str:
-        """Экранирует спецсимволы legacy Markdown.
-
-        Помимо `*`/`_`/`` ` `` экранируем `[ ] ( )` — без них сообщение
-        с именем/названием, содержащим эти символы, не уйдёт (Can't parse entities).
-        """
-        for ch in ('_', '*', '[', ']', '(', ')', '`'):
-            text = text.replace(ch, '\\' + ch)
-        return text
+        """Экранирует спецсимволы legacy Markdown (единый хелпер)."""
+        from services.text_utils import escape_markdown
+        return escape_markdown(text)
 
     def __init__(self, school_data: dict):
         self.school_data = school_data
