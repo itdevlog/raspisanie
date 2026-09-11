@@ -141,19 +141,26 @@ class BackgroundUpdater:
                 )
             
     def _get_admin_notification_settings(self):
-        """Получает настройки уведомлений для администраторов"""
+        """Получает настройки уведомлений для администраторов.
+
+        Читает сохранённые предпочтения через UserPreferencesService — тот же
+        источник, что и меню настроек (settings.py). Если у администратора нет
+        сохранённых настроек, возвращает `update_notifications: False`, чтобы
+        совпадать с тем, что показывает UI («Уведомления об обновлениях: Выкл»).
+        Раньше здесь жёстко возвращалось True -> тосты-предупреждения расходились
+        с отображением.
+        """
         try:
             # Получаем UserService из bot_data
             user_service = self.application.bot_data.get('user_service')
             if not user_service:
                 # Если нет user_service, возвращаем настройки по умолчанию
-                # (включенные уведомления для обратной совместимости)
-                return {'update_notifications': True}
+                return {'update_notifications': False}
             
             # Получаем настройки уведомлений для каждого администратора
             config = self.application.bot_data.get('config')
             if not config or not hasattr(config, 'ADMIN_IDS'):
-                return {'update_notifications': True}
+                return {'update_notifications': False}
             
             # Для упрощения возвращаем настройки первого администратора
             # В реальном приложении может потребоваться более сложная логика
@@ -165,11 +172,11 @@ class BackgroundUpdater:
                 settings = preferences_service.get_notification_settings(admin_ids[0])
                 return settings
             
-            return {'update_notifications': True}  # По умолчанию включены
+            return {'update_notifications': False}  # По умолчанию выключены
             
         except Exception as e:
             self.logger.error(f"Ошибка получения настроек уведомлений администратора: {e}")
-            return {'update_notifications': True}  # По умолчанию включены для безопасности
+            return {'update_notifications': False}  # По умолчанию выключены
             
     def get_update_log_file(self):
         """Возвращает путь к файлу лога обновлений"""
