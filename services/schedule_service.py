@@ -57,24 +57,24 @@ class ScheduleService(BaseScheduleService):
 
         return result
 
-    def get_class_schedule_week(self, class_name: str) -> str:
-        """Получает расписание класса на текущую учебную неделю"""
+    def get_class_schedule_week(self, class_name: str, week_offset: int = 0) -> str:
+        """Получает расписание класса на учебную неделю со смещением."""
         # Используем кэширование если доступно
         if self.cache_service:
             today = datetime.now(self.moscow_tz)
-            current_monday = today - timedelta(days=today.weekday())
-            cache_key = self._cache_key("week", class_name, current_monday)
+            current_monday = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
+            cache_key = self._cache_key(f"week{week_offset}", class_name, current_monday)
             cached = self.cache_service.get(cache_key)
             if cached:
                 return cached
 
-        result = self._get_week_schedule('class', class_name, self._get_class_schedule_for_date)
+        result = self._get_week_schedule('class', class_name, self._get_class_schedule_for_date, week_offset)
 
         # Сохраняем в кэш если доступно
         if self.cache_service and result:
             today = datetime.now(self.moscow_tz)
-            current_monday = today - timedelta(days=today.weekday())
-            cache_key = self._cache_key("week", class_name, current_monday)
+            current_monday = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
+            cache_key = self._cache_key(f"week{week_offset}", class_name, current_monday)
             self.cache_service.set(cache_key, result)
 
         return result

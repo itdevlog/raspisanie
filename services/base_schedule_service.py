@@ -74,6 +74,33 @@ class BaseScheduleService:
         """Получает время урока по номеру - ОБЩАЯ ЛОГИКА"""
         return self.school_data.get('LESSON_TIMES', {}).get(str(lesson_num), ['?', '?'])
 
+    def get_next_lesson(self, schedule_data: list[dict], date: datetime,
+                        now: datetime | None = None) -> dict | None:
+        """Возвращает текущий или следующий урок по времени LESSON_TIMES.
+
+        Приоритет — предстоящий урок; если его нет (текущий был последним),
+        возвращается идущий сейчас урок.
+        """
+        if not schedule_data:
+            return None
+        now = now or datetime.now(self.moscow_tz)
+        current = None
+        for lesson in sorted(schedule_data, key=lambda x: x['lesson_num']):
+            times = self._get_lesson_times(lesson['lesson_num'])
+            if len(times) < 2 or times[0] == '?':
+                continue
+            try:
+                start = now.replace(hour=int(times[0][:2]), minute=int(times[0][3:5]),
+                                    second=0, microsecond=0)
+                end = start.replace(hour=int(times[1][:2]), minute=int(times[1][3:5]))
+            except (ValueError, IndexError):
+                continue
+            if start < now and now <= end:
+                current = lesson
+            elif now <= start:
+                return lesson
+        return current
+
     def _get_day_name(self, date: datetime) -> str:
         """Получает название дня недели - ОБЩАЯ ЛОГИКА"""
         day_names = self.school_data.get('DAY_NAMES', [])
@@ -212,10 +239,11 @@ class BaseScheduleService:
 
         return "\n".join(response)
 
-    def _get_week_schedule(self, entity_type: str, entity_name: str, get_daily_schedule_func) -> str:
+    def _get_week_schedule(self, entity_type: str, entity_name: str, get_daily_schedule_func,
+                           week_offset: int = 0) -> str:
         """Получает расписание на неделю - ОБЩАЯ ЛОГИКА"""
         today = datetime.now(self.moscow_tz)
-        current_monday = today - timedelta(days=today.weekday())
+        current_monday = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
 
         week_schedule = []
 
