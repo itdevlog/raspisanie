@@ -191,22 +191,22 @@ class NotificationService:
 
     async def notify_subscribers(self, context: ContextTypes.DEFAULT_TYPE, school_id: str,
                                  kind: str, name: str, text: str,
-                                 parse_mode: str = 'Markdown') -> int:
+                                 parse_mode: str = 'Markdown') -> tuple[int, int]:
         """Отправляет текст всем подписчикам преподавателя/кабинета.
 
-        Возвращает число успешно доставленных сообщений. Best-effort: ошибки
-        подписок/отправки не выбрасываются наружу.
+        Возвращает пару `(доставлено, пропущено_по_тихим_часам)`. Best-effort:
+        ошибки подписок/отправки не выбрасываются наружу.
         """
         try:
             subscription_service = None
             if getattr(context, 'bot_data', None):
                 subscription_service = context.bot_data.get('subscription_service')
             if not subscription_service:
-                return 0
+                return 0, 0
 
             subscribers = subscription_service.get_subscribers(school_id, kind, name)
             if not subscribers:
-                return 0
+                return 0, 0
 
             # Тихие часы: читаем настройки подписчиков через UserPreferencesService.
             # Если user_service недоступен — фильтр пропускаем (best-effort).
@@ -218,12 +218,14 @@ class NotificationService:
             now = self._now()
 
             sent = 0
+            skipped_quiet = 0
             for user_id in subscribers:
                 try:
                     if preferences_service is not None:
                         settings = preferences_service.get_notification_settings(user_id)
                         if self._is_quiet_hours(settings, now):
-                            # Не шлём и не считаем доставленным; сообщение не потребляем
+                            # Не шлём, но считаем: до-не-беспокоить, не transient-фейл
+                            skipped_quiet += 1
                             self.logger.info(f"Тихие часы: пропуск уведомления подписчику {user_id}")
                             continue
                     if await self._send_message(context.bot, user_id, text, parse_mode=parse_mode):
@@ -231,11 +233,14 @@ class NotificationService:
                         await asyncio.sleep(0.05)
                 except Exception as e:
                     self.logger.error(f"Failed to notify subscriber {user_id}: {e}")
-            self.logger.info(f"Subscription notification sent to {sent}/{len(subscribers)} ({kind} {name})")
-            return sent
+            self.logger.info(
+                f"Subscription notification sent to {sent}/{len(subscribers)} "
+                f"({kind} {name}, quiet skipped: {skipped_quiet})"
+            )
+            return sent, skipped_quiet
         except Exception as e:
             self.logger.error(f"Error in notify_subscribers: {e}", exc_info=True)
-            return 0
+            return 0, 0
 
     async def notify_admins(self, context: ContextTypes.DEFAULT_TYPE, message: str, parse_mode: str = 'Markdown'):
         """Отправляет уведомление всем администраторам"""

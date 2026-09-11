@@ -464,8 +464,13 @@ class BackgroundUpdater:
             self.logger.error(f"Ошибка в проверке обновлений замен: {e}")
 
     @staticmethod
-    def _entity_exchanges_signature(class_exchanges: list, kind: str, name: str) -> str:
-        """Стабильная подпись замен, ссылающихся на конкретного преподавателя/кабинет."""
+    def _entity_exchanges_signature(class_exchanges: list, kind: str, name: str,
+                                    class_name: str = '') -> str:
+        """Стабильная подпись замен, ссылающихся на конкретного преподавателя/кабинет.
+
+        `class_name` входит в подпись, иначе два класса одной школы с идентичными
+        полями замены дают коллизию и одна из легитимных нотификаций глушится.
+        """
         field = 'new_teacher' if kind == 'teacher' else 'new_room'
         parts = []
         for ex in class_exchanges:
@@ -475,7 +480,8 @@ class BackgroundUpdater:
                 f"{ex.get('lesson_num', '')}_{ex.get('new_subject', '')}_"
                 f"{ex.get('new_teacher', '')}_{ex.get('new_room', '')}_{ex.get('is_cancelled', '')}"
             )
-        return '|'.join(parts)
+        prefix = f"{class_name}|" if class_name else ""
+        return prefix + '|'.join(parts)
 
     async def _notify_entity_subscribers(self, context, notification_service, school_id: str,
                                          class_name: str, class_exchanges: list, date) -> None:
@@ -508,16 +514,21 @@ class BackgroundUpdater:
                         continue
                     seen.add((kind, name))
 
-                    signature = self._entity_exchanges_signature(class_exchanges, kind, name)
+                    signature = self._entity_exchanges_signature(
+                        class_exchanges, kind, name, class_name)
                     digest = hashlib.md5(signature.encode()).hexdigest()[:8]
-                    key = f"{school_id}:{kind}:{name}:{date_str}:{digest}"
+                    key = f"{school_id}:{class_name}:{kind}:{name}:{date_str}:{digest}"
                     if key in self.sent_entity_notifications:
                         continue
                     try:
-                        await notification_service.notify_subscribers(
+                        delivered, skipped_quiet = await notification_service.notify_subscribers(
                             context, school_id, kind, name, text
                         )
-                        self.sent_entity_notifications[key] = time.time()
+                        # Помечаем только если что-то доставлено или все получатели
+                        # были на тихих часах. Transient-фейл отправки НЕ глушит
+                        # сущность на 24 часа.
+                        if delivered > 0 or skipped_quiet > 0:
+                            self.sent_entity_notifications[key] = time.time()
                     except Exception as e:
                         self.logger.error(f"Ошибка уведомления подписчиков {kind} {name}: {e}")
         except Exception as e:

@@ -106,9 +106,11 @@ async def test_notify_subscribers_sends_to_each():
     svc = NotificationService()
     context = SimpleNamespace(bot=bot, bot_data={'subscription_service': s})
 
-    count = await svc.notify_subscribers(context, 'school_133', 'teacher', 'Иванов', 'Текст замены')
+    delivered, skipped_quiet = await svc.notify_subscribers(
+        context, 'school_133', 'teacher', 'Иванов', 'Текст замены')
 
-    assert count == 2
+    assert delivered == 2
+    assert skipped_quiet == 0
     assert [cid for cid, _ in bot.sent] == [7, 8]
     assert all(text == 'Текст замены' for _, text in bot.sent)
 
@@ -122,7 +124,7 @@ async def test_notify_subscribers_no_subscribers_returns_zero():
 
     count = await svc.notify_subscribers(context, 'school_133', 'room', '101', 'Текст')
 
-    assert count == 0
+    assert count == (0, 0)
     assert bot.sent == []
 
 
@@ -134,7 +136,7 @@ async def test_notify_subscribers_without_service_returns_zero():
 
     count = await svc.notify_subscribers(context, 'school_133', 'room', '101', 'Текст')
 
-    assert count == 0
+    assert count == (0, 0)
 
 
 @pytest.mark.asyncio
@@ -208,7 +210,7 @@ async def test_notify_subscribers_skips_quiet_hours(monkeypatch):
         bot=bot, bot_data={'subscription_service': s, 'user_service': us})
     count = await svc.notify_subscribers(context, 'school_133', 'teacher', 'Иванов', 'Текст')
 
-    assert count == 1
+    assert count == (1, 1)
     assert [cid for cid, _ in bot.sent] == [8]
 
 
@@ -224,7 +226,7 @@ async def test_notify_entity_subscribers_dedups_same_entity_date(monkeypatch):
 
         async def notify_subscribers(self, context, school_id, kind, name, text):
             calls.append((school_id, kind, name))
-            return 1
+            return (1, 0)
 
     app = SimpleNamespace(bot_data={}, bot=None)
     updater = BackgroundUpdater(app)
@@ -243,6 +245,97 @@ async def test_notify_entity_subscribers_dedups_same_entity_date(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_notify_entity_subscribers_does_not_mark_on_send_failure(monkeypatch):
+    """Провал отправки (0 доставлено, 0 тихих) не должен глушить сущность на 24ч."""
+    from core.background_updater import BackgroundUpdater
+
+    calls = []
+
+    class _Notif:
+        def _format_exchange_notification(self, class_name, exchanges, date):
+            return 'Замена'
+
+        async def notify_subscribers(self, context, school_id, kind, name, text):
+            calls.append((kind, name))
+            return (0, 0)
+
+    app = SimpleNamespace(bot_data={}, bot=None)
+    updater = BackgroundUpdater(app)
+    date = datetime(2026, 9, 11)
+    exchanges = [{'class_name': '5А', 'new_teacher': 'Иванов', 'new_room': '101'}]
+
+    await updater._notify_entity_subscribers(
+        SimpleNamespace(), _Notif(), 'school_133', '5А', exchanges, date)
+    await updater._notify_entity_subscribers(
+        SimpleNamespace(), _Notif(), 'school_133', '5А', exchanges, date)
+
+    assert calls == [('teacher', 'Иванов'), ('room', '101'),
+                     ('teacher', 'Иванов'), ('room', '101')]
+
+
+@pytest.mark.asyncio
+async def test_notify_entity_subscribers_marks_on_quiet_skip(monkeypatch):
+    """Все подписчики на тихих часах (0 доставлено, >0 тихих) — ключ помечается."""
+    from core.background_updater import BackgroundUpdater
+
+    calls = []
+
+    class _Notif:
+        def _format_exchange_notification(self, class_name, exchanges, date):
+            return 'Замена'
+
+        async def notify_subscribers(self, context, school_id, kind, name, text):
+            calls.append((kind, name))
+            return (0, 1)
+
+    app = SimpleNamespace(bot_data={}, bot=None)
+    updater = BackgroundUpdater(app)
+    date = datetime(2026, 9, 11)
+    exchanges = [{'class_name': '5А', 'new_teacher': 'Иванов', 'new_room': '101'}]
+
+    await updater._notify_entity_subscribers(
+        SimpleNamespace(), _Notif(), 'school_133', '5А', exchanges, date)
+    await updater._notify_entity_subscribers(
+        SimpleNamespace(), _Notif(), 'school_133', '5А', exchanges, date)
+
+    assert calls == [('teacher', 'Иванов'), ('room', '101')]
+
+
+@pytest.mark.asyncio
+async def test_notify_entity_subscribers_distinct_classes_same_signature(monkeypatch):
+    """Два класса с одинаковыми полями замены не должны глушить друг друга."""
+    from core.background_updater import BackgroundUpdater
+
+    calls = []
+
+    class _Notif:
+        def _format_exchange_notification(self, class_name, exchanges, date):
+            return f'Замена {class_name}'
+
+        async def notify_subscribers(self, context, school_id, kind, name, text):
+            calls.append((text, kind, name))
+            return (1, 0)
+
+    app = SimpleNamespace(bot_data={}, bot=None)
+    updater = BackgroundUpdater(app)
+    date = datetime(2026, 9, 11)
+    exchange = {'new_teacher': 'Иванов', 'new_room': '', 'lesson_num': 1,
+                'new_subject': 'Математика', 'is_cancelled': False}
+
+    await updater._notify_entity_subscribers(
+        SimpleNamespace(), _Notif(), 'school_133', '5А',
+        [{'class_name': '5А', **exchange}], date)
+    await updater._notify_entity_subscribers(
+        SimpleNamespace(), _Notif(), 'school_133', '5Б',
+        [{'class_name': '5Б', **exchange}], date)
+
+    assert calls == [
+        ('Замена 5А', 'teacher', 'Иванов'),
+        ('Замена 5Б', 'teacher', 'Иванов'),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_background_hook_notifies_new_teacher_and_room(monkeypatch):
     from core.background_updater import BackgroundUpdater
 
@@ -254,7 +347,7 @@ async def test_background_hook_notifies_new_teacher_and_room(monkeypatch):
 
         async def notify_subscribers(self, context, school_id, kind, name, text):
             calls.append((school_id, kind, name, text))
-            return 1
+            return (1, 0)
 
     app = SimpleNamespace(bot_data={}, bot=None)
     updater = BackgroundUpdater(app)
