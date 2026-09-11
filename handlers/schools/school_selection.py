@@ -83,6 +83,10 @@ async def handle_school_selection(update: Update, context: ContextTypes.DEFAULT_
     # Сохраняем выбранную школу для пользователя
     user_service.set_user_school(user_id, school_id)
     
+    # Сбрасываем выбранную цифру класса — иначе при новой школе останется старый
+    # class_digit и список букв может оказаться пустым/чужим
+    context.user_data.pop('class_digit', None)
+    
     # Получаем информацию о школе для подтверждения
     from config.schools import SCHOOLS_CONFIG
     school_info = SCHOOLS_CONFIG.get(school_id, {})

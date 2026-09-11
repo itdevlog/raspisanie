@@ -8,6 +8,7 @@ from handlers.common.messaging import clear_search_flags
 async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает главное меню с инлайн-клавиатурой"""
     clear_search_flags(context)
+    context.user_data.pop('class_digit', None)
     user_id = update.effective_user.id
     user_service = context.bot_data.get('user_service')
 

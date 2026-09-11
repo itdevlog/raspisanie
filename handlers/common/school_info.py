@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler
 from config.schools import get_display_name
+from handlers.common.messaging import safe_edit_message
 
 async def school_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Информация о школе и данных"""
@@ -57,6 +58,6 @@ async def school_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.callback_query.edit_message_text(info_text, reply_markup=reply_markup, parse_mode='Markdown')
+        await safe_edit_message(update.callback_query, info_text, reply_markup=reply_markup)
     else:
         await update.message.reply_text(info_text, parse_mode='Markdown')

@@ -6,10 +6,26 @@
 """
 from typing import List, Optional
 import logging
+import telegram.error
 
 logger = logging.getLogger(__name__)
 
 MAX_MESSAGE_LENGTH = 4096
+
+
+async def safe_edit_message(query, text: str, reply_markup=None,
+                            parse_mode: Optional[str] = 'Markdown') -> None:
+    """Редактирует сообщение, тихо игнорируя «message is not modified».
+
+    Повторное нажатие «Обновить»/«Назад» на уже показанное сообщение даёт
+    BadRequest «Message is not modified» — раньше это улетало в error handler
+    как «непредвиденная ошибка». Здесь оно проглатывается.
+    """
+    try:
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+    except telegram.error.BadRequest as e:
+        if "not modified" not in str(e).lower():
+            raise
 
 
 def split_long_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> List[str]:
@@ -79,11 +95,11 @@ async def edit_long_message(
         return
 
     if len(chunks) == 1:
-        await query.edit_message_text(chunks[0], reply_markup=reply_markup, parse_mode=parse_mode)
+        await safe_edit_message(query, chunks[0], reply_markup=reply_markup, parse_mode=parse_mode)
         return
 
-    await query.edit_message_text(_mark_chunk(chunks[0], 1, len(chunks)),
-                                  reply_markup=reply_markup, parse_mode=parse_mode)
+    await safe_edit_message(query, _mark_chunk(chunks[0], 1, len(chunks)),
+                            reply_markup=reply_markup, parse_mode=parse_mode)
 
     chat_id = update.effective_chat.id if update.effective_chat else None
     if chat_id is None:

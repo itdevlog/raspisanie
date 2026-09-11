@@ -74,7 +74,7 @@
 ### Telegram-протокол
 
 - **Двойной `query.answer()`** — `handlers/callbacks/__init__.py:36` отвечает на query сразу, поэтому все тосты об ошибках внутри обработчиков (`class_callbacks.py:17,31`, `room_callbacks.py:25,49`, `teacher_callbacks.py:25,49,61`, `navigation_callbacks.py:35,37,112`) **не показываются вообще**. → ✅ **исправлено 11.09**: роутер больше не отвечает на query заранее — ответ берёт на себя обработчик (`query.answer(...)` для тостов, `edit_message_text` для успешных действий). PTB-objects заморожены, поэтому отследить «уже ответил» из роутера нельзя; вместо этого просто убран авто-answer.
-- **`Message is not modified`** — повторное нажатие «Обновить»/«Назад» уходит в error handler с «непредвиденной ошибкой» (`class_callbacks.py:83`, `teacher_menu.py:156,267`, `room_schedule.py:158,274`, `main_menu.py:101`, `school_info.py:59`, `callback_handler.py:144,187,270`). Обработано только в админ-панели. → ✅ **частично исправлено 11.09** (`class_callbacks`, `main_menu`, `callback_handler`); в `teacher_menu`, `room_schedule`, `school_info` — ещё открыто.
+- **`Message is not modified`** — повторное нажатие «Обновить»/«Назад» уходит в error handler с «непредвиденной ошибкой» (`class_callbacks.py:83`, `teacher_menu.py:156,267`, `room_schedule.py:158,274`, `main_menu.py:101`, `school_info.py:59`, `callback_handler.py:144,187,270`). Обработано только в админ-панели. → ✅ **исправлено 11.09**: добавлен хелпер `messaging::safe_edit_message` (глотает BadRequest «not modified»), применён в `school_info` и во всех рендер-путях через `edit_long_message` (`class_callbacks`, `teacher_menu`, `room_schedule`).
 - **Кнопки-заглушки без обработчика** — `teacher_menu.py:240,380`, `room_schedule.py:247,394` (`*_pages_info`) → «Неизвестная команда навигации». → ✅ **исправлено 11.09**: `teacher_pages_info`, `room_pages_info` (и `*_search_pages_info`) отвечают тостом «Используйте кнопки навигации по страницам».
 - **Обрезка Markdown посередине** — `admin_panel.py:278-279`, `admin_callbacks.py:278-279` (`text[:4000]`) ломает `*...*`/`` `...` `` → `Can't parse entities`. Обрезать по границе строки.
 - **Неполное экранирование** — `base_schedule_service.py:67,91,100,109`: не экранируются `[`, `]`, `(`, `)` для legacy Markdown → сообщение не уйдёт.
@@ -83,7 +83,7 @@
 ### Логика состояния
 
 - **Залипшие флаги поиска** — `class_schedule.py:36-41`: флаг `waiting_for_teacher_search`/`waiting_for_room_search` не сбрасывается при выходе в меню → следующий любой текст интерпретируется как поиск. → ✅ **исправлено 11.09**: хелпер `messaging::clear_search_flags(context)` сбрасывает все `waiting_for_*` флаги; вызывается в точках входа — `main_menu_handler`, `teacher_menu_handler`, `room_menu_handler`, `show_all_teachers`, `show_all_rooms`.
-- **Утечка `class_digit`** — `callback_handler.py:113,152`: выбор цифры класса не сбрасывается при смене школы → пустой список букв. Сбрасывать при `menu_change_school`.
+- **Утечка `class_digit`** — `callback_handler.py:113,152`: выбор цифры класса не сбрасывается при смене школы → пустой список букв. → ✅ **исправлено 11.09**: `class_digit` сбрасывается в `handle_school_selection` и в `main_menu_handler`.
 - **Сохранение списка до сортировки по ссылке** — `room_schedule.py:201-206`, `teacher_menu.py:198-203`: в `state_service` кладётся ссылка, затем `sort()` мутирует её. Скрытый рассинхрон индексов кнопок.
 - **TTL кэша ломает кнопки** — списки в `CacheService(ttl=600)` живут 10 минут, индексные кнопки потом «мёртвые» навсегда. Хранить в `context.user_data` или имена в callback_data.
 
@@ -193,7 +193,7 @@
 | **1. Стабилизация** | Баги п.1, 3, 4, 5, 6, 7 — мутация данных, потеря БД, дубли уведомлений, мёртвый апдейт-лог, кнопка админа | П.1, 3, 5, 6, 7 ✅ сделаны (п.3, 5, 6, 7 — ранее; п.2 частично); **п.4 (битый database.json) — ✅ закрыто 11.09** | 🟡 почти |
 | **2. Отзывчивость** | П.14, 15 + JobQueue вместо потока | П.14 ✅ **исправлено 11.09** (в т.ч. admin callbacks); JobQueue — рекомендация | 🟡 частично |
 | **3. Telegram-протокол** | Двойной answer (✅ 11.09), `Message is not modified` (✅ частично), нарезка 4096 (✅ 11.09), callback_data 64 байт (✅ 11.09), кнопки-заглушки | Тосты, падения на кликах | 🟡 частично |
-| **4. Поиск и состояния** | П.10 (✅ 11.09), заливание флагов (✅ 11.09), `class_digit`, TTL-кнопки | Корректный поиск учителей/кабинетов | 🟡 частично |
+| **4. Поиск и состояния** | П.10 (✅ 11.09), заливание флагов (✅ 11.09), `class_digit` (✅ 11.09), TTL-кнопки | Корректный поиск учителей/кабинетов | 🟡 частично |
 | **5. Замены** | Строковые ключи (✅ ранее), завтра/неделя, две системы настроек, инвалидация кэша | Достоверные уведомления | ❌ открыто |
 | **6. Чистка** | Мёртвый код (`admin_panel.py` — слияние, `UserSchool`), дублирование, `print`→logging (✅ 11.09 все), `RotatingFileHandler` | Поддерживаемость | 🟡 частично |
 | **7. Тесты и инструменты** | pytest, ruff, mypy, CI | Регрессии | ❌ открыто |
