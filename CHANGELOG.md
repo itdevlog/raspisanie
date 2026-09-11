@@ -1,0 +1,107 @@
+# Changelog
+
+История исправлений Telegram-бота расписания. Хронологический порядок (новое — внизу, как в git-логе).
+«Что осталось сделать» — см. [roadmap.md](roadmap.md).
+
+## 11.09.2026
+
+### PR «Fix critical bugs» `80434ed`
+
+- `AttributeError` на `self.moscow_tz` в `log_update_activity` — `updatelog.txt` теперь заполняется (`core/background_updater.py`).
+- Хак `context = ContextTypes.DEFAULT_TYPE` (мутация класса PTB) → `SimpleNamespace` (`core/background_updater.py`).
+- Дублирующийся метод `stop()` (`core/background_updater.py`).
+- Краш `show_class_selection` при вводе несуществующего класса текстом (`query=None`) (`handlers/common/callback_handler.py`).
+- Блокирующий sync-IO в админ-callback'ах → `asyncio.to_thread` (`handlers/callbacks/admin_callbacks.py`, `handlers/admin/admin_panel.py`).
+- `FileDB.delete_one` удалял ВСЕ подходящие документы, а не один (`database/file_db.py`).
+- Дублирующийся `FileDB.get_collection`; `except (…, Exception)` → `(json.JSONDecodeError, OSError)`; `print` → `logger` (`database/file_db.py`).
+- Команды `/week` и `/school` не были зарегистрированы (`bot.py`).
+- Понятная ошибка при незаданном `TELEGRAM_TOKEN` (`bot.py`).
+- `ExchangeDetector.clear_school_cache` не сохранял файл (возвращалось после рестарта) (`services/exchange_detector.py`).
+- `Message is not modified` → тихо игнорируется в `main_menu`, `class_callbacks`, `callback_handler` (`handlers/common/main_menu.py`, `handlers/callbacks/class_callbacks.py`).
+- Заголовок с датой для «Сегодня/Завтра» (классы/преподаватели/кабинеты) (`services/schedule_service.py`, `services/teacher_service.py`, `services/room_service.py`).
+- `CacheService.delete/delete_prefix`; `state_service.clear_user_state` реально удаляет ключи (`services/cache_service.py`).
+- Недостающие `__init__.py` во всех пакетах (11 шт.).
+
+### Исправлено ранее (до аудита; см. WIKI §8, §16)
+
+- Глубокие копии замен, строковые ключи уроков, `sent_count > 0`, потокобезопасный `FileDB`, `bot_data['background_updater']`, `asyncio` в фоновом обновлении.
+
+### p.4 — битый `database.json` `5b0c82f`
+
+- При повреждённом файле БД сохраняется копия `database.json.corrupt` (с ротацией `.corrupt.N`) до перезаписи; запись атомарна через temp-файл + `os.replace()` (`database/file_db.py`).
+
+### Пустой `SCHOOL_NAME` (школа 181) + косметика `5b0c82f`
+
+- Центральный helper `config/schools.py::get_display_name(school_id, school_data)` применён во всех 6 местах (`bot.py`, `status.py`, `school_info.py`, `callback_handler.py`, `background_updater.py`, `notification_service.py`).
+- Выровнен отступ в стартовом `print` списка школ (`bot.py`, `load_schools_data`).
+
+### p.9 — нарезка сообщений по 4096 `5b0c82f`
+
+- Новый `handlers/common/messaging.py`: `split_long_message` + `edit_long_message`/`reply_long_message`. Применён в `class_schedule`, `week_command`, `class_callbacks`, `teacher_menu`, `room_schedule`. Нарезка по границам строк, чтобы не рвать разметку Markdown.
+
+### p.10 — поиск учителей/кабинетов (чужие индексы + 64-байт callback) `5b0c82f`
+
+- Результаты поиска хранятся под отдельными ключами `search_teachers`/`search_rooms`; источник списка закодирован в callback (`sidx_` = поиск vs `idx_` = полный) в `teacher_callbacks`/`room_callbacks` и дневных кнопках; запрос поиска переехал в `user_data` (`teacher_search_query`/`room_search_query`); пагинация — `teacher_search_page_N`/`room_search_page_N` (все ≤64 байта).
+
+### Двойной `query.answer()` + кнопки-заглушки `0f87ec0`
+
+- Роутер больше не отвечает на query заранее — ответ берёт на себя обработчик (`query.answer(...)` для тостов, `edit_message_text` для успешных действий). PTB-objects заморожены, поэтому отследить «уже ответил» из роутера нельзя; вместо этого просто убран авто-answer.
+- `teacher_pages_info`, `room_pages_info` (и `*_search_pages_info`) отвечают тостом «Используйте кнопки навигации по страницам».
+
+### Залипшие флаги поиска `c5696d7`
+
+- Хелпер `messaging::clear_search_flags(context)` сбрасывает все `waiting_for_*` флаги; вызывается в точках входа — `main_menu_handler`, `teacher_menu_handler`, `room_menu_handler`, `show_all_teachers`, `show_all_rooms`.
+
+### Дефолты уведомлений (UI ↔ поведение) `91c4008`
+
+- `background_updater._get_admin_notification_settings` возвращает `update_notifications: False` для админов без сохранённых настроек — раньше админ-уведомления слались, хотя UI показывал «Выкл».
+
+### `print` → `logger` (~36 вызовов) `5359adc`
+
+- Все `print()` заменены на `logger` в `data_loader`, `background_updater`, `bot`, `status_service`, `room_schedule`, `school_selection`. Диагностика не теряется при буферизации stdout под systemd.
+
+### `Message is not modified` + утечка `class_digit` `fd48b82`
+
+- Новый `messaging::safe_edit_message` (глотает BadRequest «not modified»); применён в `school_info` и через `edit_long_message` (`class_callbacks`, `teacher_menu`, `room_schedule`).
+- `class_digit` сбрасывается в `handle_school_selection` и `main_menu_handler`.
+
+### Конфиг-настройки игнорировались `615a196`
+
+- `UPDATE_INTERVAL` → `BackgroundUpdater.update_interval`; `MAX_RETRIES` → дефолты `DataLoader`; пути `exchange_cache.json`, `notifications_cache.json`, `updatelog.txt` выводятся из `DB_PATH`, а не из cwd.
+
+### Логирование: ротация + консоль + тишина httpx `5e4d773`
+
+- `RotatingFileHandler` (5 МБ x 3) + `StreamHandler` вместо `basicConfig(filename=...)`.
+- httpx приглушён до WARNING — в debug не логируются URL-ы запросов с токеном бота.
+
+### Дубли `admin_panel.py` ↔ `admin_callbacks.py` `d24662e`
+
+- Из `admin_panel.py` удалён мёртвый callback-код (`admin_callback_handler`, `_force_update`, `_refresh_all_schools`, `_refresh_school`, `_show_users_with_classes` — живут в `AdminCallbackHandler`). Файл сокращён 306→130 строк, осталось только `/admin`/`/stats`. Убран импорт `admin_callback_handler` в `bot.py`.
+
+### Пагинация «Все классы» `be8f1bf`
+
+- `handle_show_all_classes` разбит на страницы (60 кнопок/стр.), список кэшируется в `state_service`, навигация через `all_classes_page_N`, общий хелпер `messaging::paginate`.
+
+### p.11 — матчинг цифры класса `30410c6`
+
+- Новый `_class_matches_digit` сравнивает по сегментам: цифра матчится только если за ней буква (не десяток) — «1» больше не матчит «11а». Применён в `show_class_selection` и `_get_class_letters_for_digit`.
+
+### Валидация `.env` `6869d03`
+
+- `_parse_int`/`_parse_admin_ids` дают понятный `ValueError` с именем переменной и примером вместо молчаливого краха на импорте.
+
+### Детектор замен: сегодня + завтра, корректная дата `4ab3f8f`
+
+- `_check_exchange_updates` и `force_check_exchanges` проверяют замены на сегодня **и завтра** (было «только сегодня»).
+- Дата замены (`date`) пробрасывается в `_format_exchange_for_notification` и `timestamp` — заголовок уведомления показывает верный день.
+
+### Инвалидация кэша расписания `0a12722`
+
+- `_perform_update` вызывает `cache_service.clear()` после обновления данных — пользователи не видят старое расписание до истечения TTL.
+
+### Юнит-тесты + безпотерьная нарезка + чистка requirements `8782ee5`
+
+- Добавлен pytest (`pytest.ini`), тесты в `tests/`: безпотерьность `split_long_message` и границы, `paginate`, `get_display_name` (пустой `SCHOOL_NAME`), матчинг цифры класса (p.11).
+- `split_long_message` переписан без потерь (`''.join(chunks) == text`).
+- `requirements.txt` очищен от закомментированных мёртвых зависимостей.
+- `.gitignore` покрывает `.venv-test/`, `data/`, `logs/`, `cache/`.

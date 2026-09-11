@@ -452,14 +452,14 @@ ADMIN_LOG_FILE=./logs/admin.log
 - [ ] Любая работа с `FileDB` должна учитывать потокобезопасность.
 - [ ] Новые callback_data не должны превышать 64 байта (ограничение Telegram).
 - [ ] Длинные сообщения (>4096) нужно нарезать.
-- [ ] Не оставляй `print()` в production-коде — используй `logger`. Сейчас `print()` всё ещё используется в `bot.py`, `core/data_loader.py`, `core/background_updater.py` (см. §16, техдолг P2).
+- [ ] Не оставляй `print()` в production-коде — используй `logger`. ✅ 11.09: все `print()` заменены на `logger` (см. CHANGELOG).
 - [ ] Обновляй этот Wiki при значимых изменениях.
 
 ---
 
 ## 16. Планируемые улучшения (roadmap)
 
-См. [roadmap.md](roadmap.md) — там полный аудит с приоритетами P0/P1/P2.
+См. [roadmap.md](roadmap.md) — там «что осталось сделать» с приоритетами P0/P1/P2; [CHANGELOG.md](CHANGELOG.md) — что уже сделано.
 
 Кратко:
 1. ✅ Исправить глубокие копии при заменах.
@@ -482,20 +482,15 @@ ADMIN_LOG_FILE=./logs/admin.log
 
 ### 16.1 Открытый техдолг (P2)
 
-1. **Заменить `print()` на `logger`** в `bot.py`, `core/data_loader.py`, `core/background_updater.py` (`database/file_db.py` — ✅ сделано 11.09).
-2. **Использовать `Config.UPDATE_INTERVAL`** вместо хардкода 1800 в `core/background_updater.py`.
-3. **Удалить дубликат кода между `admin_panel.py` и `admin_callbacks.py`** — callback-часть `admin_panel.py` мертва; живой код там: `setup_admin_handlers` (регистрация `/admin`, `/stats`). Требует слияния, не простого удаления.
-4. **Решить судьбу `database/models/user_school.py`** — либо удалить, либо интегрировать в `UserService` (сейчас модель нигде не используется).
-5. **Передать `Config` в `BackgroundUpdater.__init__`** и убрать post-construction monkey-patching в `bot.py:36-44`.
-6. **Уточнить источник настроек уведомлений** в `_get_admin_notification_settings` — сейчас берётся только у первого `ADMIN_IDS`, остальные игнорируются. Плюс **две независимые системы настроек** (`UserService.notification_settings` vs `UserPreferencesService`) с противоречащими дефолтами.
-7. **Удалить неиспользуемую `CACHE_PATH`** из `.env` (и `cache/` из репозитория) либо начать её использовать.
-8. **Кнопки-заглушки** `teacher_pages_info` / `room_search_pages_info` не обрабатываются — `room_search_pages_info` уходит в `_handle_room_selection` и пытается загрузить кабинет «info». Использовать `callback_data="noop"`.
-9. **Нарезка сообщений >4096** символов (сегодня+завтра, недельное расписание) — `BadRequest: Message is too long`.
-10. **Поиск учителей/кабинетов**: индексы результатов поиска применяются к полному списку; `callback_data` с кириллицей превышает 64 байта (см. roadmap.md п.10).
-11. **Залипающие флаги** `waiting_for_teacher_search` / `waiting_for_room_search` — сбрасывать при навигации или перейти на `ConversationHandler`.
-12. **Битый `database.json`** перезатирается пустым при первой записи — сохранять `.corrupt`-копию (roadmap.md п.4).
-13. **Кэш расписания не инвалидируется** после фонового обновления — до 10 минут старые данные (TTL).
-14. **`print()` в `handlers/schools/school_selection.py:89`** и другие остатки.
+> Полный актуальный список «что осталось» — см. [roadmap.md](roadmap.md); всё сделанное — в [CHANGELOG.md](CHANGELOG.md). Здесь — кратко, что ещё открыто:
+
+1. **Решить судьбу `database/models/user_school.py`** — либо удалить, либо интегрировать в `UserService` (сейчас модель нигде не используется).
+2. **Уточнить источник настроек уведомлений** в `_get_admin_notification_settings` — сейчас берётся только у первого `ADMIN_IDS`, остальные игнорируются (противоречие дефолтов между `UserService` и `UserPreferencesService` — частично устранено 11.09, но системы остались разными).
+3. **Удалить неиспользуемую `CACHE_PATH`** из `.env` либо начать её использовать.
+4. **Экранирование до бизнес-логики** — `room_service.py`/`teacher_service.py`: `class_name` экранируется и сравнивается с «чистыми» именами → замены для учителей/кабинетов не находятся.
+5. **Недостающие пункты** — детали и остальные открытые места: см. [roadmap.md](roadmap.md).
+
+> ✅ **Закрыто 11.09** (подробности — в CHANGELOG): `print()`→`logger`, `UPDATE_INTERVAL`/`MAX_RETRIES`, дубли `admin_panel.py`↔`admin_callbacks.py`, кнопки-заглушки, нарезка >4096, поиск учителей/кабинетов, залипающие флаги, битый `database.json` (`.corrupt`), инвалидация кэша расписания, детектор замен «сегодня+завтра», дефолты уведомлений, `Message is not modified`, пагинация «Все классы», матчинг цифры класса (p.11), валидация `.env`.
 
 ---
 
