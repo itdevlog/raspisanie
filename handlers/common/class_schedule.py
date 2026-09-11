@@ -17,7 +17,7 @@ async def class_schedule_handler(update: Update, context: ContextTypes.DEFAULT_T
     if (context.user_data.get('waiting_for_room_search')
             or context.user_data.get('waiting_for_teacher_search')) \
             and len(message_text) > 80:
-        del context.user_data['waiting_for_room_search']
+        context.user_data.pop('waiting_for_room_search', None)
         context.user_data.pop('waiting_for_teacher_search', None)
         await update.message.reply_text(
             "❌ Слишком длинный запрос (максимум 80 символов). Вернитесь в поиск и попробуйте ещё раз."
