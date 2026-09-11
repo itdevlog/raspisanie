@@ -157,11 +157,18 @@ class AdminCallbackHandler:
         if schools_data:
             context.bot_data['schools_data'] = schools_data
             admin_logger.info(f"Admin {user_id} manually refreshed all schools data")
-            
-            success_count = len(schools_data)
+
             total_count = len([s for s in SCHOOLS_CONFIG.values() if s.get('active', True)])
-            
-            await self._show_admin_panel(update, context, f"✅ Обновлено {success_count}/{total_count} школ")
+            # Считаем «успешно обновлёнными» только загруженные школы со свежими данными
+            status_service = StatusService(schools_data)
+            fresh_count = sum(
+                1 for sid in schools_data
+                if "Актуально" in status_service.get_school_status(sid)['status']
+            )
+            await self._show_admin_panel(
+                update, context,
+                f"✅ Обновлено {fresh_count}/{total_count} школ (свежих данных)"
+            )
         else:
             admin_logger.error(f"Admin {user_id} failed to refresh schools data")
             await self._show_admin_panel(update, context, "❌ Не удалось обновить данные школ")
