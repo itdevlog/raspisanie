@@ -105,8 +105,8 @@
 - **Сломанный startup-уведомитель** — `bot.py:198-220`: ручной `asyncio.get_event_loop()` + `run_until_complete` до `run_polling()`, `Bot` ещё не инициализирован. → ✅ **исправлено ранее**: `_post_init` через `Application.builder().post_init(...)` (см. WIKI §4).
 - **`FileDB` без потокобезопасности** — read-modify-write в `user_service.py:65-97` из event loop и фонового потока → потерянные обновления. → ✅ **исправлено ранее**: `threading.RLock` + атомарная запись через temp-файл (`WIKI §3`). Осталась проблема п.4 (битый файл перезатирается).
 - **Настройки конфига игнорируются** — `UPDATE_INTERVAL` (захардкожен `1800` в `background_updater.py:17`), `MAX_RETRIES`, `CACHE_PATH` не читаются нигде. → ✅ **исправлено 11.09**: `UPDATE_INTERVAL` → `BackgroundUpdater.update_interval`; `MAX_RETRIES` → дефолты `DataLoader.get_current_filename/download_schedule_data/load_school_data`; пути кэшей/логов (`exchange_cache.json`, `notifications_cache.json`, `updatelog.txt`) выводятся из `DB_PATH`, а не из cwd.
-- **Падение при невалидном `.env`** — `config/config.py:11-15`, `bot.py:51`: `ValueError`/`AttributeError` на импорте без понятного сообщения.
-- **`remove_school` оставляет висячий `current_school`** — `database/models/user_school.py:21-31`; сам класс `UserSchool` нигде не используется — удалить или подключить.
+- **Падение при невалидном `.env`** — `config/config.py:11-15`, `bot.py:51`: `ValueError`/`AttributeError` на импорте без понятного сообщения. → ✅ **исправлено 11.09**: `_parse_int`/`_parse_admin_ids` дают понятный `ValueError` с именем переменной и примером; невалидный `UPDATE_INTERVAL`/`MAX_RETRIES`/`ADMIN_IDS` сообщают о проблеме вместо молчаливого краха.
+- **`remove_school` оставляет висячий `current_school`** — `database/models/user_school.py:21-31`; сам класс `UserSchool` нигде не используется — удалить или подключить. → 🟡 открыто (`UserSchool` нигде не импортируется — кандидат на удаление; `remove_school` висячий).
 
 ### Мёртвый код (удалить)
 

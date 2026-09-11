@@ -3,16 +3,53 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _parse_int(name: str, default: int) -> int:
+    """Красиво разбирает целочисленную переменную окружения.
+
+    Раньше `int(os.getenv(...))` падал прямо на импорте config с непонятным
+    ValueError. Здесь — понятное сообщение и fallback на умолчание.
+    """
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == '':
+        return default
+    try:
+        return int(raw.strip())
+    except ValueError:
+        raise ValueError(
+            f"Переменная {name!r} = {raw!r} не является числом. "
+            f"Пример: {name}=3600. Проверьте .env (см. .env.example)."
+        )
+
+
+def _parse_admin_ids() -> list:
+    """Разбирает ADMIN_IDS как список id через запятую."""
+    raw = os.getenv('ADMIN_IDS', '')
+    result = []
+    for part in raw.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            result.append(int(part))
+        except ValueError:
+            raise ValueError(
+                f"ADMIN_IDS содержит нечисловое значение {part!r}. "
+                f"Ожидается список id через запятую. Проверьте .env (см. .env.example)."
+            )
+    return result
+
+
 class Config:
     # Telegram
     TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
-    
+
     # Настройки обновления
-    UPDATE_INTERVAL = int(os.getenv('UPDATE_INTERVAL', 3600))
-    MAX_RETRIES = int(os.getenv('MAX_RETRIES', 3))
-    
+    UPDATE_INTERVAL = _parse_int('UPDATE_INTERVAL', 3600)
+    MAX_RETRIES = _parse_int('MAX_RETRIES', 3)
+
     # Администраторы
-    ADMIN_IDS = [int(x.strip()) for x in os.getenv('ADMIN_IDS', '').split(',') if x.strip()]
+    ADMIN_IDS = _parse_admin_ids()
     
     # База данных
     DB_PATH = os.getenv('DB_PATH', './data/database.json')
