@@ -3,10 +3,11 @@ from telegram.ext import ContextTypes
 from services.state_service import UserStateService
 from services.teacher_service import TeacherService
 from config.schools import SCHOOLS_CONFIG
-from handlers.common.messaging import edit_long_message
+from handlers.common.messaging import edit_long_message, clear_search_flags
 
 async def teacher_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню выбора преподавателя"""
+    clear_search_flags(context)
     query = update.callback_query
     user_id = update.effective_user.id
     user_service = context.bot_data.get('user_service')
@@ -166,6 +167,7 @@ async def handle_teacher_selection(update: Update, context: ContextTypes.DEFAULT
 
 async def show_all_teachers(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 0):
     """Показывает полный список преподавателей с пагинацией"""
+    clear_search_flags(context)
     query = update.callback_query
     user_id = update.effective_user.id
     user_service = context.bot_data.get('user_service')

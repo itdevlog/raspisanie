@@ -3,10 +3,11 @@ from telegram.ext import ContextTypes
 from services.room_service import RoomService
 from config.schools import SCHOOLS_CONFIG
 from services.state_service import UserStateService
-from handlers.common.messaging import edit_long_message
+from handlers.common.messaging import edit_long_message, clear_search_flags
 
 async def room_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню выбора кабинета"""
+    clear_search_flags(context)
     query = update.callback_query
     user_id = update.effective_user.id
     user_service = context.bot_data.get('user_service')
@@ -169,6 +170,7 @@ async def handle_room_selection(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def show_all_rooms(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 0):
     """Показывает полный список кабинетов с пагинацией"""
+    clear_search_flags(context)
     query = update.callback_query
     user_id = update.effective_user.id
     user_service = context.bot_data.get('user_service')

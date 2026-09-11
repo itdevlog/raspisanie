@@ -51,6 +51,20 @@ def _mark_chunk(chunk: str, i: int, total: int) -> str:
     return chunk
 
 
+def clear_search_flags(context) -> None:
+    """Сбрасывает все «залипающие» флаги ожидания поиска.
+
+    Флаги `waiting_for_*` в user_data ставятся при открытии ввода поиска
+    преподавателя/кабинета и сбрасываются в class_schedule только когда
+    пользователь что-то напечатал. Если же он вышел в меню кнопкой, флаг
+    остаётся, и любой следующий текст интерпретируется как поиск. Вызов
+    этого хелпера в точках входа в меню устраняет залипание.
+    """
+    for flag in ('waiting_for_teacher_search', 'waiting_for_teacher',
+                 'waiting_for_room_search'):
+        context.user_data.pop(flag, None)
+
+
 async def edit_long_message(
     update, context, query, text: str,
     reply_markup=None, parse_mode: Optional[str] = 'Markdown',

@@ -3,9 +3,11 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from config.schools import SCHOOLS_CONFIG
 from services.status_service import StatusService
+from handlers.common.messaging import clear_search_flags
 
 async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает главное меню с инлайн-клавиатурой"""
+    clear_search_flags(context)
     user_id = update.effective_user.id
     user_service = context.bot_data.get('user_service')
 
