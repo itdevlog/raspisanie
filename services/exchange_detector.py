@@ -83,7 +83,8 @@ class ExchangeDetector:
                 
                 # Сравниваем замены для каждого класса
                 class_new_exchanges = self._compare_class_exchanges(
-                    class_name, previous_class_exchanges, current_class_exchanges, school_data
+                    class_name, previous_class_exchanges, current_class_exchanges,
+                    school_data, date  # дата замены нужна для корректного заголовка уведомления
                 )
                 self.logger.info(f"Найдено {len(class_new_exchanges)} новых замен для класса {class_name}")
                 new_exchanges.extend(class_new_exchanges)
@@ -146,7 +147,8 @@ class ExchangeDetector:
 
         return exchanges
     
-    def _compare_class_exchanges(self, class_name: str, previous: Dict, current: Dict, school_data: Dict = None) -> List[Dict]:
+    def _compare_class_exchanges(self, class_name: str, previous: Dict, current: Dict,
+                                 school_data: Dict = None, date: datetime = None) -> List[Dict]:
         """Сравнивает замены класса и возвращает новые. Ключи lesson_num — строки."""
         new_exchanges = []
 
@@ -157,7 +159,7 @@ class ExchangeDetector:
             # Если замена новая или изменилась
             if not previous_exchange or self._is_exchange_changed(previous_exchange, current_exchange):
                 formatted_exchange = self._format_exchange_for_notification(
-                    class_name, current_exchange, school_data
+                    class_name, current_exchange, school_data, date
                 )
                 if formatted_exchange:
                     new_exchanges.append(formatted_exchange)
@@ -182,7 +184,8 @@ class ExchangeDetector:
                 return True
         return False
     
-    def _format_exchange_for_notification(self, class_name: str, exchange: Dict, school_data: Dict = None) -> Dict:
+    def _format_exchange_for_notification(self, class_name: str, exchange: Dict,
+                                          school_data: Dict = None, date: datetime = None) -> Dict:
         """Форматирует замена для уведомления"""
         lesson_num = exchange.get('lesson_num')
         exchange_data = exchange.get('data', {})
@@ -221,7 +224,7 @@ class ExchangeDetector:
             'new_teacher': new_teacher,
             'new_room': new_room,
             'is_cancelled': is_cancelled,
-            'timestamp': datetime.now(self.moscow_tz)
+            'timestamp': date or datetime.now(self.moscow_tz)
         }
     
     def _convert_codes_to_names(self, codes_str, names_dict, type_name: str) -> str:

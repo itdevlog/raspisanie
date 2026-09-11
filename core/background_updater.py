@@ -1,7 +1,7 @@
 # core/background_updater.py
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Dict
 import pytz
@@ -202,46 +202,54 @@ class BackgroundUpdater:
                     self.logger.error("Notification service недоступен")
                     return
 
-            today = datetime.now(exchange_detector.moscow_tz)
+            # Проверяем замены на сегодня И завтра — раньше смотрели только «сегодня»,
+            # из-за чего замены на завтра обнаруживались только после полуночи (или вовсе
+            # терялись, если данные выгружены заранее), а заголовок даты уводился неверно.
+            dates = [
+                datetime.now(exchange_detector.moscow_tz),
+                datetime.now(exchange_detector.moscow_tz) + timedelta(days=1),
+            ]
 
-            self.logger.info(f"Проверка замен для {len(new_schools_data)} школ")
+            for today in dates:
+                date_str = today.strftime('%d.%m.%Y')
+                self.logger.info(f"Проверка замен на дату {date_str} для {len(new_schools_data)} школ")
 
-            # Проверяем замены для каждой школы
-            for school_id, school_data in new_schools_data.items():
-                try:
-                    self.logger.info(f"Проверка замен для школы {school_id}")
-                    new_exchanges = exchange_detector.detect_exchanges(school_id, school_data, today)
+                # Проверяем замены для каждой школы
+                for school_id, school_data in new_schools_data.items():
+                    try:
+                        self.logger.info(f"Проверка замен для школы {school_id} на {date_str}")
+                        new_exchanges = exchange_detector.detect_exchanges(school_id, school_data, today)
 
-                    if new_exchanges:
-                        self.logger.info(f"Найдено {len(new_exchanges)} новых замен для школы {school_id}")
+                        if new_exchanges:
+                            self.logger.info(f"Найдено {len(new_exchanges)} новых замен для школы {school_id} на {date_str}")
 
-                        # Группируем замены по классам
-                        exchanges_by_class = {}
-                        for exchange in new_exchanges:
-                            class_name = exchange['class_name']
-                            if class_name not in exchanges_by_class:
-                                exchanges_by_class[class_name] = []
-                            exchanges_by_class[class_name].append(exchange)
+                            # Группируем замены по классам
+                            exchanges_by_class = {}
+                            for exchange in new_exchanges:
+                                class_name = exchange['class_name']
+                                if class_name not in exchanges_by_class:
+                                    exchanges_by_class[class_name] = []
+                                exchanges_by_class[class_name].append(exchange)
 
-                        self.logger.info(f"Найдено {len(exchanges_by_class)} классов с заменами в школе {school_id}")
+                            self.logger.info(f"Найдено {len(exchanges_by_class)} классов с заменами в школе {school_id}")
 
-                        # Создаем один контекст для всех уведомлений
-                        context = self._make_context()
+                            # Создаем один контекст для всех уведомлений
+                            context = self._make_context()
 
-                        # Отправляем уведомления для каждого класса
-                        for class_name, class_exchanges in exchanges_by_class.items():
-                            self.logger.info(f"Обработка уведомлений для класса {class_name} в школе {school_id}, количество замен: {len(class_exchanges)}")
+                            # Отправляем уведомления для каждого класса
+                            for class_name, class_exchanges in exchanges_by_class.items():
+                                self.logger.info(f"Обработка уведомлений для класса {class_name} в школе {school_id}, количество замен: {len(class_exchanges)}")
 
-                            result = await notification_service.notify_exchange_updates(
-                                context, school_id, class_name, class_exchanges
-                            )
-                            self.logger.info(f"Notification result for class {class_name}: {result}")
+                                result = await notification_service.notify_exchange_updates(
+                                    context, school_id, class_name, class_exchanges
+                                )
+                                self.logger.info(f"Notification result for class {class_name}: {result}")
 
-                            # Логируем активность обновления
-                            self.log_update_activity(f"Отправлено {len(class_exchanges)} уведомлений для класса {class_name} в школе {school_id}, результат: {result}")
+                                # Логируем активность обновления
+                                self.log_update_activity(f"Отправлено {len(class_exchanges)} уведомлений для класса {class_name} в школе {school_id} на {date_str}, результат: {result}")
 
-                except Exception as e:
-                    self.logger.error(f"Ошибка проверки замен для школы {school_id}: {e}")
+                    except Exception as e:
+                        self.logger.error(f"Ошибка проверки замен для школы {school_id}: {e}")
 
         except Exception as e:
             self.logger.error(f"Ошибка в проверке обновлений замен: {e}")
@@ -292,7 +300,8 @@ class BackgroundUpdater:
                                         'data': exchange_data['data'],
                                         'is_cancelled': exchange_data['is_cancelled']
                                     },
-                                    school_data
+                                    school_data,
+                                    today
                                 )
                                 formatted_exchanges.append(formatted_exchange)
 
