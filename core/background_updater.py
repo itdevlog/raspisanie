@@ -1,9 +1,11 @@
 # core/background_updater.py
 import asyncio
 import logging
-import time
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Dict
+import pytz
+
 from core.data_loader import DataLoader
 from services.notification_service import NotificationService
 
@@ -15,6 +17,7 @@ class BackgroundUpdater:
         self.is_running = False
         self.update_interval = 1800  # 30 минут для более частой проверки замен
         self.logger = logging.getLogger(__name__)
+        self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
         self._update_task = None
 
     def start_periodic_updates(self):
@@ -186,10 +189,10 @@ class BackgroundUpdater:
             if 'exchange_detector' not in self.application.bot_data:
                 from services.exchange_detector import ExchangeDetector
                 self.application.bot_data['exchange_detector'] = ExchangeDetector()
-            
+
             exchange_detector = self.application.bot_data['exchange_detector']
             notification_service = self.application.bot_data.get('notification_service')
-            
+
             if not notification_service:
                 self.logger.error("Notification service не найден в bot_data")
                 # Используем self.notification_service как резервный вариант
@@ -197,20 +200,20 @@ class BackgroundUpdater:
                 if not notification_service:
                     self.logger.error("Notification service недоступен")
                     return
-            
+
             today = datetime.now(exchange_detector.moscow_tz)
-            
+
             self.logger.info(f"Проверка замен для {len(new_schools_data)} школ")
-            
+
             # Проверяем замены для каждой школы
             for school_id, school_data in new_schools_data.items():
                 try:
                     self.logger.info(f"Проверка замен для школы {school_id}")
                     new_exchanges = exchange_detector.detect_exchanges(school_id, school_data, today)
-                    
+
                     if new_exchanges:
                         self.logger.info(f"Найдено {len(new_exchanges)} новых замен для школы {school_id}")
-                        
+
                         # Группируем замены по классам
                         exchanges_by_class = {}
                         for exchange in new_exchanges:
@@ -218,44 +221,37 @@ class BackgroundUpdater:
                             if class_name not in exchanges_by_class:
                                 exchanges_by_class[class_name] = []
                             exchanges_by_class[class_name].append(exchange)
-                        
+
                         self.logger.info(f"Найдено {len(exchanges_by_class)} классов с заменами в школе {school_id}")
-                        
+
+                        # Создаем один контекст для всех уведомлений
+                        context = self._make_context()
+
                         # Отправляем уведомления для каждого класса
                         for class_name, class_exchanges in exchanges_by_class.items():
                             self.logger.info(f"Обработка уведомлений для класса {class_name} в школе {school_id}, количество замен: {len(class_exchanges)}")
-                            
-                            # Создаем контекст для уведомлений
-                            from telegram.ext import ContextTypes
-                            context = ContextTypes.DEFAULT_TYPE
-                            context.application = self.application
-                            context.bot_data = self.application.bot_data
-                            context.bot = self.application.bot  # Добавляем бота к контексту
-                            
-                            self.logger.info(f"Подготовлен контекст для уведомлений класса {class_name}")
-                            
-                            self.logger.info(f"Attempting to send exchange notifications for class {class_name} in school {school_id}, count: {len(class_exchanges)}")
+
                             result = await notification_service.notify_exchange_updates(
                                 context, school_id, class_name, class_exchanges
                             )
                             self.logger.info(f"Notification result for class {class_name}: {result}")
-                            
+
                             # Логируем активность обновления
                             self.log_update_activity(f"Отправлено {len(class_exchanges)} уведомлений для класса {class_name} в школе {school_id}, результат: {result}")
-                            
+
                 except Exception as e:
                     self.logger.error(f"Ошибка проверки замен для школы {school_id}: {e}")
-                    
+
         except Exception as e:
             self.logger.error(f"Ошибка в проверке обновлений замен: {e}")
 
     def _make_context(self):
         """Создает минимальный контекст для использования вне handler-ов"""
-        from telegram.ext import ContextTypes
-        context = ContextTypes.DEFAULT_TYPE
-        context.application = self.application
-        context.bot_data = self.application.bot_data
-        context.bot = self.application.bot
+        context = SimpleNamespace(
+            application=self.application,
+            bot_data=self.application.bot_data,
+            bot=self.application.bot
+        )
         return context
 
     async def force_check_exchanges(self, context):
@@ -309,10 +305,3 @@ class BackgroundUpdater:
 
         except Exception as e:
             self.logger.error(f"Ошибка в принудительной проверке замен: {e}")
-
-    def stop(self):
-        """Останавливает фоновое обновление"""
-        self.is_running = False
-        if self._update_task and not self._update_task.done():
-            self._update_task.cancel()
-        self.logger.info("Фоновое обновление остановлено")

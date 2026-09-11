@@ -1,4 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from config.schools import SCHOOLS_CONFIG
 from services.status_service import StatusService
@@ -98,4 +99,8 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
     elif update.callback_query:
         query = update.callback_query
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        try:
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        except BadRequest as e:
+            if "not modified" not in str(e).lower():
+                raise

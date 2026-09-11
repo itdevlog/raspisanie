@@ -37,12 +37,12 @@ class TeacherService(BaseScheduleService):
     def get_teacher_schedule_today(self, teacher_name: str) -> str:
         """Получает расписание преподавателя на сегодня"""
         today = datetime.now(self.moscow_tz)
-        return self._get_teacher_schedule_for_date(teacher_name, today)
-    
+        return self._get_teacher_schedule_for_date(teacher_name, today, include_header=True)
+
     def get_teacher_schedule_tomorrow(self, teacher_name: str) -> str:
         """Получает расписание преподавателя на завтра"""
         tomorrow = datetime.now(self.moscow_tz) + timedelta(days=1)
-        return self._get_teacher_schedule_for_date(teacher_name, tomorrow)
+        return self._get_teacher_schedule_for_date(teacher_name, tomorrow, include_header=True)
     
     def get_teacher_schedule_week(self, teacher_name: str) -> str:
         """Получает расписание преподавателя на текущую учебную неделю"""

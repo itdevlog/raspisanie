@@ -1,6 +1,7 @@
 # handlers/callbacks/admin_callbacks.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+import asyncio
 import logging
 from config.schools import SCHOOLS_CONFIG
 from services.status_service import StatusService
@@ -118,9 +119,10 @@ class AdminCallbackHandler:
         user_id = update.effective_user.id
         
         await query.edit_message_text("🔄 *Обновление данных всех школ...*\n\nЭто может занять несколько секунд.", parse_mode='Markdown')
-        
+
         loader = DataLoader()
-        schools_data = loader.load_all_schools_data()
+        # Оффлоадим синхронные HTTP-запросы в отдельный поток, чтобы не блокировать event loop
+        schools_data = await asyncio.to_thread(loader.load_all_schools_data)
         
         if schools_data:
             context.bot_data['schools_data'] = schools_data
@@ -146,9 +148,10 @@ class AdminCallbackHandler:
         
         school_name = school_config.get('name', school_id)
         await query.edit_message_text(f"🔄 *Обновление данных {school_name}...*", parse_mode='Markdown')
-        
+
         loader = DataLoader()
-        school_data = loader.load_school_data(school_config)
+        # Оффлоадим синхронный HTTP-запрос в отдельный поток, чтобы не блокировать event loop
+        school_data = await asyncio.to_thread(loader.load_school_data, school_config)
         
         if school_data:
             if 'schools_data' not in context.bot_data:

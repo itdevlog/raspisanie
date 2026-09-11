@@ -1,5 +1,6 @@
 # handlers/callbacks/class_callbacks.py
 from telegram import Update
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from services.schedule_service import ScheduleService
 
@@ -79,13 +80,17 @@ class ClassCallbackHandler:
             # Импортируем здесь чтобы избежать циклического импорта
             from handlers.common.callback_handler import create_class_navigation_keyboard
             reply_markup = create_class_navigation_keyboard(class_name, schedule_type)
-            
-            await query.edit_message_text(schedule, reply_markup=reply_markup, parse_mode='Markdown')
-            
+
+            try:
+                await query.edit_message_text(schedule, reply_markup=reply_markup, parse_mode='Markdown')
+            except BadRequest as e:
+                if "not modified" not in str(e).lower():
+                    raise
+
         except Exception as e:
             from handlers.common.callback_handler import create_error_keyboard
             reply_markup = create_error_keyboard()
-            
+
             await query.edit_message_text(
                 f"❌ Произошла ошибка при загрузке расписания:\n{str(e)}",
                 reply_markup=reply_markup

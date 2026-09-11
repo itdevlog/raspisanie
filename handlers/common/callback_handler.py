@@ -1,5 +1,6 @@
 # handlers/common/callback_handler.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from services.schedule_service import ScheduleService
 from config.schools import SCHOOLS_CONFIG
@@ -74,25 +75,36 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = update.effective_user.id
     user_service = context.bot_data.get('user_service')
     schools_data = context.bot_data.get('schools_data', {})
-    
+
+    async def send_text(text: str, reply_markup: InlineKeyboardMarkup):
+        if query:
+            try:
+                await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+            except BadRequest as e:
+                if "not modified" in str(e).lower():
+                    return
+                raise
+        else:
+            await update.effective_message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+
     if not user_service or not schools_data:
-        await query.edit_message_text("❌ Сервис не доступен")
+        await send_text("❌ Сервис не доступен", InlineKeyboardMarkup([]))
         return
-    
+
     # Получаем выбранную школу пользователя
     current_school_id = user_service.get_user_school(user_id)
     school_data = schools_data.get(current_school_id)
-    
+
     if not school_data:
-        await query.edit_message_text("❌ Данные для вашей школы не загружены")
+        await send_text("❌ Данные для вашей школы не загружены", InlineKeyboardMarkup([]))
         return
-    
+
     try:
         schedule_service = ScheduleService(school_data)
         available_classes = schedule_service.get_available_classes()
-        
+
         if not available_classes:
-            await query.edit_message_text("❌ Нет доступных классов в расписании")
+            await send_text("❌ Нет доступных классов в расписании", InlineKeyboardMarkup([]))
             return
         
         # Получаем название текущей школы для отображения
@@ -141,19 +153,16 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
                 f"Сначала выберите цифру класса:"
             )
             
-            await query.edit_message_text(
-                text,
-                reply_markup=reply_markup,
-                parse_mode='Markdown'
-            )
-            
+            await send_text(text, reply_markup)
+
         else:
             # Показываем буквы для выбранной цифры - ИНЛАЙН-КНОПКАМИ
             class_digit = context.user_data['class_digit']
             class_letters = _get_class_letters_for_digit(available_classes, int(class_digit))
-            
+
             if not class_letters:
-                await query.answer("❌ Нет классов с этой цифрой")
+                if query:
+                    await query.answer("❌ Нет классов с этой цифрой")
                 return
             
             keyboard = []
@@ -183,15 +192,15 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
                 f"Цифра: *{class_digit}*\n"
                 f"Выберите букву:"
             )
-            
-            await query.edit_message_text(
-                text,
-                reply_markup=reply_markup,
-                parse_mode='Markdown'
-            )
-        
+
+            await send_text(text, reply_markup)
+
     except Exception as e:
-        await query.edit_message_text(f"❌ Ошибка при загрузке списка классов: {str(e)}")
+        error_text = f"❌ Ошибка при загрузке списка классов: {str(e)}"
+        try:
+            await send_text(error_text, InlineKeyboardMarkup([]))
+        except Exception:
+            pass
 
 def _get_class_letters_for_digit(available_classes: List[str], digit: int) -> List[str]:
     """Получает список букв для указанной цифры класса"""

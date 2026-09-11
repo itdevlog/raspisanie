@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 import threading
 import tempfile
 import shutil
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 class FileDB:
     def __init__(self, db_path: str):
@@ -18,8 +21,8 @@ class FileDB:
             try:
                 with open(self.db_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except (json.JSONDecodeError, Exception) as e:
-                print(f"Error loading database: {e}")
+            except (json.JSONDecodeError, OSError) as e:
+                logger.error(f"Error loading database: {e}")
                 return {}
         return {}
 
@@ -39,7 +42,7 @@ class FileDB:
                     os.remove(temp_path)
                 raise
         except Exception as e:
-            print(f"Error saving database: {e}")
+            logger.error(f"Error saving database: {e}")
 
     @staticmethod
     def _json_serializer(obj):
@@ -57,10 +60,6 @@ class FileDB:
         with self._lock:
             self.data = self._load_data()
 
-    def get_collection(self, collection_name: str) -> 'Collection':
-        """Возвращает коллекцию"""
-        return Collection(self, collection_name)
-    
     def get_collection(self, collection_name: str) -> 'Collection':
         """Возвращает коллекцию"""
         return Collection(self, collection_name)
@@ -121,11 +120,11 @@ class Collection:
     def delete_one(self, query: Dict):
         """Удаляет один документ"""
         with self.db._lock:
-            self.db.data[self.name] = [
-                doc for doc in self.db.data[self.name]
-                if not all(doc.get(k) == v for k, v in query.items())
-            ]
-            self.db._save_data()
+            for i, doc in enumerate(self.db.data[self.name]):
+                if all(doc.get(k) == v for k, v in query.items()):
+                    del self.db.data[self.name][i]
+                    self.db._save_data()
+                    return
     
     def _clean_document(self, document: Dict) -> Dict:
         """Очищает документ от несериализуемых объектов"""

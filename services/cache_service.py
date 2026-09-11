@@ -21,6 +21,19 @@ class CacheService:
     def set(self, key: str, data: Any):
         """Устанавливает значение в кэш"""
         self.cache[key] = (data, time.time())
+
+    def delete(self, key: str) -> bool:
+        """Удаляет ключ из кэша. Возвращает True, если ключ существовал"""
+        if key in self.cache:
+            del self.cache[key]
+            return True
+        return False
+
+    def delete_prefix(self, prefix: str):
+        """Удаляет все ключи с указанным префиксом"""
+        keys_to_remove = [key for key in self.cache if key.startswith(prefix)]
+        for key in keys_to_remove:
+            del self.cache[key]
     
     def clear(self):
         """Очищает весь кэш"""

@@ -32,6 +32,11 @@ class ScheduleBot:
         self.config = Config()
         self.setup_logging()
 
+        if not self.config.TELEGRAM_TOKEN:
+            raise RuntimeError(
+                "TELEGRAM_TOKEN не задан. Укажите его в .env (см. .env.example)"
+            )
+
         # Создаем фоновый обновлятор временно без приложения
         self.background_updater = BackgroundUpdater(None)
 
@@ -115,6 +120,8 @@ class ScheduleBot:
         self.application.add_handler(CommandHandler("help", help_handler))
         self.application.add_handler(CommandHandler("status", status_handler))
         self.application.add_handler(CommandHandler("settings", settings_handler))
+        self.application.add_handler(CommandHandler("week", week_command_handler))
+        self.application.add_handler(CommandHandler("school", school_info_handler))
         
         # Админ-команды
         # Регистрация происходит в setup_admin_handlers
@@ -203,6 +210,8 @@ class ScheduleBot:
         print("📝 Доступные команды:")
         print("   /start - Главное меню (основная команда)")
         print("   /help - Помощь")
+        print("   /week <класс> - Расписание на неделю")
+        print("   /school - Информация о школе")
         print("\n🏫 Доступные школы:")
         for school in SCHOOLS_CONFIG.values():
             if school.get('active', True):

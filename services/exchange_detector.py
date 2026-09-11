@@ -49,12 +49,10 @@ class ExchangeDetector:
             if school_id in self.previous_schedules:
                 del self.previous_schedules[school_id]
                 self.logger.info(f"Кэш для школы {school_id} очищен")
-                self.save_cache()
         else:
             self.previous_schedules = {}
             self.logger.info("Полный кэш замен очищен")
-            self.save_cache()
-        self.logger.info("ExchangeDetector инициализирован с пустым кэшем предыдущих замен")
+        self.save_cache()
     
     def detect_exchanges(self, school_id: str, school_data: Dict, date: datetime) -> List[Dict]:
         """
@@ -266,3 +264,4 @@ class ExchangeDetector:
         """Очищает кэш для школы (например, при принудительном обновлении)"""
         if school_id in self.previous_schedules:
             del self.previous_schedules[school_id]
+            self.save_cache()

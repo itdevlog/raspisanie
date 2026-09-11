@@ -41,26 +41,12 @@ class UserStateService:
         """Очищает состояние пользователя"""
         if list_type:
             # Очищаем только конкретный тип
-            keys_to_remove = [
-                f"user_{user_id}_{list_type}",
-                f"user_{user_id}_{list_type}_page"
-            ]
+            self.cache_service.delete(f"user_{user_id}_{list_type}")
+            self.cache_service.delete(f"user_{user_id}_{list_type}_page")
         else:
-            # Очищаем все состояние пользователя (сложнее, нужно знать все ключи)
-            # Пока просто очищаем известные типы
-            known_types = ['teachers', 'rooms', 'search_teachers', 'search_rooms']
-            keys_to_remove = []
-            for ltype in known_types:
-                keys_to_remove.extend([
-                    f"user_{user_id}_{ltype}",
-                    f"user_{user_id}_{ltype}_page"
-                ])
-        
-        # В текущей реализации CacheService нет массового удаления,
-        # поэтому просто устанавливаем значения в None
-        for key in keys_to_remove:
-            self.cache_service.set(key, None)
-        
+            # Очищаем все состояние пользователя по префиксу
+            self.cache_service.delete_prefix(f"user_{user_id}_")
+
         self.logger.debug(f"Cleared state for user {user_id}, type: {list_type or 'all'}")
     
     def get_teacher_index(self, user_id: int, teacher_name: str) -> Optional[int]:

@@ -20,7 +20,7 @@ class ScheduleService(BaseScheduleService):
                 return cached
         
         today = datetime.now(self.moscow_tz)
-        result = self._get_class_schedule_for_date(class_name, today)
+        result = self._get_class_schedule_for_date(class_name, today, include_header=True)
         
         # Сохраняем в кэш если доступно
         if self.cache_service and result:
@@ -40,7 +40,7 @@ class ScheduleService(BaseScheduleService):
                 return cached
         
         tomorrow = datetime.now(self.moscow_tz) + timedelta(days=1)
-        result = self._get_class_schedule_for_date(class_name, tomorrow)
+        result = self._get_class_schedule_for_date(class_name, tomorrow, include_header=True)
         
         # Сохраняем в кэш если доступно
         if self.cache_service and result:

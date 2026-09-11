@@ -37,12 +37,12 @@ class RoomService(BaseScheduleService):
     def get_room_schedule_today(self, room_name: str) -> str:
         """Получает расписание кабинета на сегодня"""
         today = datetime.now(self.moscow_tz)
-        return self._get_room_schedule_for_date(room_name, today)
-    
+        return self._get_room_schedule_for_date(room_name, today, include_header=True)
+
     def get_room_schedule_tomorrow(self, room_name: str) -> str:
         """Получает расписание кабинета на завтра"""
         tomorrow = datetime.now(self.moscow_tz) + timedelta(days=1)
-        return self._get_room_schedule_for_date(room_name, tomorrow)
+        return self._get_room_schedule_for_date(room_name, tomorrow, include_header=True)
     
     def get_room_schedule_week(self, room_name: str) -> str:
         """Получает расписание кабинета на текущую учебную неделю"""
