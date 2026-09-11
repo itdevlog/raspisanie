@@ -31,7 +31,7 @@
 - У школы 181 `SCHOOL_NAME` в выгрузке Nikasoft — **пустая строка**. `.get('SCHOOL_NAME', 'Неизвестно')` не срабатывает (ключ есть, значение `''`) → в стартовом списке `bot.py` выводится `- Загружено`, пустое имя в `/status`, «О школе», меню выбора класса. → ✅ **исправлено 11.09**: центральный helper `config/schools.py::get_display_name(school_id, school_data)` применён во всех 6 местах (`bot.py`, `status.py`, `school_info.py`, `callback_handler.py`, `background_updater.py`, `notification_service.py`).
 - Косметика: кривой отступ в стартовом `print` (bot.py, `load_schools_data`). → ✅ **исправлено 11.09**: выровнен («• Имя - Загружено»).
 
-**Осталось открытым** — см. таблицы ниже, прежде всего: две системы настроек уведомлений, дубли `admin_panel.py` ↔ `admin_callbacks.py`, `print` → `logger` (~36 вызовов). П.4, п.9, п.10, двойной `query.answer()` и залипающие флаги поиска — ✅ закрыты.
+**Осталось открытым** — см. таблицы ниже, прежде всего: дубли `admin_panel.py` ↔ `admin_callbacks.py`. П.4, п.9, п.10, двойной `query.answer()`, залипающие флаги, две системы настроек уведомлений и `print` → `logger` — ✅ закрыты.
 
 ---
 
@@ -151,7 +151,7 @@
 ### Логирование и безопасность
 
 - Токен бота пишется в `logs/bot.log` в URL httpx — не публиковать логи; настроить `RotatingFileHandler` (сейчас файл растёт бесконечно, `bot.py:49-53`).
-- ~36 `print()` вперемешку с `logger` (`data_loader`, `background_updater`, `bot.py`, `status_service.py:84-85`, `school_selection.py:89`; `file_db.py` — ✅ очищен 11.09). Унифицировать на logging. Плюс stdout буферизуется при systemd/перенаправлении — теряется диагностика.
+- ~36 `print()` вперемешку с `logger` (`data_loader`, `background_updater`, `bot.py`, `status_service.py:84-85`, `school_selection.py:89`; `file_db.py` — ✅ очищен 11.09). Унифицировать на logging. Плюс stdout буферизуется при systemd/перенаправлении — теряется диагностика. → ✅ **исправлено 11.09**: все `print()` заменены на `logger` (`data_loader`, `background_updater`, `bot.py`, `status_service`, `room_schedule`, `school_selection`).
 - `ADMIN_LOG_FILE` объявлен в конфиге (`config.py:26`), но нигде не используется.
 - `logging.basicConfig(filename=...)` глушит консоль — не видно работы под systemd.
 
@@ -195,7 +195,7 @@
 | **3. Telegram-протокол** | Двойной answer (✅ 11.09), `Message is not modified` (✅ частично), нарезка 4096 (✅ 11.09), callback_data 64 байт (✅ 11.09), кнопки-заглушки | Тосты, падения на кликах | 🟡 частично |
 | **4. Поиск и состояния** | П.10 (✅ 11.09), заливание флагов (✅ 11.09), `class_digit`, TTL-кнопки | Корректный поиск учителей/кабинетов | 🟡 частично |
 | **5. Замены** | Строковые ключи (✅ ранее), завтра/неделя, две системы настроек, инвалидация кэша | Достоверные уведомления | ❌ открыто |
-| **6. Чистка** | Мёртвый код (`admin_panel.py` — слияние, `UserSchool`), дублирование, `print`→logging (`file_db.py` ✅), `RotatingFileHandler` | Поддерживаемость | 🟡 частично |
+| **6. Чистка** | Мёртвый код (`admin_panel.py` — слияние, `UserSchool`), дублирование, `print`→logging (✅ 11.09 все), `RotatingFileHandler` | Поддерживаемость | 🟡 частично |
 | **7. Тесты и инструменты** | pytest, ruff, mypy, CI | Регрессии | ❌ открыто |
 
 > **11.09.2026**: выполнен этап 2 целиком (в рамках текущей архитектуры) и часть этапа 1 (п.8), этапа 3 (Message is not modified — 3 файла) и этапа 6 (FileDB: дубли/логирование; /week и /school зарегистрированы; __init__.py во всех пакетах). Добавлен smoke-тест импортов и unit-проверки `delete_one`/`log_update_activity`/`clear_user_state` (временно, вне репозитория — нужен pytest, см. этап 7).

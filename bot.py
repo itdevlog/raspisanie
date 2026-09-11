@@ -97,7 +97,7 @@ class ScheduleBot:
 
     def load_schools_data(self):
         """Загружает данные для всех активных школ"""
-        print("Загрузка данных расписания для всех школ...")
+        self.logger.info("Загрузка данных расписания для всех школ...")
         loader = DataLoader()
         
         # Загружаем данные для всех активных школ
@@ -105,13 +105,13 @@ class ScheduleBot:
         
         if schools_data:
             self.application.bot_data['schools_data'] = schools_data
-            print("✅ Данные расписания успешно загружены!")
+            self.logger.info("✅ Данные расписания успешно загружены!")
             
             for school_id, school_data in schools_data.items():
                 school_name = get_display_name(school_id, school_data)
-                print(f"• {school_name} - Загружено")
+                self.logger.info(f"• {school_name} - Загружено")
         else:
-            print("❌ Не удалось загрузить данные расписания")
+            self.logger.error("❌ Не удалось загрузить данные расписания")
             self.application.bot_data['schools_data'] = {}
     
     def setup_handlers(self):
@@ -154,11 +154,6 @@ class ScheduleBot:
                 exc_info=context.error
             )
             
-            # ДОБАВЛЕНО: Вывод в консоль для отладки
-            print(f"❌ CRITICAL ERROR: {context.error}")
-            import traceback
-            traceback.print_exc()
-            
             # Уведомление пользователю
             if update and update.effective_message:
                 await update.effective_message.reply_text(
@@ -167,7 +162,6 @@ class ScheduleBot:
                 
         except Exception as e:
             self.logger.error(f"Error in error handler: {e}")
-            print(f"❌ ERROR IN ERROR HANDLER: {e}")
     
     async def force_check_exchanges(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Принудительная проверка замен и отправка уведомлений"""
@@ -196,7 +190,7 @@ class ScheduleBot:
             if notification_service:
                 await notification_service.notify_bot_started(self.application)
         except Exception as e:
-            print(f"❌ Ошибка отправки уведомления о запуске: {e}")
+            self.logger.error(f"Ошибка отправки уведомления о запуске: {e}")
 
         self.background_updater.start_periodic_updates()
 
@@ -206,17 +200,17 @@ class ScheduleBot:
         self.logger.info("Бот запущен")
 
         # Запускаем polling
-        print("✅ Бот запущен! Остановите сочетанием Ctrl+C")
-        print("📝 Доступные команды:")
-        print("   /start - Главное меню (основная команда)")
-        print("   /help - Помощь")
-        print("   /week <класс> - Расписание на неделю")
-        print("   /school - Информация о школе")
-        print("\n🏫 Доступные школы:")
+        self.logger.info("✅ Бот запущен! Остановите сочетанием Ctrl+C")
+        self.logger.info("📝 Доступные команды:")
+        self.logger.info("   /start - Главное меню (основная команда)")
+        self.logger.info("   /help - Помощь")
+        self.logger.info("   /week <класс> - Расписание на неделю")
+        self.logger.info("   /school - Информация о школе")
+        self.logger.info("🏫 Доступные школы:")
         for school in SCHOOLS_CONFIG.values():
             if school.get('active', True):
                 status = "✅" if school['id'] in self.application.bot_data.get('schools_data', {}) else "❌"
-                print(f"   {status} {school['name']} ({school['city']})")
+                self.logger.info(f"   {status} {school['name']} ({school['city']})")
 
         # ЗАПУСКАЕМ POLLING
         try:
@@ -224,7 +218,7 @@ class ScheduleBot:
                 stop_signals=None  # обрабатываем KeyboardInterrupt ниже
             )
         except KeyboardInterrupt:
-            print("\n🛑 Остановка бота...")
+            self.logger.info("🛑 Остановка бота...")
         finally:
             # Останавливаем фоновое обновление при выходе
             self.background_updater.stop()

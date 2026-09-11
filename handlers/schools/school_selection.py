@@ -1,6 +1,9 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from config.schools import SCHOOLS_CONFIG
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def school_selection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню выбора школы"""
@@ -86,7 +89,7 @@ async def handle_school_selection(update: Update, context: ContextTypes.DEFAULT_
     school_name = school_info.get('name', 'неизвестная школа')
     
     # Логируем изменение
-    print(f"Пользователь {user_id} выбрал школу {school_id}")
+    logger.info(f"Пользователь {user_id} выбрал школу {school_id}")
     
     # Показываем главное меню вместо сообщения с подтверждением
     from handlers.common.main_menu import main_menu_handler

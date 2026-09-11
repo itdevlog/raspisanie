@@ -31,7 +31,6 @@ class BackgroundUpdater:
         self._update_task = asyncio.create_task(self._update_loop())
 
         self.logger.info(f"✅ Фоновое обновление запущено (интервал: {self.update_interval} сек)")
-        print(f"✅ Фоновое обновление запущено (интервал: {self.update_interval} сек)")
 
     def stop(self):
         """Останавливает фоновое обновление"""
@@ -52,7 +51,6 @@ class BackgroundUpdater:
                     break
 
                 self.logger.info("🔄 Запуск планового обновления данных...")
-                print("🔄 Запуск планового обновления данных...")
 
                 await self._perform_update()
                 self.logger.info("✅ Плановое обновление завершено")
@@ -62,10 +60,8 @@ class BackgroundUpdater:
                 break
             except asyncio.TimeoutError:
                 self.logger.error("❌ Таймаут при выполнении обновления")
-                print("❌ Таймаут при выполнении обновления")
             except Exception as e:
                 self.logger.error(f"❌ Ошибка в цикле обновления: {e}", exc_info=True)
-                print(f"❌ Ошибка в цикле обновления: {e}")
                 # Ждем перед повторной попыткой
                 await asyncio.sleep(300)  # 5 минут при ошибке
 
@@ -75,7 +71,6 @@ class BackgroundUpdater:
         """Выполняет обновление данных и проверяет замены"""
         try:
             self.logger.info("🔄 Начало фонового обновления данных...")
-            print("🔄 Фоновое обновление данных...")
 
             old_schools_data = self.application.bot_data.get('schools_data', {})
             # Оффлоадим синхронные HTTP-запросы в отдельный поток
@@ -97,7 +92,6 @@ class BackgroundUpdater:
                 
                 if updated_schools:
                     self.logger.info(f"✅ Фоновое обновление завершено. Обновлено школ: {len(updated_schools)}")
-                    print(f"✅ Фоновое обновление завершено. Обновлено школ: {len(updated_schools)}")
 
                     # Проверяем настройки уведомлений администратора перед отправкой
                     notification_settings = self._get_admin_notification_settings()
@@ -111,12 +105,10 @@ class BackgroundUpdater:
                         await self.notification_service.notify_admins(context, message)
                 else:
                     self.logger.info("✅ Фоновое обновление завершено. Изменений нет")
-                    print("✅ Фоновое обновление завершено. Изменений нет")
                     
             else:
                 error_msg = "❌ Фоновое обновление не удалось - не получены данные"
                 self.logger.error(error_msg)
-                print(error_msg)
 
                 # Уведомляем админов об ошибке
                 context = self._make_context()
@@ -128,7 +120,6 @@ class BackgroundUpdater:
         except Exception as e:
             error_msg = f"❌ Ошибка фонового обновления: {e}"
             self.logger.error(error_msg, exc_info=True)
-            print(error_msg)
 
             # Проверяем настройки уведомлений администратора перед отправкой уведомления об ошибке
             notification_settings = self._get_admin_notification_settings()

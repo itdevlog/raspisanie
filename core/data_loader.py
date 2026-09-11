@@ -39,7 +39,7 @@ class DataLoader:
                 return None
                     
             except Exception as e:
-                print(f"⚠️ Попытка {attempt + 1} не удалась для {check_url}: {e}")
+                self.logger.warning(f"⚠️ Попытка {attempt + 1} не удалась для {check_url}: {e}")
                 if attempt < max_retries - 1:
                     time.sleep(2 ** attempt)  # Exponential backoff
                 else:
@@ -69,7 +69,7 @@ class DataLoader:
                     return None
                     
             except Exception as e:
-                print(f"⚠️ Попытка {attempt + 1} не удалась для {filename}: {e}")
+                self.logger.warning(f"⚠️ Попытка {attempt + 1} не удалась для {filename}: {e}")
                 if attempt < max_retries - 1:
                     time.sleep(2 ** attempt)  # Exponential backoff
                 else:
@@ -109,18 +109,17 @@ class DataLoader:
         
         for school_id, school_config in SCHOOLS_CONFIG.items():
             if school_config.get('active', True):
-                print(f"🔄 Загрузка данных для {school_config['name']}...")
+                self.logger.info(f"🔄 Загрузка данных для {school_config['name']}...")
                 school_data = self.load_school_data(school_config)
                 if school_data:
                     schools_data[school_id] = school_data
-                    print(f"✅ Данные для {school_config['name']} загружены")
+                    self.logger.info(f"✅ Данные для {school_config['name']} загружены")
                 else:
-                    print(f"❌ Не удалось загрузить данные для {school_config['name']}")
+                    self.logger.warning(f"❌ Не удалось загрузить данные для {school_config['name']}")
                     failed_schools.append(school_config['name'])
         
         if failed_schools:
-            print(f"\n⚠️ Не удалось загрузить данные для {len(failed_schools)} школ:")
-            for school_name in failed_schools:
-                print(f"   ❌ {school_name}")
+            self.logger.warning(f"⚠️ Не удалось загрузить данные для {len(failed_schools)} школ: "
+                                f"{', '.join(failed_schools)}")
         
         return schools_data

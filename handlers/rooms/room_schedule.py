@@ -4,6 +4,9 @@ from services.room_service import RoomService
 from config.schools import SCHOOLS_CONFIG
 from services.state_service import UserStateService
 from handlers.common.messaging import edit_long_message, clear_search_flags
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def room_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню выбора кабинета"""
@@ -121,7 +124,7 @@ async def handle_room_selection(update: Update, context: ContextTypes.DEFAULT_TY
             schedule = room_service.get_room_schedule_week(room_name)
         else:
             # Если неизвестный тип, показываем сегодняшнее расписание
-            print(f"WARNING: Unknown schedule_type '{schedule_type}', defaulting to 'today'")
+            logger.warning(f"WARNING: Unknown schedule_type '{schedule_type}', defaulting to 'today'")
             schedule = room_service.get_room_schedule_today(room_name)
         
         # Создаем клавиатуру для навигации

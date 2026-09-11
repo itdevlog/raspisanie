@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta
 from typing import Dict, Optional
+import logging
 import pytz
+
+logger = logging.getLogger(__name__)
 
 class StatusService:
     def __init__(self, schools_data: Dict):
@@ -81,8 +84,8 @@ class StatusService:
                 }
         
         except Exception as e:
-            print(f"Error parsing date for school {school_id}: {e}")
-            print(f"Export date: {export_date}, time: {export_time}")
+            logger.warning(f"Error parsing date for school {school_id}: {e}; "
+                           f"export_date={export_date!r}, export_time={export_time!r}")
         
         # Если не удалось распарсить дату, показываем сырые данные
         return {
