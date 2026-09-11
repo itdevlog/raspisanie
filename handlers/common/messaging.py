@@ -31,31 +31,37 @@ async def safe_edit_message(query, text: str, reply_markup=None,
 def split_long_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> List[str]:
     """Разбивает текст на части не длиннее max_length по границам строк.
 
-    Если отдельная строка всё равно длиннее лимита (в ней нет переноса до
-    max_length), она режется жёстко — иначе сообщение не уйдёт вовсе.
+    Разбивка без потерь: `''.join(chunks) == text`. Режем по границам строк,
+    перебирая строки и склеивая их, пока они помещаются в лимит, чтобы не рвать
+    пары `*...*`/`` `...` `` разметки Markdown. Если отдельная строка длиннее
+    лимита (нет переноса внутри), режем её жёстко — иначе сообщение не уйдёт.
     """
     if not text:
         return []
 
     chunks: List[str] = []
-    remaining = text
+    current = ""
+    for line in text.splitlines(keepends=True):
+        if len(current) + len(line) <= max_length:
+            current += line
+            continue
 
-    while remaining:
-        if len(remaining) <= max_length:
-            chunks.append(remaining)
-            break
+        # Текущая строка не помещается: выгружаем накопленное
+        if current:
+            chunks.append(current)
+            current = ""
 
-        # Ищем границу строки в пределах лимита, чтобы не разрывать строку
-        cut = remaining.rfind('\n', 0, max_length + 1)
-        if cut == -1:
-            # Длинная строка без переноса — ищем пробел, иначе режем жёстко
-            space_cut = remaining.rfind(' ', 0, max_length + 1)
-            cut = space_cut if space_cut > 0 else max_length
+        # Сама строка может быть длиннее лимита — режем её на куски
+        if len(line) > max_length:
+            while len(line) > max_length:
+                chunks.append(line[:max_length])
+                line = line[max_length:]
+            current = line
+        else:
+            current = line
 
-        chunks.append(remaining[:cut])
-        # Потребляем символ переноса, если он был на границе
-        next_i = cut + 1 if cut < len(remaining) and remaining[cut] == '\n' else cut
-        remaining = remaining[next_i:]
+    if current:
+        chunks.append(current)
 
     return chunks
 
