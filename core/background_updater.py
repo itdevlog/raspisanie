@@ -396,6 +396,18 @@ class BackgroundUpdater:
                                 exchange_context, school_id, class_name, formatted_exchanges
                             )
 
+                            # Best-effort: уведомляем подписчиков преподавателей/кабинетов
+                            try:
+                                await self._notify_entity_subscribers(
+                                    exchange_context, notification_service, school_id,
+                                    class_name, formatted_exchanges, today
+                                )
+                            except Exception as e:
+                                self.logger.error(
+                                    f"Ошибка уведомления подписчиков класса {class_name} "
+                                    f"в школе {school_id}: {e}"
+                                )
+
                 except Exception as e:
                     self.logger.error(f"Ошибка принудительной проверки замен для школы {school_id}: {e}")
 

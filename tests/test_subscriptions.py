@@ -16,6 +16,23 @@ def _svc():
     return SubscriptionService(FileDB(os.path.join(d, 'database.json')))
 
 
+def test_whitespace_in_source_name_matches_stripped_subscription():
+    s = _svc()
+    assert s.subscribe(1, 'school_133', 'teacher', '  Иванов  ') is True
+    assert s.get_subscriptions(1, 'school_133') == [('teacher', 'Иванов')]
+    assert s.is_subscribed(1, 'school_133', 'teacher', 'Иванов') is True
+    assert s.get_subscribers('school_133', 'teacher', 'Иванов') == [1]
+    assert s.get_subscribers('school_133', 'teacher', '  Иванов ') == [1]
+    assert s.unsubscribe(1, 'school_133', 'teacher', ' Иванов ') is True
+    assert s.get_subscriptions(1, 'school_133') == []
+
+
+def test_blank_name_is_rejected():
+    s = _svc()
+    assert s.subscribe(1, 'school_133', 'teacher', '   ') is False
+    assert s.get_subscriptions(1, 'school_133') == []
+
+
 def test_subscribe_and_get():
     s = _svc()
     assert s.subscribe(1, 'school_133', 'teacher', 'Иванов') is True
@@ -115,6 +132,47 @@ async def test_notify_subscribers_without_service_returns_zero():
     count = await svc.notify_subscribers(context, 'school_133', 'room', '101', 'Текст')
 
     assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_force_check_exchanges_notifies_entity_subscribers(monkeypatch):
+    from core.background_updater import BackgroundUpdater
+
+    class _Detector:
+        moscow_tz = None
+
+        def _get_current_exchanges(self, school_data, today):
+            return {'5А': {1: {'data': {}, 'is_cancelled': False}}}
+
+        def _format_exchange_for_notification(self, class_name, exchange, school_data, today):
+            return {'class_name': class_name, 'new_teacher': 'Иванов', 'new_room': ''}
+
+    class _Notif:
+        async def notify_exchange_updates(self, context, school_id, class_name, exchanges):
+            return 1
+
+    app = SimpleNamespace(
+        bot_data={
+            'exchange_detector': _Detector(),
+            'notification_service': _Notif(),
+            'schools_data': {'school_133': {}},
+        },
+        bot=None,
+    )
+    updater = BackgroundUpdater(app)
+
+    calls = []
+
+    async def _fake_notify(context, notification_service, school_id, class_name, exchanges, date):
+        calls.append((school_id, class_name, exchanges))
+
+    monkeypatch.setattr(updater, '_notify_entity_subscribers', _fake_notify)
+
+    await updater.force_check_exchanges(SimpleNamespace())
+
+    assert len(calls) == 1
+    assert calls[0][0] == 'school_133'
+    assert calls[0][1] == '5А'
 
 
 @pytest.mark.asyncio

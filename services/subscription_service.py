@@ -20,6 +20,7 @@ class SubscriptionService:
         return self.collection.find_one({'user_id': user_id, 'school_id': school_id})
 
     def _has_item(self, doc: dict, kind: str, name: str) -> bool:
+        name = (name or '').strip()
         return any(
             item.get('kind') == kind and item.get('name') == name
             for item in doc.get('items', [])
@@ -28,6 +29,9 @@ class SubscriptionService:
     def subscribe(self, user_id: int, school_id: str, kind: str, name: str) -> bool:
         """Добавляет подписку. Идемпотентно. False — при неверном kind или ошибке записи."""
         if kind not in VALID_KINDS or not name:
+            return False
+        name = name.strip()
+        if not name:
             return False
 
         doc = self._find_doc(user_id, school_id)
@@ -50,6 +54,7 @@ class SubscriptionService:
         """Удаляет подписку. False — если её не было, kind неверен или ошибка записи."""
         if kind not in VALID_KINDS:
             return False
+        name = (name or '').strip()
 
         doc = self._find_doc(user_id, school_id)
         if not doc or not self._has_item(doc, kind, name):
@@ -79,6 +84,7 @@ class SubscriptionService:
         """Проверяет наличие подписки (для UI-переключателя)."""
         if kind not in VALID_KINDS:
             return False
+        name = (name or '').strip()
         doc = self._find_doc(user_id, school_id)
         return bool(doc and self._has_item(doc, kind, name))
 
