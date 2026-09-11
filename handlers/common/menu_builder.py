@@ -14,12 +14,11 @@ from services.text_utils import escape_markdown
 def build_main_menu_keyboard(current_class: str | None) -> InlineKeyboardMarkup:
     """Клавиатура главного меню; меняется в зависимости от того, выбран ли класс."""
     if current_class:
-        safe_class = escape_markdown(current_class)
         rows = [
             [
-                InlineKeyboardButton(f"📅 {safe_class} - Сегодня", callback_data=f"class_today_{current_class}"),
-                InlineKeyboardButton(f"📆 {safe_class} - Завтра", callback_data=f"class_tomorrow_{current_class}"),
-                InlineKeyboardButton(f"🗓️ {safe_class} - Неделя", callback_data=f"class_week_{current_class}"),
+                InlineKeyboardButton(f"📅 {current_class} - Сегодня", callback_data=f"class_today_{current_class}"),
+                InlineKeyboardButton(f"📆 {current_class} - Завтра", callback_data=f"class_tomorrow_{current_class}"),
+                InlineKeyboardButton(f"🗓️ {current_class} - Неделя", callback_data=f"class_week_{current_class}"),
             ],
             [
                 InlineKeyboardButton("👨‍🏫 Преподаватель", callback_data="menu_teacher"),
