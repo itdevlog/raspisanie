@@ -5,17 +5,21 @@ import time
 import logging
 from typing import Optional, Dict
 from config.schools import SCHOOLS_CONFIG  # Добавить импорт
+from config.config import Config
 
 class DataLoader:
     def __init__(self):
+        self.config = Config()
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
         self.logger = logging.getLogger(__name__)
 
-    def get_current_filename(self, check_url: str, max_retries: int = 3) -> Optional[str]:
+    def get_current_filename(self, check_url: str, max_retries: int = None) -> Optional[str]:
         """Получает актуальное имя файла из check страницы с повторными попытками"""
+        if max_retries is None:
+            max_retries = self.config.MAX_RETRIES
         for attempt in range(max_retries):
             try:
                 response = self.session.get(check_url, timeout=10)
@@ -45,8 +49,10 @@ class DataLoader:
                 else:
                     return None
     
-    def download_schedule_data(self, base_url: str, filename: str, max_retries: int = 3) -> Optional[Dict]:
+    def download_schedule_data(self, base_url: str, filename: str, max_retries: int = None) -> Optional[Dict]:
         """Скачивает и парсит данные расписания с повторными попытками"""
+        if max_retries is None:
+            max_retries = self.config.MAX_RETRIES
         for attempt in range(max_retries):
             try:
                 url = f"{base_url}{filename}"
@@ -75,8 +81,10 @@ class DataLoader:
                 else:
                     return None
     
-    def load_school_data(self, school_config: Dict, max_retries: int = 3) -> Optional[Dict]:
+    def load_school_data(self, school_config: Dict, max_retries: int = None) -> Optional[Dict]:
         """Полная загрузка данных для школы с повторными попытками"""
+        if max_retries is None:
+            max_retries = self.config.MAX_RETRIES
         school_name = school_config['name']
         
         for attempt in range(max_retries):

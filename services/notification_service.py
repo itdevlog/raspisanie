@@ -19,8 +19,15 @@ class NotificationService:
          self.sent_notifications: Dict[str, Set[str]] = {}
          self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')  # ДОБАВЬТЕ ЭТУ СТРОКУ
          self.logger.info("NotificationService инициализирован с пустым кэшом отправленных уведомлений")
-         self.notifications_cache_file = 'data/notifications_cache.json'
+         self.notifications_cache_file = self._get_cache_file()
          self.load_notifications_cache()
+
+    @staticmethod
+    def _get_cache_file() -> str:
+        """Путь к кэшу уведомлений в общей data-директории (не от cwd)."""
+        db_path = Config().DB_PATH
+        data_dir = os.path.dirname(db_path) or './data'
+        return os.path.join(data_dir, 'notifications_cache.json')
          
     def load_notifications_cache(self):
          """Загружает кэш отправленных уведомлений из файла"""

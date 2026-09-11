@@ -104,7 +104,7 @@
 
 - **Сломанный startup-уведомитель** — `bot.py:198-220`: ручной `asyncio.get_event_loop()` + `run_until_complete` до `run_polling()`, `Bot` ещё не инициализирован. → ✅ **исправлено ранее**: `_post_init` через `Application.builder().post_init(...)` (см. WIKI §4).
 - **`FileDB` без потокобезопасности** — read-modify-write в `user_service.py:65-97` из event loop и фонового потока → потерянные обновления. → ✅ **исправлено ранее**: `threading.RLock` + атомарная запись через temp-файл (`WIKI §3`). Осталась проблема п.4 (битый файл перезатирается).
-- **Настройки конфига игнорируются** — `UPDATE_INTERVAL` (зохардкожен `1800` в `background_updater.py:17`), `MAX_RETRIES`, `CACHE_PATH` не читаются нигде.
+- **Настройки конфига игнорируются** — `UPDATE_INTERVAL` (захардкожен `1800` в `background_updater.py:17`), `MAX_RETRIES`, `CACHE_PATH` не читаются нигде. → ✅ **исправлено 11.09**: `UPDATE_INTERVAL` → `BackgroundUpdater.update_interval`; `MAX_RETRIES` → дефолты `DataLoader.get_current_filename/download_schedule_data/load_school_data`; пути кэшей/логов (`exchange_cache.json`, `notifications_cache.json`, `updatelog.txt`) выводятся из `DB_PATH`, а не из cwd.
 - **Падение при невалидном `.env`** — `config/config.py:11-15`, `bot.py:51`: `ValueError`/`AttributeError` на импорте без понятного сообщения.
 - **`remove_school` оставляет висячий `current_school`** — `database/models/user_school.py:21-31`; сам класс `UserSchool` нигде не используется — удалить или подключить.
 
@@ -145,7 +145,7 @@
 - **`FileDB` перезаписывает весь JSON на каждую операцию** (`file_db.py:72,80,96`) — dirty-флаг + отложенная запись, или перейти на `sqlite3` (stdlib).
 - **Кэш уведомлений** — `notification_service.py:337-344`: «последние 100» через `list(set)[-100:]` — порядок не гарантирован; обещанной очистки по 24 ч нет. Хранить `Dict[key, timestamp]`.
 - **Дублирование запросов в `data_loader`** — вложенные ретраи дают до 9 запросов на школу; нет ETag/If-Modified-Since; `except Exception` ловит и `JSONDecodeError` (ретрай бессмысленен); парсинг по `'var NIKA='` хрупок; `Session` не закрывается.
-- **Относительные пути от cwd** — `exchange_detector.py:18`, `notification_service.py:21`, `config.py:31-33`: запуск не из корня молча создаст новую пустую `data/`. Пути от `__file__`/Config.
+- **Относительные пути от cwd** — `exchange_detector.py:18`, `notification_service.py:21`, `config.py:31-33`: запуск не из корня молча создаст новую пустую `data/`. Пути от `__file__`/Config. → 🟡 **частично исправлено 11.09**: `exchange_cache.json`, `notifications_cache.json`, `updatelog.txt` выводятся из `DB_PATH`; `setup_directories` по-прежнему от cwd.
 - **`CacheService`** — нет лимита размера и потокобезопасности; `get_stats` сериализует весь кэш в строки.
 
 ### Логирование и безопасность

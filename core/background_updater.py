@@ -9,14 +9,16 @@ import pytz
 from core.data_loader import DataLoader
 from services.notification_service import NotificationService
 from config.schools import get_display_name
+from config.config import Config
 
 class BackgroundUpdater:
     def __init__(self, application):
+        self.config = Config()
         self.application = application
         self.data_loader = DataLoader()
         self.notification_service = NotificationService()
         self.is_running = False
-        self.update_interval = 1800  # 30 минут для более частой проверки замен
+        self.update_interval = self.config.UPDATE_INTERVAL
         self.logger = logging.getLogger(__name__)
         self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
         self._update_task = None
@@ -171,7 +173,7 @@ class BackgroundUpdater:
             
     def get_update_log_file(self):
         """Возвращает путь к файлу лога обновлений"""
-        return 'updatelog.txt'
+        return self.config.get_updatelog_path()
             
     def log_update_activity(self, message: str):
         """Записывает сообщение в лог обновлений"""

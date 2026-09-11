@@ -31,3 +31,15 @@ class Config:
         os.makedirs('./data', exist_ok=True)
         os.makedirs('./logs', exist_ok=True)
         os.makedirs('./cache', exist_ok=True)
+
+    @staticmethod
+    def get_updatelog_path() -> str:
+        """Путь к файлу лога обновлений — рядом с базой данных (в data/).
+
+        Раньше жёстко 'updatelog.txt' от cwd; запуск не из корня молча создавал
+        пустой файл в другом месте. Выводим из CACHE_PATH, чтобы файл лежал
+        в общей data-директории.
+        """
+        db_path = os.getenv('DB_PATH', './data/database.json')
+        data_dir = os.path.dirname(db_path) or './data'
+        return os.path.join(data_dir, 'updatelog.txt')

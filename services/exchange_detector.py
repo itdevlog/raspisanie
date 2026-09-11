@@ -6,6 +6,7 @@ import logging
 import json
 import os
 from services.exchange_service import ExchangeService
+from config.config import Config
 
 class ExchangeDetector:
     """Сервис для обнаружения новых замен в расписании"""
@@ -15,8 +16,15 @@ class ExchangeDetector:
         self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
         # Храним предыдущее состояние расписаний для сравнения
         self.previous_schedules: Dict[str, Dict] = {}
-        self.cache_file = 'data/exchange_cache.json'
+        self.cache_file = self._get_cache_file()
         self.load_cache()
+
+    @staticmethod
+    def _get_cache_file() -> str:
+        """Путь к кэшу замен в общей data-директории (не от cwd)."""
+        db_path = Config().DB_PATH
+        data_dir = os.path.dirname(db_path) or './data'
+        return os.path.join(data_dir, 'exchange_cache.json')
         
     def load_cache(self):
         """Загружает кэш замен из файла"""
