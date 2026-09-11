@@ -104,7 +104,7 @@ class DataLoader:
         for attempt in range(max_retries):
             self.logger.info(f"Попытка {attempt + 1} загрузки данных для {school_name}...")
 
-            filename = self.get_current_filename(school_config['check_url'])
+            filename = self.get_current_filename(school_config['check_url'], max_retries=1)
             if not filename:
                 self.logger.warning(f"Не удалось получить имя файла для {school_name}")
                 if attempt < max_retries - 1:
@@ -113,7 +113,7 @@ class DataLoader:
                 else:
                     return None
 
-            data = self.download_schedule_data(school_config['base_url'], filename)
+            data = self.download_schedule_data(school_config['base_url'], filename, max_retries=1)
             if data:
                 self.logger.info(f"Данные для {school_name} успешно загружены")
                 return data
@@ -125,20 +125,30 @@ class DataLoader:
         return None
 
     def load_all_schools_data(self) -> dict[str, dict]:
-        """Загружает данные для всех активных школ"""
+        """Загружает данные всех активных школ; использует локальную сессию и закрывает её."""
         schools_data = {}
         failed_schools = []
-
-        for school_id, school_config in SCHOOLS_CONFIG.items():
-            if school_config.get('active', True):
-                self.logger.info(f"🔄 Загрузка данных для {school_config['name']}...")
-                school_data = self.load_school_data(school_config)
-                if school_data:
-                    schools_data[school_id] = school_data
-                    self.logger.info(f"✅ Данные для {school_config['name']} загружены")
-                else:
-                    self.logger.warning(f"❌ Не удалось загрузить данные для {school_config['name']}")
-                    failed_schools.append(school_config['name'])
+        session = requests.Session()
+        session.headers.update(self.session.headers)
+        original = self.session
+        try:
+            self.session = session
+            for school_id, school_config in SCHOOLS_CONFIG.items():
+                if school_config.get('active', True):
+                    self.logger.info(f"🔄 Загрузка данных для {school_config['name']}...")
+                    school_data = self.load_school_data(school_config)
+                    if school_data:
+                        schools_data[school_id] = school_data
+                        self.logger.info(f"✅ Данные для {school_config['name']} загружены")
+                    else:
+                        self.logger.warning(f"❌ Не удалось загрузить данные для {school_config['name']}")
+                        failed_schools.append(school_config['name'])
+        finally:
+            self.session = original
+            try:
+                session.close()
+            except Exception:
+                pass
 
         if failed_schools:
             self.logger.warning(f"⚠️ Не удалось загрузить данные для {len(failed_schools)} школ: "
