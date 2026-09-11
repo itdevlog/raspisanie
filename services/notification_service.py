@@ -30,6 +30,9 @@ class NotificationService:
          self._index_loaded_for_school: str | None = None
          # Настройки уведомлений {user_id: enabled} для текущей школы, строится вместе с индексом
          self._settings_for_school: dict[int, bool] = {}
+         # Анти-флуд: минимальный интервал между сообщениями одному чату.
+         self._min_send_interval = 1.0
+         self._last_sent_at: dict[int, float] = {}
 
     def _build_user_class_index(self, user_service, school_id: str):
         """Один проход по всем пользователям: (school_id, класс) -> [user_id].
@@ -126,12 +129,52 @@ class NotificationService:
          except Exception as e:
              self.logger.error(f"Ошибка сохранения кэша уведомлений: {e}")
 
+    def _now(self) -> datetime:
+        """Текущее время в таймзоне приложения (точка подмены в тестах)."""
+        return datetime.now(self.moscow_tz)
+
+    @staticmethod
+    def _is_quiet_hours(settings: dict, now: datetime) -> bool:
+        """Включены ли сейчас тихие часы по настройкам пользователя.
+
+        Поддерживает интервал через полночь (start > end), например 22–7.
+        Некорректные/отсутствующие настройки считаются «не тихими».
+        """
+        if not isinstance(settings, dict):
+            return False
+        quiet = settings.get('quiet_hours')
+        if not isinstance(quiet, dict) or not quiet.get('enabled'):
+            return False
+        try:
+            start = int(quiet['start'])
+            end = int(quiet['end'])
+        except (KeyError, TypeError, ValueError):
+            return False
+        hour = now.hour
+        if start == end:
+            return True
+        if start < end:
+            return start <= hour < end
+        return hour >= start or hour < end
+
     async def _send_message(self, bot, chat_id: int, text: str, parse_mode: str = 'Markdown',
                             max_attempts: int = 3) -> bool:
-        """Отправляет сообщение, пережидая Telegram RetryAfter (429)."""
+        """Отправляет сообщение, пережидая Telegram RetryAfter (429).
+
+        Простой анти-флуд: одному чату не чаще, чем раз в `_min_send_interval`.
+        """
+        last_sent_at = getattr(self, '_last_sent_at', None)
+        if last_sent_at is None:
+            self._last_sent_at = last_sent_at = {}
+        now = time.monotonic()
+        interval = getattr(self, '_min_send_interval', 1.0)
+        if now - last_sent_at.get(chat_id, 0.0) < interval:
+            self.logger.warning(f"Анти-флуд: пропуск сообщения для {chat_id}")
+            return False
         for attempt in range(max_attempts):
             try:
                 await bot.send_message(chat_id=chat_id, text=text, parse_mode=parse_mode)
+                self._last_sent_at[chat_id] = time.monotonic()
                 return True
             except RetryAfter as e:
                 wait = float(getattr(e, 'retry_after', 1) or 1)
@@ -230,10 +273,23 @@ class NotificationService:
                 self.logger.info(f"Notification already sent for {notification_key}")
                 return False
 
+            # Настройки тихих часов читаем из UserPreferencesService
+            from services.user_preferences import UserPreferencesService
+
+            preferences_service = UserPreferencesService(getattr(user_service, 'db', None))
+            now = self._now()
+
             # Получатели уже отфильтрованы по настройкам уведомлений в get_users_for_exchange
             sent_count = 0
+            skipped_quiet = 0
             for user_id in users:
                 try:
+                    user_settings = preferences_service.get_notification_settings(user_id)
+                    if self._is_quiet_hours(user_settings, now):
+                        # Не шлём, но считаем обработанным — dedup не даст задублировать позже
+                        skipped_quiet += 1
+                        self.logger.info(f"Тихие часы: пропуск уведомления для {user_id}")
+                        continue
                     if await self._send_message(context.bot, user_id, notification_text, parse_mode='Markdown'):
                         sent_count += 1
                         self.logger.info(f"Exchange notification sent to user {user_id}")
@@ -242,12 +298,16 @@ class NotificationService:
                 except Exception as e:
                     self.logger.error(f"Failed to send message to user {user_id}: {e}")
 
-            # Сохраняем в кэш отправленных уведомлений ТОЛЬКО если что-то действительно отправлено
-            if sent_count > 0:
+            # Помечаем отправленным, если что-то реально ушло ИЛИ все получатели
+            # были на тихих часах — иначе после них пришлём то же самое повторно.
+            if sent_count > 0 or skipped_quiet:
                 self._mark_notification_sent(notification_key)
                 self.save_notifications_cache()
 
-            self.logger.info(f"Exchange notifications sent to {sent_count}/{len(users)} users for class {class_name}")
+            self.logger.info(
+                f"Exchange notifications sent to {sent_count}/{len(users)} users "
+                f"for class {class_name} (quiet skipped: {skipped_quiet})"
+            )
             return sent_count > 0
 
         except Exception as e:

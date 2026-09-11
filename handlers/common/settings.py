@@ -26,9 +26,12 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Проверяем, является ли пользователь администратором
     is_admin = Config.is_admin(config, user_id)
 
-    # Напоминания об уроках — доступны всем пользователям
+    # Напоминания об уроках и тихие часы — доступны всем пользователям
     preferences_service = UserPreferencesService(user_service.db)
-    lesson_reminders_enabled = preferences_service.get_notification_settings(user_id).get('lesson_reminders', False)
+    user_notification_settings = preferences_service.get_notification_settings(user_id)
+    lesson_reminders_enabled = user_notification_settings.get('lesson_reminders', False)
+    quiet_hours = user_notification_settings.get('quiet_hours') or {}
+    quiet_hours_enabled = bool(quiet_hours.get('enabled'))
 
     # Создаем клавиатуру с настройками
     keyboard = [
@@ -42,6 +45,13 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(
                 f"⏰ Напоминания об уроках: {'✅ Вкл' if lesson_reminders_enabled else '❌ Выкл'}",
                 callback_data=f"toggle_lesson_reminders_{'off' if lesson_reminders_enabled else 'on'}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"🌙 Тихие часы ({quiet_hours.get('start', 22)}:00-{quiet_hours.get('end', 7)}:00): "
+                f"{'✅ Вкл' if quiet_hours_enabled else '❌ Выкл'}",
+                callback_data=f"toggle_quiet_hours_{'off' if quiet_hours_enabled else 'on'}"
             )
         ]
     ]
@@ -63,9 +73,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Если пользователь администратор, добавляем настройки уведомлений об обновлениях
     if is_admin:
-        # Получаем настройки уведомлений об обновлениях
-        admin_notifications = preferences_service.get_notification_settings(user_id)
-        update_notifications_enabled = admin_notifications.get('update_notifications', False)
+        update_notifications_enabled = user_notification_settings.get('update_notifications', False)
 
         keyboard.append([
             InlineKeyboardButton(
@@ -172,6 +180,28 @@ async def toggle_lesson_reminders(update: Update, context: ContextTypes.DEFAULT_
         status_text = "отключены"
 
     await query.answer(f"⏰ Напоминания об уроках {status_text}")
+    await settings_handler(update, context)
+
+
+async def toggle_quiet_hours(update: Update, context: ContextTypes.DEFAULT_TYPE, state: str):
+    """Переключает тихие часы (доступно всем пользователям)."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    user_service = context.bot_data.get('user_service')
+
+    if not user_service:
+        await query.answer("❌ Сервис не доступен")
+        return
+
+    preferences_service = UserPreferencesService(user_service.db)
+    if state == 'on':
+        preferences_service.enable_quiet_hours(user_id)
+        status_text = "включены"
+    else:
+        preferences_service.disable_quiet_hours(user_id)
+        status_text = "отключены"
+
+    await query.answer(f"🌙 Тихие часы {status_text}")
     await settings_handler(update, context)
 
 

@@ -98,17 +98,25 @@ class BackgroundUpdater:
             if not user_classes:
                 return
 
+            now = self._now()
             due = self.reminder_service.get_due_reminders_detailed(
-                schools_data, user_classes, self._now()
+                schools_data, user_classes, now
             )
 
             self._cleanup_sent_reminders()
             notification_service = bot_data.get('notification_service') or self.notification_service
+            bot = bot_data.get('bot') or self.application.bot
             for user_id, text, key in due:
                 if key in self.sent_reminders:
                     continue
+                # Тихие часы: не шлём, но помечаем ключ, чтобы не дублировать позже
+                settings = preferences_service.get_notification_settings(user_id)
+                if NotificationService._is_quiet_hours(settings, now):
+                    self.sent_reminders[key] = time.time()
+                    self.logger.info(f"Тихие часы: пропуск напоминания для {user_id}")
+                    continue
                 try:
-                    await notification_service._send_message(bot_data.get('bot') or self.application.bot, user_id, text, parse_mode=None)
+                    await notification_service._send_message(bot, user_id, text, parse_mode=None)
                     self.sent_reminders[key] = time.time()
                 except Exception as e:
                     self.logger.error(f"Ошибка отправки напоминания {user_id}: {e}")

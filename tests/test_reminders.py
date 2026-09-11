@@ -127,6 +127,54 @@ def test_reminder_loop_dedups_and_respects_toggle(monkeypatch):
     assert len(sent) == 1
 
 
+def test_reminder_loop_skips_quiet_hours_but_dedups(monkeypatch):
+    db = _make_db()
+    us = UserService(db)
+    us.set_user_class(1, '5а', 'school_133')
+    UserPreferencesService(db).set_notification_settings(1, {
+        'lesson_reminders': True,
+        'quiet_hours': {'enabled': True, 'start': 22, 'end': 8},
+    })
+
+    school_data = _school_data()
+    school_data['LESSON_TIMES'] = {'1': ['07:00', '07:45']}
+
+    updater = object.__new__(BackgroundUpdater)
+    import logging
+    updater.logger = logging.getLogger('test')
+    updater._update_lock = __import__('asyncio').Lock()
+    updater.application = SimpleNamespace(
+        bot_data={
+            'user_service': us,
+            'schools_data': {'school_133': school_data},
+        },
+        bot=None,
+    )
+    updater.reminder_service = ReminderService()
+    updater.sent_reminders = {}
+
+    sent = []
+
+    async def _fake_send(bot, chat_id, text, parse_mode='Markdown'):
+        sent.append((chat_id, text))
+        return True
+
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)
+
+    # 06:55, урок в 07:00 попадает в окно, но идёт тихий час (22–8)
+    now = datetime(2026, 9, 11, 6, 55, tzinfo=TZ)
+    monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
+    import asyncio
+    asyncio.run(updater._send_reminders())
+
+    # не отправлено, но ключ дедупа сохранён
+    assert sent == []
+    assert updater.sent_reminders != {}
+
+    asyncio.run(updater._send_reminders())
+    assert sent == []
+
+
 def test_lesson_reminders_toggle_roundtrip():
     db = _make_db()
     prefs = UserPreferencesService(db)

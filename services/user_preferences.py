@@ -20,13 +20,25 @@ class UserPreferencesService:
         self.db = db
         self.preferences_collection = db.get_collection('user_preferences')
 
+    @staticmethod
+    def _default_settings() -> dict:
+        """Настройки уведомлений по умолчанию (единая точка)."""
+        return {
+            'update_notifications': False,
+            'lesson_reminders': False,
+            'quiet_hours': {'enabled': False, 'start': 22, 'end': 7},
+        }
+
     def get_notification_settings(self, user_id: int) -> dict:
         """Получает настройки уведомлений пользователя"""
         preferences = self.preferences_collection.find_one({'user_id': user_id}) or {}
-        return preferences.get('notifications', {
-            'update_notifications': False,
-            'lesson_reminders': False
-        })
+        settings = preferences.get('notifications')
+        if not settings:
+            return self._default_settings()
+        # Дополняем недостающие ключи (обратная совместимость со старыми записями)
+        merged = self._default_settings()
+        merged.update(settings)
+        return merged
 
     def set_notification_settings(self, user_id: int, settings: dict) -> bool:
         """Устанавливает настройки уведомлений пользователя"""
@@ -81,3 +93,26 @@ class UserPreferencesService:
         settings = self.get_notification_settings(user_id)
         settings['lesson_reminders'] = not settings.get('lesson_reminders', False)
         return self.set_notification_settings(user_id, settings)
+
+    def enable_quiet_hours(self, user_id: int, start: int = 22, end: int = 7) -> bool:
+        """Включает тихие часы (интервал может пересекать полночь)."""
+        settings = self.get_notification_settings(user_id)
+        settings['quiet_hours'] = {'enabled': True, 'start': start, 'end': end}
+        return self.set_notification_settings(user_id, settings)
+
+    def disable_quiet_hours(self, user_id: int) -> bool:
+        """Отключает тихие часы, сохраняя границы интервала."""
+        settings = self.get_notification_settings(user_id)
+        quiet = dict(settings.get('quiet_hours') or {})
+        quiet['enabled'] = False
+        quiet.setdefault('start', 22)
+        quiet.setdefault('end', 7)
+        settings['quiet_hours'] = quiet
+        return self.set_notification_settings(user_id, settings)
+
+    def toggle_quiet_hours(self, user_id: int) -> bool:
+        """Переключает тихие часы для пользователя."""
+        settings = self.get_notification_settings(user_id)
+        if (settings.get('quiet_hours') or {}).get('enabled'):
+            return self.disable_quiet_hours(user_id)
+        return self.enable_quiet_hours(user_id)
