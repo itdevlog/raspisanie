@@ -166,3 +166,8 @@
 ### P2: CacheService — потокобезопасность, лимит размера, честная статистика
 
 - `CacheService` обёрнут в `threading.RLock`; добавлен параметр `max_entries` с вытеснением самых старых; `get_stats` больше не сериализует весь кэш в строки (O(n), оценочная память). Юнит-тесты (TTL/эviction/prefix/thread-safety).
+
+### P2: data_loader — не ретраим некорректный JSON, закрываем Session
+
+- `JSONDecodeError` при парсинге `var NIKA=` больше не уходит в ретрай (выход сразу) — раньше ловился `except Exception` и бесполезно повторялся.
+- Добавлен `DataLoader.close()` для закрытия HTTP-сессии (пул соединений).

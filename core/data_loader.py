@@ -16,6 +16,13 @@ class DataLoader:
         })
         self.logger = logging.getLogger(__name__)
 
+    def close(self):
+        """Закрывает HTTP-сессию (держит пул соединений)."""
+        try:
+            self.session.close()
+        except Exception as e:
+            self.logger.error(f"Ошибка закрытия сессии: {e}")
+
     def get_current_filename(self, check_url: str, max_retries: int = None) -> Optional[str]:
         """Получает актуальное имя файла из check страницы с повторными попытками"""
         if max_retries is None:
@@ -69,7 +76,12 @@ class DataLoader:
                     if json_str.endswith(';'):
                         json_str = json_str[:-1]
                     
-                    data = json.loads(json_str)
+                    try:
+                        data = json.loads(json_str)
+                    except json.JSONDecodeError as e:
+                        # Искажённые данные — повторные запросы не помогут, выходим сразу
+                        self.logger.error(f"Некорректный JSON в {url}: {e}")
+                        return None
                     return data
                 else:
                     return None
