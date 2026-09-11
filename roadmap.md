@@ -150,10 +150,10 @@
 
 ### Логирование и безопасность
 
-- Токен бота пишется в `logs/bot.log` в URL httpx — не публиковать логи; настроить `RotatingFileHandler` (сейчас файл растёт бесконечно, `bot.py:49-53`).
+- Токен бота пишется в `logs/bot.log` в URL httpx — не публиковать логи; настроить `RotatingFileHandler` (сейчас файл растёт бесконечно, `bot.py:49-53`). → ✅ **исправлено 11.09**: `RotatingFileHandler` (5 МБ x 3) + `StreamHandler`; httpx приглушён до WARNING (в debug не пишутся URL-ы с токеном).
 - ~36 `print()` вперемешку с `logger` (`data_loader`, `background_updater`, `bot.py`, `status_service.py:84-85`, `school_selection.py:89`; `file_db.py` — ✅ очищен 11.09). Унифицировать на logging. Плюс stdout буферизуется при systemd/перенаправлении — теряется диагностика. → ✅ **исправлено 11.09**: все `print()` заменены на `logger` (`data_loader`, `background_updater`, `bot.py`, `status_service`, `room_schedule`, `school_selection`).
 - `ADMIN_LOG_FILE` объявлен в конфиге (`config.py:26`), но нигде не используется.
-- `logging.basicConfig(filename=...)` глушит консоль — не видно работы под systemd.
+- `logging.basicConfig(filename=...)` глушит консоль — не видно работы под systemd. → ✅ **исправлено 11.09**: добавлен `StreamHandler`, консоль работает вместе с файлом.
 
 ---
 

@@ -1,5 +1,6 @@
 # File: c:\Users\set\Downloads\telegram-schedule-bot1001\telegram-schedule-bot\bot.py
 import logging
+import logging.handlers
 import asyncio
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from telegram import Update
@@ -56,12 +57,32 @@ class ScheduleBot:
         self.load_schools_data()
     
     def setup_logging(self):
-        """Базовая настройка логирования"""
-        logging.basicConfig(
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            level=getattr(logging, self.config.LOG_LEVEL),
-            filename=self.config.LOG_FILE
+        """Настройка логирования: ротация файла + вывод в консоль.
+
+        Раньше `basicConfig(filename=...)` писал ВЕСЬ вывод только в файл
+        (под systemd в консоли ничего не видно) и файл рос бесконечно. Теперь:
+          - RotatingFileHandler (1 файл x 5 МБ, ротация до 3 бэкапов) — файл не растёт без предела;
+          - StreamHandler — лог и в консоль/журнал systemd.
+        httpx гонит в debug URL'ы с токеном бота — приглушаем его до WARNING.
+        """
+        level = getattr(logging, self.config.LOG_LEVEL, logging.INFO)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+        file_handler = logging.handlers.RotatingFileHandler(
+            self.config.LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8'
         )
+        file_handler.setFormatter(formatter)
+
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+
+        root = logging.getLogger()
+        root.handlers = [file_handler, console_handler]
+        root.setLevel(level)
+
+        # Не писать URL-ы запросов (содержат TELEGRAM_TOKEN) в debug-лог httpx
+        logging.getLogger('httpx').setLevel(logging.WARNING)
+
         self.logger = logging.getLogger(__name__)
     
     def setup_services(self):
