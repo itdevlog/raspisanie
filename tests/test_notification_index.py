@@ -98,6 +98,32 @@ def test_get_notification_settings_batch():
     assert batch[2] is False
 
 
+def test_get_users_for_exchange_filters_disabled():
+    users = [
+        {'user_id': 1, 'school_classes': {'school_133': '5А'}, 'notification_settings': {'school_133': True}},
+        {'user_id': 2, 'school_classes': {'school_133': '5а'}, 'notification_settings': {'school_133': False}},
+        {'user_id': 3, 'school_classes': {'school_133': '5А'}},  # нет настроек -> включено по умолчанию
+        {'user_id': 4, 'school_classes': {'school_133': '7б'}, 'notification_settings': {'school_133': True}},
+    ]
+    svc = _make_svc()
+    us = FakeUserService(users)
+
+    # индекс строится один раз для школы
+    svc.get_users_by_class_indexed(us, 'school_133', '5А')
+    result = svc.get_users_for_exchange('school_133', '5А')
+    assert sorted(result) == [1, 3], result  # 2 отключён, 4 — другой класс
+
+
+def test_get_users_for_exchange_defaults_enabled_without_settings():
+    users = [
+        {'user_id': 5, 'school_classes': {'school_133': '9В'}},
+    ]
+    svc = _make_svc()
+    us = FakeUserService(users)
+    svc.get_users_by_class_indexed(us, 'school_133', '9В')
+    assert svc.get_users_for_exchange('school_133', '9В') == [5]
+
+
 def test_notification_ttl_cleanup():
     import time
 
