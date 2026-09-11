@@ -1,0 +1,492 @@
+# 📚 Wiki: Telegram-бот расписания занятий
+
+> Дата создания: 2026-09-10  
+> Назначение: единая точка знаний о проекте. Если что-то здесь не описано — это баг документации, дополняй.
+
+---
+
+## 1. Что это за проект
+
+Telegram-бот для просмотра школьного расписания и автоматических уведомлений о заменах.
+
+- **Источник данных**: система расписания [Nikasoft (Ника-Люкс)](https://raspisanie.nikasoft.ru).
+- **Фреймворк**: `python-telegram-bot` v20.7 (асинхронный).
+- **База данных**: локальный JSON-файл (`data/database.json`) через обёртку `FileDB`.
+- **Язык**: Python 3.10+.
+- **Поддерживаемые школы**: МАОУ СОШ №133, МАОУ СОШ №181 (г. Екатеринбург).
+
+---
+
+## 2. Высокоуровневая архитектура
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Telegram API                            │
+└─────────────────────────────────────────────────────────────────┘
+                                ▲
+                                │
+┌─────────────────────────────────────────────────────────────────┐
+│  bot.py  ──  Application (python-telegram-bot)                    │
+│  • регистрация обработчиков                                     │
+│  • хранилище сервисов в application.bot_data                      │
+│  • запуск фонового обновления + polling                         │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+        ┌───────────────────────┼───────────────────────┐
+        ▼                       ▼                       ▼
+┌───────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   handlers/   │     │    services/     │     │     core/       │
+│  команды и    │     │ бизнес-логика    │     │ загрузка данных │
+│  callback'и   │     │                  │     │ и фоновые задачи│
+└───────────────┘     └──────────────────┘     └─────────────────┘
+        │                       │                       │
+        └───────────────────────┼───────────────────────┘
+                                ▼
+                    ┌──────────────────┐
+                    │  config/ + data/ │
+                    │  .env, JSON БД,  │
+                    │  кэш-файлы       │
+                    └──────────────────┘
+```
+
+### 2.1 Главные потоки выполнения
+
+1. **Пользовательский поток**: Telegram → `handlers/` → `services/` → ответ пользователю.
+2. **Фоновый поток**: `core/background_updater.py` раз в 30 минут загружает свежие данные и проверяет замены.
+3. **Поток данных**: `core/data_loader.py` → `bot_data['schools_data']` → все `services` работают с этим словарём.
+
+---
+
+## 3. Структура проекта
+
+| Путь | Назначение |
+|------|-----------|
+| [bot.py](bot.py) | Точка входа. Создаёт приложение, инициализирует сервисы, запускает polling. |
+| [config/config.py](config/config.py) | Чтение `.env`, настройки логирования, путей, админов. |
+| [config/schools.py](config/schools.py) | Список поддерживаемых школ: `id`, имя, URL check-страницы, URL статики. |
+| [core/data_loader.py](core/data_loader.py) | Скачивает JS-файл расписания с Nikasoft и парсит его в Python-словарь. |
+| [core/background_updater.py](core/background_updater.py) | Фоновый поток обновления данных и детекции замен. |
+| [database/file_db.py](database/file_db.py) | Простая JSON-обёртка «как MongoDB»: коллекции, `find`, `insert`, `update`. |
+| [database/models/user_school.py](database/models/user_school.py) | Модель `UserSchool` (сейчас не используется). |
+| [services/base_schedule_service.py](services/base_schedule_service.py) | Базовый класс с общей логикой форматирования расписания. |
+| [services/schedule_service.py](services/schedule_service.py) | Расписание классов: сегодня, завтра, неделя. |
+| [services/teacher_service.py](services/teacher_service.py) | Расписание преподавателей. |
+| [services/room_service.py](services/room_service.py) | Расписание кабинетов. |
+| [services/exchange_service.py](services/exchange_service.py) | Применяет замены к расписанию урока. |
+| [services/exchange_detector.py](services/exchange_detector.py) | Обнаруживает *новые* замены, сравнивая текущее состояние с предыдущим. |
+| [services/notification_service.py](services/notification_service.py) | Отправляет уведомления о заменах пользователям и админам. |
+| [services/user_service.py](services/user_service.py) | Работа с пользователями: школа, класс, настройки уведомлений. |
+| [services/user_preferences.py](services/user_preferences.py) | Альтернативный слой настроек поверх `FileDB`. Используется в `background_updater._get_admin_notification_settings` для настроек админов. Частично пересекается с `UserService` по API, но хранит данные в отдельной коллекции `user_preferences`. |
+| [services/cache_service.py](services/cache_service.py) | In-memory кэш с TTL (10 минут по умолчанию). |
+| [services/status_service.py](services/status_service.py) | Проверяет актуальность данных по времени экспорта из Nikasoft. |
+| [services/state_service.py](services/state_service.py) | Временное хранилище состояний пользователей (FSM-подобное). |
+| [handlers/start.py](handlers/start.py) | `/start` и `/help`. |
+| [handlers/common/main_menu.py](handlers/common/main_menu.py) | Отрисовка главного меню. |
+| [handlers/common/callback_handler.py](handlers/common/callback_handler.py) | **Активный** callback-роутер. Делегирует в `CallbackRouter` из `handlers/callbacks/__init__.py`. Регистрируется в `bot.py:130` через `CallbackQueryHandler(callback_handler)`. |
+| [handlers/callbacks/__init__.py](handlers/callbacks/__init__.py) | Реализация `CallbackRouter` и 5 специализированных обработчиков (`ClassCallbackHandler`, `TeacherCallbackHandler`, `RoomCallbackHandler`, `AdminCallbackHandler`, `NavigationCallbackHandler`). |
+| [handlers/callbacks/class_callbacks.py](handlers/callbacks/class_callbacks.py) | Callback'и классов. |
+| [handlers/callbacks/teacher_callbacks.py](handlers/callbacks/teacher_callbacks.py) | Callback'и учителей. |
+| [handlers/callbacks/room_callbacks.py](handlers/callbacks/room_callbacks.py) | Callback'и кабинетов. |
+| [handlers/callbacks/navigation_callbacks.py](handlers/callbacks/navigation_callbacks.py) | Навигация: главное меню, смена класса/школы, настройки. |
+| [handlers/callbacks/admin_callbacks.py](handlers/callbacks/admin_callbacks.py) | Админ-панель и callback'и администратора. |
+| [handlers/admin/admin_panel.py](handlers/admin/admin_panel.py) | Содержит `admin_panel_handler`, `admin_callback_handler`, `setup_admin_handlers`. **Команды `/admin` и `/stats` регистрируются именно здесь** через `setup_admin_handlers(application)` (вызов в `bot.py:127`, реализация в `admin_panel.py:300-303`). Функция `admin_callback_handler` нигде не вызывается — мёртвый код. |
+| [handlers/common/class_schedule.py](handlers/common/class_schedule.py) | Обработка текстового ввода класса. |
+| [handlers/common/week_command.py](handlers/common/week_command.py) | `/week` — не зарегистрирована. |
+| [handlers/common/status.py](handlers/common/status.py) | Команда `/status`. |
+| [handlers/common/settings.py](handlers/common/settings.py) | Команда `/settings`. |
+| [handlers/common/school_info.py](handlers/common/school_info.py) | Информация о школе. |
+| [handlers/schools/school_selection.py](handlers/schools/school_selection.py) | Выбор школы. |
+| [handlers/teachers/teacher_menu.py](handlers/teachers/teacher_menu.py) | Меню и расписание учителей. |
+| [handlers/rooms/room_schedule.py](handlers/rooms/room_schedule.py) | Меню и расписание кабинетов. |
+| [logs/](logs/) | Лог-файлы. |
+| [data/](data/) | JSON база и кэш-файлы. |
+| [cache/](cache/) | Зарезервировано, но **пусто**. Переменная `CACHE_PATH` в `.env` в текущей версии не используется ни одним сервисом. |
+
+---
+
+## 4. Как бот запускается
+
+Последовательность в [bot.py](bot.py):
+
+1. `Config()` читает `.env`.
+2. Создаётся `Application.builder().token(...).build()`.
+3. `setup_services()` создаёт сервисы и кладёт их в `application.bot_data`:
+   - `user_service`
+   - `db`
+   - `cache_service`
+   - `notification_service`
+   - `state_service`
+   - `exchange_detector`
+   - `schools_config`
+4. `load_schools_data()` вызывает `DataLoader.load_all_schools_data()` — синхронно загружает данные всех школ.
+5. `setup_handlers()` регистрирует обработчики команд и callback.
+6. `background_updater.start_periodic_updates()` запускает фоновый поток.
+7. `application.run_polling()` блокирует основной поток и начинает слушать Telegram.
+
+> ⚠️ **Хрупкость инициализации**: `BackgroundUpdater` создаётся в `bot.py:36` **до** построения `Application` (с `application=None`); ссылка на `application` устанавливается позже в `bot.py:44` и дублируется в `bot_data['background_updater']` (строка 45). До этого момента любое использование `self.application` в `__init__` упало бы с `AttributeError`.
+
+> ⚠️ **Интервал жёстко задан**: `core/background_updater.py:16` устанавливает `update_interval = 1800` (30 минут). `Config.UPDATE_INTERVAL` (по умолчанию 3600) **не используется** (см. §13).
+
+### 4.1 Что находится в `application.bot_data`
+
+Это общее хранилище данных приложения, доступное из любого обработчика через `context.bot_data`.
+
+| Ключ | Что хранится | Кто использует |
+|------|-------------|----------------|
+| `user_service` | Работа с пользователями | Все handlers |
+| `db` | `FileDB` (потокобезопасный, атомарная запись) | `user_service`, `admin_callbacks` |
+| `config` | Объект `Config` (`.env`-настройки) | `notification_service`, `settings` |
+| `cache_service` | In-memory кэш TTL | `schedule_service` |
+| `notification_service` | Отправка уведомлений | `background_updater`, `admin_callbacks` |
+| `schools_config` | `SCHOOLS_CONFIG` | Везде |
+| `state_service` | Временные состояния | `class_schedule`, `teacher_menu`, `room_schedule` |
+| `exchange_detector` | `ExchangeDetector` (детекция замен) | `background_updater` |
+| `background_updater` | `BackgroundUpdater` | `admin_callbacks`, `force_check_exchanges` |
+| `schools_data` | Распарсенные данные школ | Все сервисы расписания |
+
+---
+
+## 5. Как загружаются данные расписания
+
+### 5.1 Источник
+
+У каждой школы в [config/schools.py](config/schools.py) есть:
+
+- `check_url` — страница с именем актуального JS-файла, например `55812556.html`.
+- `base_url` — путь к статическим файлам, например `https://raspisanie.nikasoft.ru/static/public/`.
+
+### 5.2 Алгоритм загрузки
+
+Реализован в [core/data_loader.py](core/data_loader.py):
+
+1. `get_current_filename(check_url)` — GET-запрос на check-страницу, регуляркой ищет `\d+_\d+\.js` (например, `124_20250910.js`).
+2. `download_schedule_data(base_url, filename)` — скачивает JS-файл.
+3. Парсинг: ищет подстроку `var NIKA=`, берёт всё после неё, отрезает `;` в конце, прогоняет через `json.loads()`.
+4. Результат — гигантский словарь с ключами: `CLASSES`, `TEACHERS`, `ROOMS`, `SUBJECTS`, `CLASS_SCHEDULE`, `CLASS_EXCHANGE`, `PERIODS`, `LESSON_TIMES`, `EXPORT_DATE`, `EXPORT_TIME` и др.
+
+### 5.3 Фоновое обновление
+
+[core/background_updater.py](core/background_updater.py):
+
+- Интервал: 1800 сек (30 мин), захардкожен.
+- Работает внутри основного event loop (`asyncio.create_task`), а не в отдельном `threading.Thread`.
+- Засыпает через `asyncio.sleep`, не блокируя polling.
+- Синхронные HTTP-запросы `requests` оффлоадятся в отдельный поток через `asyncio.to_thread(...)`.
+- Загружает новые данные, заменяет `bot_data['schools_data']`, проверяет замены, при необходимости уведомляет админов.
+
+> ⚠️ **Техдолг**: `self.moscow_tz` упоминается в `log_update_activity` (`core/background_updater.py:178`), но **не инициализируется** в `BackgroundUpdater.__init__` — вызов метода упадёт с `AttributeError`. На практике метод сейчас не вызывается из других мест, но это мина замедленного действия.
+
+---
+
+## 6. Структура данных Nikasoft
+
+После парсинга данные школы — это словарь. Основные ключи:
+
+| Ключ | Содержимое | Пример |
+|------|-----------|--------|
+| `SCHOOL_NAME` | Название школы | `"МАОУ СОШ №133"` |
+| `CLASSES` | `{class_id: class_name}` | `{"1001": "5А", "1002": "5Б"}` |
+| `TEACHERS` | `{teacher_id: teacher_name}` | `{"2001": "Иванова А.А."}` |
+| `ROOMS` | `{room_id: room_name}` | `{"3001": "201"}` |
+| `SUBJECTS` | `{subject_id: subject_name}` | `{"4001": "Математика"}` |
+| `PERIODS` | `{period_id: {b: start_date, e: end_date}}` | Учебные периоды |
+| `LESSON_TIMES` | `{lesson_num: [start, end]}` | `{"1": ["8:30", "9:15"]}` |
+| `DAY_NAMES` | Список дней недели | `["Понедельник", ...]` |
+| `CLASS_SCHEDULE` | `{period_id: {class_id: {key: lesson_data}}}` | Основное расписание |
+| `CLASS_EXCHANGE` | `{class_id: {date_str: {lesson_num: exchange}}}` | Замены |
+| `EXPORT_DATE` | Дата экспорта | `"10.09.2026"` |
+| `EXPORT_TIME` | Время экспорта | `"08:15:00"` |
+
+### 6.1 Формат урока
+
+```python
+{
+    's': ['subject_id', ...],   # предметы
+    't': ['teacher_id', ...],   # преподаватели
+    'r': ['room_id', ...]       # кабинеты
+}
+```
+
+### 6.2 Формат замены
+
+```python
+{
+    's': 'subject_id',   # новый предмет
+    't': 'teacher_id',   # новый учитель
+    'r': 'room_id',      # новый кабинет
+    's': 'F'             # урок отменён
+}
+```
+
+---
+
+## 7. Как строится расписание класса
+
+### 7.1 Поток вызовов
+
+```
+/start или callback "class_today_5А"
+  → handlers/callbacks/class_callbacks.py
+    → services/schedule_service.py
+      → BaseScheduleService._format_schedule_response()
+```
+
+### 7.2 Алгоритм
+
+В [services/schedule_service.py](services/schedule_service.py):
+
+1. По имени класса находится `class_id` (`_find_class_id`).
+2. По дате находится `period_id` (`_get_period_for_date`).
+3. Определяется день недели (`isoweekday()`, 1=Пн ... 7=Вс).
+4. Если суббота/воскресенье — выводится "Выходной день".
+5. Из `CLASS_SCHEDULE[period_id][class_id]` собираются уроки.
+6. Ключ урока формируется как `f"{day_num}{lesson_num:02d}"` (например, `"401"` = день 4, урок 1, `"410"` = день 4, урок 10).
+7. Данные урока копируются, чтобы замены не мутировали исходный `school_data`.
+8. К полученному расписанию применяются замены через `exchange_service.apply_exchanges_to_schedule()`.
+9. Результат форматируется в Markdown и отправляется пользователю.
+
+### 7.3 Расписание на неделю
+
+`_get_week_schedule()` строит расписание для Пн–Пт и объединяет в одно сообщение.
+
+---
+
+## 8. Как работают замены
+
+### 8.1 Применение замен
+
+[services/exchange_service.py](services/exchange_service.py):
+
+1. По имени класса находится `class_id`.
+2. По дате `date_str = "dd.mm.YYYY"` берутся замены: `CLASS_EXCHANGE[class_id][date_str]`.
+3. Для каждого урока проверяется наличие замены по номеру урока.
+4. Если `s == 'F'` — урок помечается `is_cancelled=True`.
+5. Иначе перезаписываются поля `s`, `t`, `r` и ставится флаг `has_exchange=True`.
+
+> ✅ Исправлено: `ExchangeService._apply_exchange` делает глубокую копию `data`, поэтому `school_data['CLASS_SCHEDULE']` не мутируется. Аналогично в `ScheduleService._format_schedule_response`, `TeacherService` и `RoomService` данные урока копируются (`copy.deepcopy` либо ручная копия списков) перед применением замен, чтобы замены не мутировали общий `school_data`.
+
+### 8.2 Детекция новых замен
+
+[services/exchange_detector.py](services/exchange_detector.py):
+
+1. Хранит `previous_schedules` — предыдущее состояние замен по школам.
+2. Периодически (из фонового обновления) вызывается `detect_exchanges(school_id, school_data, date)`.
+3. Строит текущие замены для всех классов (`_get_current_exchanges`).
+4. Сравнивает с предыдущими (`_compare_class_exchanges`).
+5. Найденные **новые** замены возвращаются для отправки уведомлений.
+6. Текущее состояние сохраняется в `data/exchange_cache.json`.
+
+> ✅ Исправлено: ключи замен хранятся только как строки (`str(int(lesson_num_str))`). Это устраняет рассогласование `int`/`str` после JSON-сериализации кэша и предотвращает дублирование уведомлений. В финальном payload уведомления `lesson_num` преобразуется обратно в `int`.
+
+### 8.3 Отправка уведомлений
+
+[services/notification_service.py](services/notification_service.py):
+
+1. Получает список пользователей, у которых текущий класс совпадает с классом замены.
+2. Проверяет, включены ли уведомления у пользователя.
+3. Формирует текст уведомления.
+4. Создаёт уникальный ключ (`school_id + class + date + hash замен`) и проверяет, не отправлялось ли уже.
+5. Отправляет сообщения. Помечает ключ отправленным и сохраняет в `data/notifications_cache.json`.
+
+> ✅ Исправлено: уведомление помечается отправленным и кэш сохраняется только при `sent_count > 0`. Если все отправки не удались, ключ остаётся неотмеченным и повторная попытка будет предпринята позже.
+
+---
+
+## 9. Пользовательские данные
+
+### 9.1 Структура записи пользователя
+
+Хранится в `data/database.json`, коллекция `users`:
+
+```json
+{
+  "user_id": 123456789,
+  "current_school": "school_133",
+  "school_classes": {
+    "school_133": "5А",
+    "school_181": "7Б"
+  },
+  "notification_settings": {
+    "school_133": true,
+    "school_181": false
+  },
+  "created_at": "2026-09-10T10:00:00",
+  "updated_at": "2026-09-10T12:00:00"
+}
+```
+
+### 9.2 Ключевые операции
+
+- `get_user_school(user_id)` — текущая школа.
+- `set_user_school(user_id, school_id)` — сменить школу.
+- `get_user_class(user_id, school_id)` — класс для школы.
+- `set_user_class(user_id, class_name, school_id)` — установить класс.
+- `clear_user_class(user_id, school_id=None)` — очистить класс для указанной школы.
+- `get_current_class(user_id)` — класс для текущей школы пользователя (сокращение для `get_user_class` + `get_user_school`).
+- `get_user_data(user_id)` — все данные пользователя из БД.
+- `get_users_with_classes()` — список всех пользователей, у которых задан хотя бы один класс (используется в админ-статистике).
+- `get_user_notification_settings(user_id, school_id)` — включены ли уведомления.
+- `set_user_notification_settings(user_id, enabled, school_id)` — настройка уведомлений.
+
+---
+
+## 10. Состояния пользователей
+
+[services/state_service.py](services/state_service.py) — временное хранилище в памяти, похожее на FSM.
+
+Используется для:
+- ожидания ввода класса текстом,
+- ожидания поиска учителя/кабинета,
+- сохранения промежуточных списков при пагинации.
+
+> ⚠️ Состояния живут только в памяти. После рестарта бота они теряются.
+
+---
+
+## 11. Callback-роутинг
+
+Все inline-кнопки проходят через [handlers/callbacks/__init__.py](handlers/callbacks/__init__.py) — `CallbackRouter`.
+
+Префикс callback_data → обработчик (на основе `handlers/callbacks/__init__.py:50-79`):
+
+| Префикс | Обработчик | Назначение |
+|---------|-----------|------------|
+| `class_digit_` | `NavigationCallbackHandler` | Выбор цифры класса при наборе |
+| `class_` | `ClassCallbackHandler` | Расписание класса (`class_today_`, `class_tomorrow_`, `class_week_` и т. п.) |
+| `teacher_` | `TeacherCallbackHandler` | Учителя (поиск, расписание, навигация по дням) |
+| `room_` | `RoomCallbackHandler` | Кабинеты (поиск, расписание, навигация по дням) |
+| `admin_` | `AdminCallbackHandler` | Админ-панель и её подменю |
+| `menu_` | `NavigationCallbackHandler` | Меню и настройки |
+| `school_` | `NavigationCallbackHandler` | Выбор школы |
+| `show_all_` | `NavigationCallbackHandler` | Показать полный список (учителя/кабинеты без поиска) |
+| `clear_digit_` | `NavigationCallbackHandler` | Сброс выбора цифры класса |
+| `toggle_notifications_` | `NavigationCallbackHandler` | Вкл/выкл уведомления о заменах для текущей школы |
+| `toggle_update_notifications_` | `NavigationCallbackHandler` | Вкл/выкл админ-уведомления об обновлениях школ |
+| `main_menu` | `NavigationCallbackHandler` | Возврат в главное меню |
+| `change_class` | `NavigationCallbackHandler` | Сменить класс |
+
+> **Fallback**: если ни один префикс не совпал, callback уходит в `menu` (`NavigationCallbackHandler`) — это поведение реализовано в `CallbackRouter.handle` (`handlers/callbacks/__init__.py:47-48`).
+
+---
+
+## 12. Администрирование
+
+### 12.1 Кто админ
+
+Список `ADMIN_IDS` задаётся в `.env`:
+```env
+ADMIN_IDS=123456789,987654321
+```
+
+### 12.2 Команды и кнопки
+
+- `/status` — статус загрузки данных по школам.
+- `/settings` — настройки уведомлений о заменах для текущей школы (+ для админов переключатель `update_notifications`). Реализовано в `handlers/common/settings.py`.
+- `/check_exchanges` — принудительная проверка замен.
+- `/admin` или `/stats` — админ-панель с кнопками:
+  - Принудительное обновление данных.
+  - Проверить замены.
+  - Очистить кэш замен.
+  - Статистика пользователей.
+
+> **Регистрация команд**: `/admin` и `/stats` регистрируются в `setup_admin_handlers()` (`handlers/admin/admin_panel.py:300-303`), вызов из `bot.py:127`. Прямой регистрации `CommandHandler("admin", …)` в `bot.py:114-130` **нет** (строки 121-122 закомментированы). Команда `/check_exchanges` регистрируется в `bot.py:124`.
+
+### 12.3 Админ-уведомления
+
+[notification_service.py](services/notification_service.py) умеет слать сообщения всем админам.
+
+- Флаг `update_notifications` хранится в `user_preferences.notifications` (коллекция `user_preferences` в `data/database.json`).
+- Дефолт — `False` (см. `services/user_preferences.py:17`).
+- Считывается через `BackgroundUpdater._get_admin_notification_settings` **для первого `ADMIN_IDS`** — настройки остальных админов в текущей реализации игнорируются (упрощение, см. §16).
+- Если хотя бы у одного админа флаг `True`, фоновое обновление шлёт summary-сообщение «обновлены школы: …» и сообщение об ошибке, если данные не загрузились.
+
+---
+
+## 13. Конфигурация (.env)
+
+```env
+TELEGRAM_TOKEN=your_bot_token_here
+ADMIN_IDS=123456789
+UPDATE_INTERVAL=3600
+MAX_RETRIES=3
+DB_PATH=./data/database.json
+CACHE_PATH=./data/cache.json
+LOG_LEVEL=INFO
+LOG_FILE=./logs/bot.log
+ADMIN_LOG_FILE=./logs/admin.log
+```
+
+> ⚠️ **`UPDATE_INTERVAL` не используется** — в `background_updater.py:16` жёстко 1800 сек.
+> ⚠️ **`CACHE_PATH` не используется** — папка `cache/` пуста, ни один сервис её не читает и не пишет. Переменная оставлена в `.env` для обратной совместимости.
+
+---
+
+## 14. Частые проблемы и где искать
+
+| Симптом | Вероятная причина | Где смотреть |
+|---------|-------------------|--------------|
+| Бот не запускается | Нет `.env` или невалидный токен | [config/config.py](config/config.py), логи |
+| Данные не загружаются | Изменился формат check-страницы или JS-файла | [core/data_loader.py](core/data_loader.py) |
+| Замены не применяются | `CLASS_EXCHANGE` не найден или неправильный `class_id` | [services/exchange_service.py](services/exchange_service.py) |
+| Замены портят базовое расписание | Неглубокая копия в `_apply_exchange` мутировала `school_data` | [services/exchange_service.py](services/exchange_service.py) (исправлено) |
+| "Класс не найден" для правильного имени | Поиск по подстроке ловил другой класс | [services/schedule_service.py](services/schedule_service.py) (исправлено) |
+| Не показываются уроки 10+ | Ключ формировался как `day0lesson` вместо `day{lesson:02d}` | [services/schedule_service.py](services/schedule_service.py) (исправлено) |
+| Уведомления дублируются | JSON-ключи уроков стали строками | [services/exchange_detector.py](services/exchange_detector.py) |
+| Уведомления не приходят | 0 доставок помечали ключ отправленным | [services/notification_service.py](services/notification_service.py) (исправлено) |
+| Поиск учителя даёт не того | Индексы применяются к неправильному списку | [handlers/teachers/teacher_menu.py](handlers/teachers/teacher_menu.py), [handlers/callbacks/teacher_callbacks.py](handlers/callbacks/teacher_callbacks.py) |
+| Бот зависает на обновлении | Синхронный `requests` в async-обработчике | [core/background_updater.py](core/background_updater.py) — `asyncio.to_thread` для `load_all_schools_data()` |
+| Сообщение не уходит | Markdown экранирование сломано или >4096 символов | [services/base_schedule_service.py](services/base_schedule_service.py), соответствующий handler |
+| `AttributeError: 'BackgroundUpdater' object has no attribute 'moscow_tz'` при `log_update_activity` | Поле `moscow_tz` не инициализировано в `__init__` | [core/background_updater.py:11-18, 178](core/background_updater.py) |
+| `bot_data['background_updater']` пуст в хендлерах | `bot.py:36` создаёт `BackgroundUpdater(None)` до `Application`; ссылка ставится в `bot.py:44-45` | [bot.py:36-45](bot.py) |
+
+---
+
+## 15. Чек-лист при доработке
+
+- [ ] Если меняешь структуру `schools_data`, проверь все сервисы расписания.
+- [ ] Если правишь замены, проверь и `exchange_detector`, и `exchange_service`, и `notification_service`.
+- [ ] Любая работа с `FileDB` должна учитывать потокобезопасность.
+- [ ] Новые callback_data не должны превышать 64 байта (ограничение Telegram).
+- [ ] Длинные сообщения (>4096) нужно нарезать.
+- [ ] Не оставляй `print()` в production-коде — используй `logger`. Сейчас `print()` всё ещё используется в `bot.py`, `core/data_loader.py`, `core/background_updater.py` (см. §16, техдолг P2).
+- [ ] Обновляй этот Wiki при значимых изменениях.
+
+---
+
+## 16. Планируемые улучшения (roadmap)
+
+См. [roadmap.md](roadmap.md) — там полный аудит с приоритетами P0/P1/P2.
+
+Кратко:
+1. ✅ Исправить глубокие копии при заменах.
+2. ✅ Исправить поиск класса по точному совпадению.
+3. ✅ Исправить формат ключей уроков (`day{lesson:02d}`) для уроков 10+.
+4. ✅ Исправить `background_updater` в `bot_data`.
+5. ✅ Исправить сохранение уведомлений только при успешной доставке.
+6. ✅ Сделать `FileDB` потокобезопасным и атомарным.
+7. ✅ Починить детектор замен: унифицировать строковые ключи.
+8. ✅ Перевести фоновое обновление с `threading` на `asyncio` + `to_thread`.
+9. Вынести общую логику учителей/кабинетов в базовый класс.
+10. Унифицировать главное меню и help-текст.
+
+### 16.1 Открытый техдолг (P2)
+
+1. **Заменить `print()` на `logger`** в `bot.py`, `core/data_loader.py`, `core/background_updater.py` — десятки вызовов дублируют логирование, идут в stdout в обход `logging.basicConfig` (с `filename=self.config.LOG_FILE`).
+2. **Инициализировать `self.moscow_tz`** в `BackgroundUpdater.__init__` (`core/background_updater.py:11-18`) или удалить неиспользуемый `log_update_activity` (`core/background_updater.py:174-181`).
+3. **Использовать `Config.UPDATE_INTERVAL`** вместо хардкода 1800 в `core/background_updater.py:16`.
+4. **Удалить мёртвый импорт `admin_callback_handler`** в `bot.py:24` (используется только `admin_panel_handler` и `setup_admin_handlers`).
+5. **Удалить дубликат `FileDB.get_collection`** (`database/file_db.py:60-66`).
+6. **Решить судьбу `database/models/user_school.py`** — либо удалить, либо интегрировать в `UserService` (сейчас модель нигде не используется).
+7. **Передать `Config` в `BackgroundUpdater.__init__`** и убрать post-construction monkey-patching в `bot.py:36-44`.
+8. **Уточнить источник настроек уведомлений** в `_get_admin_notification_settings` — сейчас берётся только у первого `ADMIN_IDS`, остальные игнорируются.
+9. **Удалить неиспользуемую `CACHE_PATH`** из `.env` (и `cache/` из репозитория) либо начать её использовать.
+10. **Удалить дублирующиеся/мёртвые callback-функции** (`admin_callback_handler` в `admin_panel.py`, `week_command_handler` в `week_command.py` — импортируется, но не регистрируется).
+
+---
+
+## 17. Как дополнять Wiki
+
+1. Открыть [WIKI.md](WIKI.md).
+2. Добавить раздел или исправить существующий.
+3. Сохранить.
+4. При значимых изменениях кода обновить соответствующий раздел Wiki.

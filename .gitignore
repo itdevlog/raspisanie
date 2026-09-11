@@ -1,0 +1,38 @@
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Data / cache / logs (локальные)
+data/*.json
+data/database.json
+data/cache.json
+data/exchange_cache.json
+data/notifications_cache.json
+cache/
+logs/
+*.log
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Прочее
+updatelog.txt
+*.tmp
+*.bak
