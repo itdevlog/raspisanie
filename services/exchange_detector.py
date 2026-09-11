@@ -55,8 +55,8 @@ class ExchangeDetector:
         for _school, by_date in data.items():
             if not isinstance(by_date, dict):
                 return True
-            for key in by_date:
-                if not date_re.match(str(key)):
+            for key, value in by_date.items():
+                if not date_re.match(str(key)) or not isinstance(value, dict):
                     return True
         return False
 

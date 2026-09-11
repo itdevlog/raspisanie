@@ -17,7 +17,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await new_callback_handler(update, context)
 
 
-def parse_all_classes_page(callback_data: str):
+def parse_all_classes_page(callback_data: str) -> tuple[str, int] | None:
     """Разбирает 'all_classes_page_{type}_{page}' -> (schedule_type, page).
 
     Раньше пагинация теряла тип расписания, и после первой страницы
