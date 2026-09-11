@@ -142,3 +142,11 @@
 ### P2: не показываем str(e) пользователю
 
 - `messaging::log_user_error` — логирует реальное исключение (exc_info) и возвращает общее сообщение. Применён в `class_callbacks`, `week_command`, `callback_handler`, `admin_callbacks`; `str(e)` больше не утекает пользователю.
+
+### P2: чистка мёртвого кода
+
+- Удалён мёртвый `callback_handler.py::handle_school_info` (дублировал `school_info_handler`).
+- Удалён никогда не устанавливавшийся флаг `waiting_for_teacher` (class_schedule.py, `messaging::clear_search_flags`).
+- Удалены заглушка `_get_user_service` и большой закомментированный блок в `notification_service.py`.
+- Удалено неиспользуемое поле `['order']` из конфига школ.
+- Исправлено случайное дублирование всего `callback_handler.py` (434→780→434), внесённое скриптом в 422e91f.

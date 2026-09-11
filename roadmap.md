@@ -42,7 +42,7 @@
 
 ### Мёртвый код (удалить)
 
-- `callback_handler.py:282-333` (`handle_school_info`), `class_schedule.py:36-41` (флаг `waiting_for_teacher`), `navigation_callbacks.py:69-76,114-122` (недостижимые ветки), закомментированный блок `notification_service.py:247-317`, заглушка `_get_user_service:242-245`, `UserSchool`, `['order']` в конфиге школ.
+- ✅ **исправлено 11.09**: удалены мёртвые `callback_handler.py::handle_school_info` (дублировал `school_info_handler`), флаг `waiting_for_teacher` (никогда не устанавливался) из `class_schedule.py`/`messaging::clear_search_flags`, заглушка `notification_service::_get_user_service` и закомментированный блок `notification_service.py`, поле `['order']` из конфига школ; исправлено случайное дублирование `callback_handler.py` (434→780→434 строки). Осталось: проверить недостижимые ветки `navigation_callbacks.py` (сместились с исходного аудита).
 
 ---
 

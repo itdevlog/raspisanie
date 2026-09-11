@@ -34,12 +34,9 @@ async def class_schedule_handler(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     # Если пользователь ввел фамилию учителя (поиск преподавателя)
-    if context.user_data.get('waiting_for_teacher') or context.user_data.get('waiting_for_teacher_search'):
-        # Очищаем флаги
-        if 'waiting_for_teacher' in context.user_data:
-            del context.user_data['waiting_for_teacher']
-        if 'waiting_for_teacher_search' in context.user_data:
-            del context.user_data['waiting_for_teacher_search']
+    if context.user_data.get('waiting_for_teacher_search'):
+        # Очищаем флаг
+        del context.user_data['waiting_for_teacher_search']
         
         # Получаем данные школы пользователя
         if not user_service or not schools_data:

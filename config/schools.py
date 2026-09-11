@@ -6,8 +6,7 @@ SCHOOLS_CONFIG = {
         "city": "Екатеринбург",
         "check_url": "https://raspisanie.nikasoft.ru/check/55812556.html",
         "base_url": "https://raspisanie.nikasoft.ru/static/public/",
-        "active": True,
-        "order": 1
+        "active": True
     },
     "school_181": {
         "id": "school_181", 
@@ -15,8 +14,7 @@ SCHOOLS_CONFIG = {
         "city": "Екатеринбург",
         "check_url": "https://raspisanie.nikasoft.ru/check/32911315.html",
         "base_url": "https://raspisanie.nikasoft.ru/static/public/",
-        "active": True,
-        "order": 2
+        "active": True
     }
 }
 

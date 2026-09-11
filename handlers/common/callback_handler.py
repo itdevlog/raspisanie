@@ -3,7 +3,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from services.schedule_service import ScheduleService
-from config.schools import SCHOOLS_CONFIG, get_display_name
+from config.schools import SCHOOLS_CONFIG
 from handlers.common.messaging import safe_edit_message, paginate, log_user_error
 from typing import List, Union
 
@@ -326,58 +326,6 @@ async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_
 
 # ========== ФУНКЦИИ ДЛЯ ИНФОРМАЦИИ И ПОМОЩИ ==========
 
-async def handle_school_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает показ информации о школе через меню"""
-    query = update.callback_query
-    user_id = update.effective_user.id
-    user_service = context.bot_data.get('user_service')
-    schools_data = context.bot_data.get('schools_data', {})
-    
-    if not user_service or not schools_data:
-        await query.edit_message_text("❌ Сервис не доступен")
-        return
-    
-    # Получаем выбранную школу пользователя
-    current_school_id = user_service.get_user_school(user_id)
-    school_data = schools_data.get(current_school_id)
-    
-    if not school_data:
-        await query.edit_message_text("❌ Данные не загружены")
-        return
-    
-    school_name = get_display_name(current_school_id, school_data)
-    city = school_data.get('CITY_NAME', 'Неизвестно')
-    export_date = school_data.get('EXPORT_DATE', 'Неизвестно')
-    export_time = school_data.get('EXPORT_TIME', 'Неизвестно')
-    
-    # Статистика
-    classes_count = len(school_data.get('CLASSES', {}))
-    teachers_count = len(school_data.get('TEACHERS', {}))
-    subjects_count = len(school_data.get('SUBJECTS', {}))
-    rooms_count = len(school_data.get('ROOMS', {}))
-    
-    info_text = (
-        f"🏫 *{school_name}*\n"
-        f"📍 {city}\n\n"
-        f"📊 *Статистика:*\n"
-        f"• Классов: {classes_count}\n"
-        f"• Преподавателей: {teachers_count}\n"
-        f"• Предметов: {subjects_count}\n"
-        f"• Кабинетов: {rooms_count}\n\n"
-        f"🕒 *Данные обновлены:*\n"
-        f"{export_date} {export_time}\n\n"
-        f"🔗 *Сайт школы:*\n"
-        f"{school_data.get('HOMEPAGE_URL', 'Не указан')}"
-    )
-    
-    # Добавляем кнопку возврата
-    keyboard = [
-        [InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu"),
-         InlineKeyboardButton("⚙️ Настройки", callback_data="menu_settings")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await query.edit_message_text(info_text, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает показ справки через меню"""

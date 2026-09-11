@@ -94,8 +94,7 @@ def clear_search_flags(context) -> None:
     остаётся, и любой следующий текст интерпретируется как поиск. Вызов
     этого хелпера в точках входа в меню устраняет залипание.
     """
-    for flag in ('waiting_for_teacher_search', 'waiting_for_teacher',
-                 'waiting_for_room_search'):
+    for flag in ('waiting_for_teacher_search', 'waiting_for_room_search'):
         context.user_data.pop(flag, None)
 
 
