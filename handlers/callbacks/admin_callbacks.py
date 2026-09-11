@@ -77,6 +77,28 @@ class AdminCallbackHandler:
         config = context.bot_data.get('config')
         return Config.is_admin(config, user_id)
 
+    async def show_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE, message_text: str = None):
+        """Показывает админ-панель (публичный вход для /admin и callback'ов)"""
+        await self._show_admin_panel(update, context, message_text)
+
+    async def _show_statistics(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показывает статистику пользователей (для /stats)."""
+        user_service = context.bot_data.get('user_service')
+        users = user_service.get_users_with_classes() if user_service else []
+        total = len(users)
+        by_school = {}
+        for u in users:
+            sid = u.get('current_school', '—')
+            by_school[sid] = by_school.get(sid, 0) + 1
+        lines = ["📊 *Статистика*\n", f"👥 Пользователей с классами: *{total}*", ""]
+        for sid, cnt in sorted(by_school.items()):
+            lines.append(f"• {sid}: {cnt}")
+        text = "\n".join(lines)
+        if getattr(update, 'callback_query', None):
+            await update.callback_query.edit_message_text(text, parse_mode='Markdown')
+        else:
+            await update.message.reply_text(text, parse_mode='Markdown')
+
     async def _show_admin_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE, message_text: str = None):
         """Показывает админ-панель"""
         schools_status = await self._get_schools_status(context)
