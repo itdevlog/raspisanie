@@ -9,14 +9,14 @@ teacher_menu.py и room_schedule.py раньше дублировали ~90% к�
 """
 
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional
+from typing import Callable
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from config.schools import SCHOOLS_CONFIG
+from handlers.common.messaging import clear_search_flags, edit_long_message
 from services.state_service import UserStateService
-from handlers.common.messaging import edit_long_message, clear_search_flags
 
 
 @dataclass
@@ -62,7 +62,7 @@ class EntityMenuHandler:
     # ---------- helpers ----------
 
     @staticmethod
-    def _school_name(school_data: Optional[dict], current_school_id: str) -> str:
+    def _school_name(school_data: dict | None, current_school_id: str) -> str:
         cfg_school = SCHOOLS_CONFIG.get(current_school_id, {})
         return cfg_school.get('name') or 'Неизвестно'
 
@@ -77,8 +77,8 @@ class EntityMenuHandler:
     async def menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показывает меню сущности."""
         clear_search_flags(context)
-        query = update.callback_query
         user_id = update.effective_user.id
+
         user_service = context.bot_data.get('user_service')
         schools_data = context.bot_data.get('schools_data', {})
 
@@ -304,7 +304,6 @@ class EntityMenuHandler:
 
     async def search_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                              search_query: str, page: int = 0):
-        query = update.callback_query
         user_id = update.effective_user.id
         user_service = context.bot_data.get('user_service')
         schools_data = context.bot_data.get('schools_data', {})

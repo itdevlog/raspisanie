@@ -2,9 +2,9 @@
 """Юнит-тесты общих построителей главного меню/справки."""
 from handlers.common.menu_builder import (
     HELP_TEXT,
+    build_help_keyboard,
     build_main_menu_keyboard,
     build_main_menu_text,
-    build_help_keyboard,
     resolve_school_name,
 )
 

@@ -8,8 +8,8 @@ handlers/common/entity_menu.py; здесь только конфиг сущно�
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from services.teacher_service import TeacherService
 from handlers.common.entity_menu import EntityConfig, EntityMenuHandler
+from services.teacher_service import TeacherService
 
 _teacher_handler = EntityMenuHandler(EntityConfig(
     entity='teacher',

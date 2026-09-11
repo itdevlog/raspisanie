@@ -1,6 +1,5 @@
 # tests/test_file_db.py
 """Юнит-тесты FileDB: битый файл (.corrupt бэкап), upsert, delete_one."""
-import json
 import os
 import tempfile
 

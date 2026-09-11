@@ -1,6 +1,5 @@
 # tests/test_entity_menu.py
 """Юнит-тесты общих хелперов EntityMenuHandler (пагинация, resolve source)."""
-import pytest
 
 from handlers.common.entity_menu import EntityConfig, EntityMenuHandler
 

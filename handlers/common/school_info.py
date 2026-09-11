@@ -1,8 +1,10 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CommandHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import ContextTypes
+
 from config.schools import get_display_name
 from handlers.common.messaging import safe_edit_message
 from handlers.common.requires_school import requires_school
+
 
 @requires_school
 async def school_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -13,13 +15,13 @@ async def school_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     city = school_data.get('CITY_NAME', 'Неизвестно')
     export_date = school_data.get('EXPORT_DATE', 'Неизвестно')
     export_time = school_data.get('EXPORT_TIME', 'Неизвестно')
-    
+
     # Статистика
     classes_count = len(school_data.get('CLASSES', {}))
     teachers_count = len(school_data.get('TEACHERS', {}))
     subjects_count = len(school_data.get('SUBJECTS', {}))
     rooms_count = len(school_data.get('ROOMS', {}))
-    
+
     info_text = (
         f"🏫 *{school_name}*\n"
         f"📍 {city}\n\n"
@@ -33,7 +35,7 @@ async def school_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"🔗 *Сайт школы:*\n"
         f"{school_data.get('HOMEPAGE_URL', 'Не указан')}"
     )
-    
+
     # Создаем клавиатуру только для callback (в команде /school не нужна)
     if update.callback_query:
         keyboard = [

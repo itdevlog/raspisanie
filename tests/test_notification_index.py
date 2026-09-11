@@ -82,6 +82,7 @@ def test_reset_user_class_index():
 
 def test_notification_ttl_cleanup():
     import time
+
     from services.notification_service import NotificationService
     svc = NotificationService.__new__(NotificationService)
     svc.logger = logging.getLogger('test')

@@ -1,9 +1,11 @@
 from telegram import Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
-from services.status_service import StatusService
+
 from handlers.common.menu_builder import build_main_menu_keyboard, build_main_menu_text
 from handlers.common.messaging import clear_search_flags
+from services.status_service import StatusService
+
 
 async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает главное меню с инлайн-клавиатурой"""

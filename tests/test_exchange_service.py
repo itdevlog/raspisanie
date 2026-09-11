@@ -1,6 +1,7 @@
 # tests/test_exchange_service.py
 """Юнит-тесты ExchangeService: точный матчинг класса и нет мутации исходных данных."""
 from datetime import datetime
+
 import pytz
 
 from services.exchange_service import ExchangeService

@@ -1,6 +1,8 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CommandHandler
 import logging
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import CommandHandler, ContextTypes
+
 from config.schools import SCHOOLS_CONFIG
 from services.status_service import StatusService, status_icon
 
@@ -10,23 +12,23 @@ admin_logger = logging.getLogger('admin_panel')
 async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Главная админ-панель"""
     user_id = update.effective_user.id
-    
+
     if not _is_admin(user_id, context):
         await update.message.reply_text("❌ У вас нет прав доступа к админ-панели")
         return
-    
+
     await _show_admin_panel(update, context)
 
 async def _show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE, message_text: str = None):
     """Показывает админ-панель"""
     schools_status = await _get_schools_status(context)
-    
+
     # Формируем текст
     text = _build_admin_panel_text(schools_status, message_text)
-    
+
     # Создаем клавиатуру
     reply_markup = _build_admin_keyboard(schools_status)
-    
+
     try:
         if update.callback_query:
             await _update_callback_message(update, text, reply_markup)
@@ -38,22 +40,22 @@ async def _show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 def _build_admin_panel_text(schools_status: dict, message_text: str = None) -> str:
     """Формирует текст админ-панели"""
     text = "⚙️ *Админ-панель*\n\n"
-    
+
     # Статус школ
-    text += f"🏫 *Статус школ:*\n"
+    text += "🏫 *Статус школ:*\n"
     for school_id, status in schools_status.items():
         school_config = SCHOOLS_CONFIG.get(school_id, {})
         school_name = school_config.get('name', school_id)
-        
+
         if status['loaded']:
             icon = status_icon(status)
             text += f"• {icon} {school_name}: {status['details']}\n"
         else:
             text += f"• ❌ {school_name}: Данные не загружены\n"
-    
+
     if message_text:
         text += f"\n💡 {message_text}"
-    
+
     return text
 
 def _build_admin_keyboard(schools_status: dict) -> InlineKeyboardMarkup:
@@ -62,7 +64,7 @@ def _build_admin_keyboard(schools_status: dict) -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🔄 Обновить все школы", callback_data="admin_refresh_all")],
         [InlineKeyboardButton("📋 Пользователи с классами", callback_data="admin_show_users_with_classes")],
     ]
-    
+
     # Кнопки для каждой школы
     for school_id, status in schools_status.items():
         school_config = SCHOOLS_CONFIG.get(school_id, {})
@@ -72,9 +74,9 @@ def _build_admin_keyboard(schools_status: dict) -> InlineKeyboardMarkup:
             keyboard.append([
                 InlineKeyboardButton(f"🔄 {button_text}", callback_data=f"admin_refresh_school_{school_id}")
             ])
-    
+
     keyboard.append([InlineKeyboardButton("🔄 Обновить панель", callback_data="admin_refresh_panel")])
-    
+
     return InlineKeyboardMarkup(keyboard)
 
 # Callback-обработчики админ-панели (admin_*) обслуживаются НЕ здесь, а классом
@@ -86,11 +88,11 @@ async def _get_schools_status(context: ContextTypes.DEFAULT_TYPE) -> dict:
     """Получает статус всех школ"""
     schools_data = context.bot_data.get('schools_data', {})
     status_service = StatusService(schools_data)
-    
+
     schools_status = {}
     for school_id in SCHOOLS_CONFIG.keys():
         schools_status[school_id] = status_service.get_school_status(school_id)
-    
+
     return schools_status
 
 async def _update_callback_message(update: Update, text: str, reply_markup: InlineKeyboardMarkup):
@@ -103,7 +105,7 @@ async def _update_callback_message(update: Update, text: str, reply_markup: Inli
         else:
             admin_logger.error(f"Error updating admin panel: {e}")
             await update.callback_query.answer("❌ Ошибка при обновлении")
-    
+
 async def _handle_message_error(update: Update, error: Exception):
     """Обрабатывает ошибки сообщений"""
     if "Message is not modified" in str(error):

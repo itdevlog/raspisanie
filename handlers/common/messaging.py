@@ -4,8 +4,8 @@
 Сообщения режутся по границам строк, чтобы не ломать разметку Markdown
 (пары `*...*`, `` `...` `` и т.п. не рвутся посередине).
 """
-from typing import List, Optional
 import logging
+
 import telegram.error
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ def log_user_error(message: str, exc: Exception) -> str:
 
 
 async def safe_edit_message(query, text: str, reply_markup=None,
-                            parse_mode: Optional[str] = 'Markdown') -> None:
+                            parse_mode: str | None = 'Markdown') -> None:
     """Редактирует сообщение, тихо игнорируя «message is not modified».
 
     Повторное нажатие «Обновить»/«Назад» на уже показанное сообщение даёт
@@ -40,7 +40,7 @@ async def safe_edit_message(query, text: str, reply_markup=None,
             raise
 
 
-def split_long_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> List[str]:
+def split_long_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list[str]:
     """Разбивает текст на части не длиннее max_length по границам строк.
 
     Разбивка без потерь: `''.join(chunks) == text`. Режем по границам строк,
@@ -51,7 +51,7 @@ def split_long_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> List[
     if not text:
         return []
 
-    chunks: List[str] = []
+    chunks: list[str] = []
     current = ""
     for line in text.splitlines(keepends=True):
         if len(current) + len(line) <= max_length:
@@ -98,7 +98,7 @@ def clear_search_flags(context) -> None:
         context.user_data.pop(flag, None)
 
 
-def paginate(items: List[str], page: int, per_page: int = 30) -> tuple:
+def paginate(items: list[str], page: int, per_page: int = 30) -> tuple:
     """Разбивает список на страницы; возвращает (страница, список_на_странице).
 
     Нормализует page в допустимые границы (0..total_pages-1), чтобы избежать
@@ -119,7 +119,7 @@ def paginate(items: List[str], page: int, per_page: int = 30) -> tuple:
 
 async def edit_long_message(
     update, context, query, text: str,
-    reply_markup=None, parse_mode: Optional[str] = 'Markdown',
+    reply_markup=None, parse_mode: str | None = 'Markdown',
 ):
     """Редактирует сообщение по callback_query, разбивая длинный текст.
 
@@ -152,7 +152,7 @@ async def edit_long_message(
 
 
 async def reply_long_message(
-    update, context, text: str, parse_mode: Optional[str] = 'Markdown',
+    update, context, text: str, parse_mode: str | None = 'Markdown',
 ):
     """Отправляет длинное сообщение reply-сообщениями, разбивая по лимиту."""
     chunks = split_long_message(text)

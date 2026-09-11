@@ -3,8 +3,6 @@
 import asyncio
 from types import SimpleNamespace
 
-import pytest
-
 from handlers.common.requires_school import requires_school
 
 pytest_plugins = []

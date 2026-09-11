@@ -1,6 +1,6 @@
 # tests/test_schools.py
 """Юнит-тесты для config/schools.py::get_display_name."""
-from config.schools import get_display_name, SCHOOLS_CONFIG
+from config.schools import get_display_name
 
 
 def test_normal_name_passthrough():

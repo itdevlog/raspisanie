@@ -4,14 +4,13 @@
 start.py и main_menu.py раньше дублировали построение клавиатуры и заголовка.
 Здесь — единый построитель; оба используют одинаковую раскладку кнопок.
 """
-from typing import Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from config.schools import SCHOOLS_CONFIG
 
 
-def build_main_menu_keyboard(current_class: Optional[str]) -> InlineKeyboardMarkup:
+def build_main_menu_keyboard(current_class: str | None) -> InlineKeyboardMarkup:
     """Клавиатура главного меню; меняется в зависимости от того, выбран ли класс."""
     if current_class:
         rows = [
@@ -54,7 +53,7 @@ def build_main_menu_keyboard(current_class: Optional[str]) -> InlineKeyboardMark
     return InlineKeyboardMarkup(rows)
 
 
-def resolve_school_name(current_school_id: Optional[str]) -> str:
+def resolve_school_name(current_school_id: str | None) -> str:
     """Название школы по id из конфигурации (иначе 'Не выбрана')."""
     if not current_school_id:
         return "Не выбрана"
@@ -62,8 +61,8 @@ def resolve_school_name(current_school_id: Optional[str]) -> str:
     return cfg.get('name') or "Не выбрана"
 
 
-def build_main_menu_text(school_status, current_school_id: Optional[str],
-                         current_class: Optional[str], welcome: str = "") -> str:
+def build_main_menu_text(school_status, current_school_id: str | None,
+                         current_class: str | None, welcome: str = "") -> str:
     """Текст главного меню с учётом статуса данных и выбранного класса."""
     school_name = resolve_school_name(current_school_id)
 

@@ -1,14 +1,16 @@
 # handlers/common/callback_handler.py
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
-from services.schedule_service import ScheduleService
+
 from config.schools import SCHOOLS_CONFIG
-from handlers.common.messaging import safe_edit_message, paginate, log_user_error
-from typing import List, Union
 
 # Импортируем новый роутер callback'ов
 from handlers.callbacks import callback_handler as new_callback_handler
+from handlers.common.messaging import log_user_error, paginate, safe_edit_message
+from services.schedule_service import ScheduleService
+
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает все callback-и от инлайн-клавиатур (перенаправляет в новый роутер)"""
@@ -19,7 +21,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def create_class_navigation_keyboard(class_name: str, schedule_type: str) -> InlineKeyboardMarkup:
     """Создает клавиатуру навигации для расписания класса"""
     keyboard = []
-    
+
     # Кнопки других дней для этого же класса
     other_days = []
     if schedule_type != "today":
@@ -31,17 +33,17 @@ def create_class_navigation_keyboard(class_name: str, schedule_type: str) -> Inl
 
     if other_days:
         keyboard.append(other_days)
-    
+
     # Кнопка обновления
     keyboard.append([InlineKeyboardButton("🔄 Обновить", callback_data=f"class_{schedule_type}_{class_name}")])
 
-    # Навигация        
+    # Навигация
     keyboard.append([
         InlineKeyboardButton("📚 Выбрать класс", callback_data=f"menu_{schedule_type}"),
         InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu"),
         InlineKeyboardButton("⚙️ Настройки", callback_data="menu_settings")
     ])
-    
+
     return InlineKeyboardMarkup(keyboard)
 
 def create_error_keyboard() -> InlineKeyboardMarkup:
@@ -59,14 +61,14 @@ async def handle_change_class(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     user_id = update.effective_user.id
     user_service = context.bot_data.get('user_service')
-    
+
     if not user_service:
         await query.edit_message_text("❌ Сервис не доступен")
         return
-    
+
     # Очищаем выбранный класс
     user_service.clear_user_class(user_id)
-    
+
     # Всегда используем "today" при смене класса
     await show_class_selection(update, context, "today")
 
@@ -107,27 +109,27 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
         if not available_classes:
             await send_text("❌ Нет доступных классов в расписании", InlineKeyboardMarkup([]))
             return
-        
+
         # Получаем название текущей школы для отображения
         school_config = None
         for school in SCHOOLS_CONFIG.values():
             if school['id'] == current_school_id:
                 school_config = school
                 break
-        
+
         school_name = school_config['name'] if school_config else "Неизвестно"
         type_text = {
             "today": "на сегодня",
-            "tomorrow": "на завтра", 
+            "tomorrow": "на завтра",
             "week": "на неделю"
         }
-        
+
         # Если нет callback_data с цифрой, показываем выбор цифры (1-11) - ИНЛАЙН-КНОПКАМИ
         if not context.user_data.get('class_digit'):
             # Создаем клавиатуру с цифрами 1-11
             keyboard = []
             row = []
-            
+
             for digit in range(1, 12):  # 1-11
                 # Проверяем, есть ли классы с этой цифрой (ровно с цифрой, а не с десятком)
                 has_classes = any(_class_matches_digit(cls, digit) for cls in available_classes)
@@ -136,24 +138,24 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
                     if len(row) == 4:  # 4 кнопки в ряду
                         keyboard.append(row)
                         row = []
-            
+
             if row:  # Добавим оставшиеся кнопки
                 keyboard.append(row)
-            
+
             # Кнопка "Все классы сразу"
             keyboard.append([InlineKeyboardButton("📋 Все классы сразу", callback_data=f"show_all_{schedule_type}")])
-            
+
             # Кнопка возврата в главное меню
             keyboard.append([InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")])
-            
+
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
+
             text = (
                 f"📚 *{school_name}*\n"
                 f"Выберите класс *{type_text[schedule_type]}*\n\n"
                 f"Сначала выберите цифру класса:"
             )
-            
+
             await send_text(text, reply_markup)
 
         else:
@@ -165,28 +167,28 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
                 if query:
                     await query.answer("❌ Нет классов с этой цифрой")
                 return
-            
+
             keyboard = []
             row = []
-            
+
             for letter in class_letters:
                 class_name = f"{class_digit}{letter}"
                 row.append(InlineKeyboardButton(class_name, callback_data=f"class_{schedule_type}_{class_name}"))
                 if len(row) == 4:  # 4 кнопки в ряду
                     keyboard.append(row)
                     row = []
-            
+
             if row:  # Добавим оставшиеся кнопки
                 keyboard.append(row)
-            
+
             # Кнопки навигации
             keyboard.append([
                 InlineKeyboardButton("🔙 К выбору цифры", callback_data=f"clear_digit_{schedule_type}"),
                 InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
             ])
-            
+
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
+
             text = (
                 f"📚 *{school_name}*\n"
                 f"Выберите класс *{type_text[schedule_type]}*\n\n"
@@ -217,7 +219,7 @@ def _class_matches_digit(class_name: str, digit: int) -> bool:
     return bool(rest) and not rest[0].isdigit()
 
 
-def _get_class_letters_for_digit(available_classes: List[str], digit: int) -> List[str]:
+def _get_class_letters_for_digit(available_classes: list[str], digit: int) -> list[str]:
     """Получает список букв для указанной цифры класса"""
     letters = set()
     for class_name in available_classes:
@@ -226,7 +228,7 @@ def _get_class_letters_for_digit(available_classes: List[str], digit: int) -> Li
             letter = class_name[len(str(digit)):]
             if letter:  # Убедимся что буква не пустая
                 letters.add(letter)
-    
+
     return sorted(list(letters))
 
 async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_TYPE, schedule_type: str, page: int = 0):
@@ -330,40 +332,40 @@ async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_
 async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает показ справки через меню"""
     query = update.callback_query
-    
+
     help_text = (
         "📚 *Помощь по боту расписания*\n\n"
-        
+
         "🏠 *Главное меню:*\n"
         "• *Класс - Сегодня/Завтра/Неделя* - быстрый доступ к расписанию вашего класса\n"
         "• *Сменить класс* - выбрать другой класс\n"
         "• *Сменить школу* - выбрать другую школу\n"
         "• *О школе* - информация о текущей школе\n\n"
-        
+
         "📅 *Основные разделы:*\n"
-        "• *Сегодня* - расписание на сегодня\n" 
+        "• *Сегодня* - расписание на сегодня\n"
         "• *Завтра* - расписание на завтра\n"
         "• *Неделя* - расписание на всю неделю\n"
         "• *Учитель* - поиск преподавателя\n\n"
-        
+
         "🎯 *Как пользоваться:*\n"
         "1. Выберите школу в разделе 'Сменить школу'\n"
         "2. Выберите класс через любой раздел расписания\n"
         "3. Класс сохранится для быстрого доступа\n"
         "4. Используйте кнопки класса для быстрого просмотра\n\n"
-        
+
         "🔧 *Основные команды:*\n"
         "`/start` - Главное меню\n"
         "`/help` - Эта справка\n"
         "`/settings` - Настройки уведомлений\n"
-        
+
         "💡 *Особенности:*\n"
         "• Бот автоматически сохраняет ваш класс для каждой школы\n"
         "• Расписание обновляется автоматически\n"
         "• Показываются актуальные замены уроков\n"
         "• Поддерживается поиск по фамилии преподавателя\n"
         "• Уведомления о заменах можно отключить в настройках\n\n"
-        
+
         "❓ *Частые вопросы:*\n"
         "• *Как сменить класс?* - Нажмите 'Сменить класс' в главном меню\n"
         "• *Как отключить уведомления?* - Перейдите в 'Настройки' и выключите уведомления\n"
@@ -371,7 +373,7 @@ async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• *Нет расписания?* - Данные еще не загружены\n"
         "• *Ошибка в расписании?* - Сообщите администраторам школы"
     )
-    
+
     keyboard = [
         [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")],
         [InlineKeyboardButton("⚙️ Настройки", callback_data="menu_settings")],
@@ -379,5 +381,5 @@ async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🏫 Сменить школу", callback_data="menu_change_school")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     await query.edit_message_text(help_text, reply_markup=reply_markup, parse_mode='Markdown')

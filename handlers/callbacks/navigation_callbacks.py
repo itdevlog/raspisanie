@@ -2,13 +2,14 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
+
 class NavigationCallbackHandler:
     """Обработчик callback'ов для навигации и меню"""
-    
+
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает навигационные callback'ы"""
         query = update.callback_query
-        
+
         if callback_data == "main_menu":
             await self._handle_main_menu(update, context)
         elif callback_data == "change_class":
@@ -39,26 +40,25 @@ class NavigationCallbackHandler:
             await query.answer("❌ Данные для этой школы еще загружаются. Попробуйте позже.")
         else:
             await query.answer("❌ Неизвестная команда навигации")
-    
+
     async def _handle_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает переход в главное меню"""
         from handlers.common.main_menu import main_menu_handler
         await main_menu_handler(update, context)
-    
+
     async def _handle_change_class(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает смену класса"""
         from handlers.common.callback_handler import handle_change_class
         await handle_change_class(update, context)
-    
+
     async def _handle_menu_navigation(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает навигацию по меню"""
-        from handlers.common.callback_handler import show_class_selection
+        from handlers.common.callback_handler import handle_help, show_class_selection
         from handlers.common.school_info import school_info_handler
-        from handlers.common.callback_handler import handle_help
         from handlers.common.settings import settings_handler
-        
+
         menu_item = callback_data.replace("menu_", "")
-        
+
         if menu_item in ["today", "tomorrow", "week"]:
             await show_class_selection(update, context, menu_item)
         elif menu_item == "school_info":
@@ -78,14 +78,14 @@ class NavigationCallbackHandler:
             # ДОБАВЛЕНО: Обработка перехода в меню кабинетов
             from handlers.rooms.room_schedule import room_menu_handler
             await room_menu_handler(update, context)
-    
+
     async def _handle_school_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает выбор школы"""
         from handlers.schools.school_selection import handle_school_selection
-        
+
         school_id = callback_data.replace("select_school_", "")
         await handle_school_selection(update, context, school_id)
-    
+
     async def _handle_show_all_classes(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает показ всех классов"""
         from handlers.common.callback_handler import handle_show_all_classes
@@ -98,20 +98,20 @@ class NavigationCallbackHandler:
                 await handle_show_all_classes(update, context, schedule_type, 0)
         except ValueError:
             await update.callback_query.answer("❌ Ошибка страницы")
-    
+
     async def _handle_clear_digit(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает очистку выбранной цифры класса"""
         from handlers.common.callback_handler import show_class_selection
-        
+
         schedule_type = callback_data.replace("clear_digit_", "")
         if 'class_digit' in context.user_data:
             del context.user_data['class_digit']
         await show_class_selection(update, context, schedule_type)
-    
+
     async def _handle_class_digit(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает выбор цифры класса"""
         from handlers.common.callback_handler import show_class_selection
-        
+
         parts = callback_data.split('_')
         if len(parts) >= 4:
             digit = parts[2]  # цифра класса
@@ -130,17 +130,17 @@ class NavigationCallbackHandler:
         """Обрабатывает переход в меню кабинетов"""
         from handlers.rooms.room_schedule import room_menu_handler
         await room_menu_handler(update, context)
-    
+
     async def _handle_toggle_notifications(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает переключение уведомлений"""
         from handlers.common.settings import toggle_notifications
-        
+
         state = callback_data.replace("toggle_notifications_", "")
         await toggle_notifications(update, context, state)
-    
+
     async def _handle_toggle_update_notifications(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает переключение уведомлений обновлениях"""
         from handlers.common.settings import toggle_update_notifications
-        
+
         state = callback_data.replace("toggle_update_notifications_", "")
         await toggle_update_notifications(update, context, state)

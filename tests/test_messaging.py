@@ -1,8 +1,7 @@
 # tests/test_messaging.py
 """Юнит-тесты для handlers/common/messaging.py — чистые функции разбивки сообщений."""
-import pytest
 
-from handlers.common.messaging import split_long_message, MAX_MESSAGE_LENGTH, paginate
+from handlers.common.messaging import MAX_MESSAGE_LENGTH, paginate, split_long_message
 
 
 def test_split_short_message():
