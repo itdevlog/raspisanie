@@ -66,12 +66,6 @@ class ExchangeService:
         return updated_lesson
 
     def _find_class_id(self, class_name: str) -> str | None:
-        """Находит ID класса по точному совпадению имени (без учета регистра)"""
-        if not class_name:
-            return None
-        classes = self.school_data.get('CLASSES', {})
-        class_name_lower = class_name.strip().lower()
-        for class_id, name in classes.items():
-            if name.strip().lower() == class_name_lower:
-                return class_id
-        return None
+        """Находит ID класса по имени (делегирует общий хелпер)"""
+        from services.base_schedule_service import find_class_id
+        return find_class_id(self.school_data, class_name)

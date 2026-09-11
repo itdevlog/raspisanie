@@ -126,15 +126,6 @@ class StatusService:
         return status.get('export_datetime')
 
     def _format_time_ago(self, time_diff: timedelta) -> str:
-        """Форматирует разницу во времени"""
-        if time_diff < timedelta(minutes=1):
-            return "только что"
-        elif time_diff < timedelta(hours=1):
-            minutes = int(time_diff.total_seconds() / 60)
-            return f"{minutes} мин"
-        elif time_diff < timedelta(days=1):
-            hours = int(time_diff.total_seconds() / 3600)
-            return f"{hours} ч"
-        else:
-            days = time_diff.days
-            return f"{days} дн"
+        """Форматирует разницу во времени (делегирует общий хелпер)"""
+        from services.base_schedule_service import format_time_ago
+        return format_time_ago(time_diff)

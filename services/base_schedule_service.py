@@ -5,6 +5,30 @@ from config.config import get_timezone
 from services.exchange_service import ExchangeService
 
 
+def format_time_ago(time_diff: timedelta) -> str:
+    """Форматирует разницу во времени (единый хелпер)."""
+    if time_diff < timedelta(minutes=1):
+        return "только что"
+    elif time_diff < timedelta(hours=1):
+        return f"{int(time_diff.total_seconds() / 60)} мин"
+    elif time_diff < timedelta(days=1):
+        return f"{int(time_diff.total_seconds() / 3600)} ч"
+    else:
+        return f"{time_diff.days} дн"
+
+
+def find_class_id(school_data: dict, class_name: str) -> str | None:
+    """Находит ID класса по точному совпадению имени (без учета регистра)."""
+    if not class_name:
+        return None
+    classes = school_data.get('CLASSES', {})
+    class_name_lower = class_name.strip().lower()
+    for class_id, name in classes.items():
+        if name.strip().lower() == class_name_lower:
+            return class_id
+    return None
+
+
 class BaseScheduleService:
     """
     Базовый класс для всех сервисов расписания
@@ -40,17 +64,11 @@ class BaseScheduleService:
 
     def _format_time_ago(self, time_diff: timedelta) -> str:
         """Форматирует разницу во времени - ОБЩАЯ ЛОГИКА"""
-        if time_diff < timedelta(minutes=1):
-            return "только что"
-        elif time_diff < timedelta(hours=1):
-            minutes = int(time_diff.total_seconds() / 60)
-            return f"{minutes} мин"
-        elif time_diff < timedelta(days=1):
-            hours = int(time_diff.total_seconds() / 3600)
-            return f"{hours} ч"
-        else:
-            days = time_diff.days
-            return f"{days} дн"
+        return format_time_ago(time_diff)
+
+    def _find_class_id(self, class_name: str) -> str | None:
+        """Находит ID класса по имени - ОБЩАЯ ЛОГИКА"""
+        return find_class_id(self.school_data, class_name)
 
     def _get_lesson_times(self, lesson_num: int) -> list[str]:
         """Получает время урока по номеру - ОБЩАЯ ЛОГИКА"""
