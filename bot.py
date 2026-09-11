@@ -80,6 +80,17 @@ class ScheduleBot:
         root.handlers = [file_handler, console_handler]
         root.setLevel(level)
 
+        # Отдельный файл для действий администраторов (admin_logger, имя 'admin_panel').
+        # Раньше ADMIN_LOG_FILE был объявлен в конфиге, но нигде не использовался.
+        admin_handler = logging.handlers.RotatingFileHandler(
+            self.config.ADMIN_LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8'
+        )
+        admin_handler.setFormatter(formatter)
+        admin_handler.setLevel(level)
+        admin_logger = logging.getLogger('admin_panel')
+        admin_logger.handlers = [admin_handler]
+        admin_logger.propagate = False
+
         # Не писать URL-ы запросов (содержат TELEGRAM_TOKEN) в debug-лог httpx
         logging.getLogger('httpx').setLevel(logging.WARNING)
 
