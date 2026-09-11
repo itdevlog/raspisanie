@@ -9,14 +9,16 @@ import logging
 import hashlib
 import json
 import os
+import time
 import pytz
 
 class NotificationService:
     def __init__(self):
          self.config = Config()
          self.logger = logging.getLogger(__name__)
-         # Кэш для отслеживания уже отправленных уведомлений
-         self.sent_notifications: Dict[str, Set[str]] = {}
+         # Кэш для отслеживания уже отправленных уведомлений.
+         # Значение категории — dict {notification_key: timestamp_сек} (с TTL 24 ч).
+         self.sent_notifications: Dict[str, Dict[str, float]] = {}
          self.moscow_tz = get_timezone()  # ДОБАВЬТЕ ЭТУ СТРОКУ
          self.logger.info("NotificationService инициализирован с пустым кэшом отправленных уведомлений")
          self.notifications_cache_file = self._get_cache_file()
@@ -78,10 +80,11 @@ class NotificationService:
              if os.path.exists(self.notifications_cache_file):
                  with open(self.notifications_cache_file, 'r', encoding='utf-8') as f:
                      cache_data = json.load(f)
-                     # Преобразуем списки обратно в множества
+                     # Старый формат хранил списки ключей -> преобразуем в dict с timestamp,
+                     # а новые записи (dict) оставляем как есть.
                      for key, value in cache_data.items():
                          if isinstance(value, list):
-                             cache_data[key] = set(value)
+                             cache_data[key] = {item: 0.0 for item in value}
                      self.sent_notifications = cache_data
                  self.logger.info(f"Загружен кэш уведомлений из {self.notifications_cache_file}")
              else:
@@ -96,7 +99,7 @@ class NotificationService:
              # Создаем директорию, если она не существует
              os.makedirs(os.path.dirname(self.notifications_cache_file), exist_ok=True)
              
-             # Преобразуем множества в списки для JSON сериализации
+             # Множества (старый формат) — в списки; dict с timestamp оставляем как есть
              cache_data = {}
              for key, value in self.sent_notifications.items():
                  if isinstance(value, set):
@@ -267,27 +270,34 @@ class NotificationService:
         # Очищаем старые уведомления (старше 24 часов)
         self._cleanup_old_notifications()
         
-        # Проверяем наличие ключа в любом месте словаря
-        for key_set in self.sent_notifications.values():
-            if notification_key in key_set:
+        # Проверяем наличие ключа в любом месте словаря (set — старый формат, dict — новый с timestamp)
+        for entries in self.sent_notifications.values():
+            if notification_key in entries:
                 return True
         return False
     
     def _mark_notification_sent(self, notification_key: str):
-        """Помечает уведомление как отправленное"""
-        # Используем общий словарь для всех уведомлений
+        """Помечает уведомление как отправленное (с временем отправки)."""
+        # Значение хранит timestamp в секундах — это позволяет очищать по возрасту.
         if 'exchanges' not in self.sent_notifications:
-            self.sent_notifications['exchanges'] = set()
-        self.sent_notifications['exchanges'].add(notification_key)
+            self.sent_notifications['exchanges'] = {}
+        self.sent_notifications['exchanges'][notification_key] = time.time()
     
     def _cleanup_old_notifications(self):
-        """Очищает старые уведомления (простая реализация - можно улучшить)"""
-        # В production лучше использовать Redis с TTL
-        # Здесь просто ограничиваем размер кэша
-        if 'exchanges' in self.sent_notifications and len(self.sent_notifications['exchanges']) > 200:
-            # Оставляем только последние 100 уведомлений
-            exchanges_list = list(self.sent_notifications['exchanges'])
-            self.sent_notifications['exchanges'] = set(exchanges_list[-100:])
+        """Удаляет уведомления старше 24 часов (порядок не важен)."""
+        cutoff = time.time() - self._notifications_ttl_seconds()
+        for category, entries in list(self.sent_notifications.items()):
+            if isinstance(entries, dict):
+                stale = [k for k, ts in entries.items() if ts < cutoff]
+                for k in stale:
+                    del entries[k]
+            elif isinstance(entries, set):
+                # старый формат (множество без времени) — считаем свежими, оставляем
+                continue
+
+    @staticmethod
+    def _notifications_ttl_seconds() -> float:
+        return 24 * 60 * 60
     
     # Существующие методы оставляем без изменений
     async def notify_school_down(self, context: ContextTypes.DEFAULT_TYPE, school_name: str, error: str = ""):

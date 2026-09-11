@@ -158,3 +158,7 @@
 ### P2: O(N) индекс получателей замен (вместо O(N²))
 
 - `NotificationService` строит индекс `(school_id, класс) → [user_id]` одним проходом по пользователям и кэширует на школу; читает `school_classes` из документа без per-user `find_one`. Сброс после обновления данных в `_perform_update`. Юнит-тесты `tests/test_notification_index.py`.
+
+### P2: кэш уведомлений — TTL 24 ч вместо случайного среза
+
+- `sent_notifications` хранит `{notification_key: timestamp}`, `_cleanup_old_notifications` удаляет записи старше 24 ч (было «последние 100» через `list(set)[-100:]` без гарантии порядка). Старый set-формат читается для совместимости. Юнит-тесты TTL и mark/is.

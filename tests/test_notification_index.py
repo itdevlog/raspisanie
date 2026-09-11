@@ -78,3 +78,27 @@ def test_reset_user_class_index():
     svc.reset_user_class_index()
     assert svc._index_loaded_for_school is None
     assert svc._user_class_index == {}
+
+
+def test_notification_ttl_cleanup():
+    import time
+    from services.notification_service import NotificationService
+    svc = NotificationService.__new__(NotificationService)
+    svc.logger = logging.getLogger('test')
+    svc.sent_notifications = {
+        'exchanges': {
+            'old_key': time.time() - (25 * 60 * 60),   # старше 24 ч
+            'new_key': time.time(),                      # свежий
+        }
+    }
+    svc._cleanup_old_notifications()
+    assert 'old_key' not in svc.sent_notifications['exchanges']
+    assert 'new_key' in svc.sent_notifications['exchanges']
+
+
+def test_notification_mark_and_is_sent():
+    svc = _make_svc()
+    svc.sent_notifications = {}
+    svc._mark_notification_sent('abc')
+    assert svc._is_notification_sent('abc') is True
+    assert svc._is_notification_sent('def') is False
