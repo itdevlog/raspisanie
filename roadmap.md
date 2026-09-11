@@ -69,7 +69,7 @@
 
 ### Данные и производительность
 
-- **O(N²) в подборе получателей** — `notification_service.py:159-184`: полный проход по всем пользователям на каждый класс. Собрать индекс `(school_id, class) → [user_id]` одним проходом.
+- **O(N²) в подборе получателей** — полный проход по всем пользователям на каждый класс. → ✅ **исправлено 11.09**: `NotificationService` строит индекс `(school_id, class_lower) → [user_id]` одним проходом и кэширует его на школу (`_build_user_class_index`/`get_users_by_class_indexed`), сброс — в `_perform_update`; читает `school_classes` без per-user `find_one`.
 - **`FileDB` перезаписывает весь JSON на каждую операцию** (`file_db.py:72,80,96`) — dirty-флаг + отложенная запись, или перейти на `sqlite3` (stdlib).
 - **Кэш уведомлений** — `notification_service.py:337-344`: «последние 100» через `list(set)[-100:]` — порядок не гарантирован; обещанной очистки по 24 ч нет. Хранить `Dict[key, timestamp]`.
 - **Дублирование запросов в `data_loader`** — вложенные ретраи дают до 9 запросов на школу; нет ETag/If-Modified-Since; `except Exception` ловит и `JSONDecodeError` (ретрай бессмысленен); парсинг по `'var NIKA='` хрупок; `Session` не закрывается.

@@ -154,3 +154,7 @@
 ### P2: ADMIN_LOG_FILE подключён
 
 - `bot.py::setup_logging` создаёт отдельный ротируемый файловый логгер `admin_panel` (действия администраторов) в `logs/admin.log` — раньше `ADMIN_LOG_FILE` был объявлен, но не использовался.
+
+### P2: O(N) индекс получателей замен (вместо O(N²))
+
+- `NotificationService` строит индекс `(school_id, класс) → [user_id]` одним проходом по пользователям и кэширует на школу; читает `school_classes` из документа без per-user `find_one`. Сброс после обновления данных в `_perform_update`. Юнит-тесты `tests/test_notification_index.py`.

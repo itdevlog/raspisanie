@@ -89,6 +89,11 @@ class BackgroundUpdater:
                     cache_service.clear()
                     self.logger.info("Кэш расписания очищен после обновления данных")
 
+                # Сброс индекса пользователей уведомлений (классы могли измениться)
+                notification_service = self.application.bot_data.get('notification_service')
+                if notification_service and hasattr(notification_service, 'reset_user_class_index'):
+                    notification_service.reset_user_class_index()
+
                 # Проверяем замены
                 await self._check_exchange_updates(old_schools_data, new_schools_data)
                 

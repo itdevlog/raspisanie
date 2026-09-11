@@ -21,6 +21,49 @@ class NotificationService:
          self.logger.info("NotificationService инициализирован с пустым кэшом отправленных уведомлений")
          self.notifications_cache_file = self._get_cache_file()
          self.load_notifications_cache()
+         # Кэш индекса (school_id, class_lower) -> [user_id], строится один раз за цикл
+         self._user_class_index: Dict[tuple, List[int]] = {}
+         self._index_loaded_for_school: str = None
+
+    def _build_user_class_index(self, user_service, school_id: str):
+        """Один проход по всем пользователям: (school_id, класс) -> [user_id].
+
+        Снимает O(N²) при массовой рассылке замен по многим классам: раньше
+        _get_users_by_class сканировал всех пользователей на каждый класс.
+        """
+        try:
+            users_collection = user_service.db.get_collection('users')
+            idx: Dict[tuple, List[int]] = {}
+            for user_data in users_collection.find():
+                user_id = user_data.get('user_id')
+                if not user_id:
+                    continue
+                school_classes = user_data.get('school_classes') or {}
+                class_name = school_classes.get(school_id)
+                if class_name:
+                    key = (school_id, class_name.lower())
+                    idx.setdefault(key, []).append(user_id)
+            self._user_class_index = idx
+            self._index_loaded_for_school = school_id
+            return idx
+        except Exception as e:
+            self.logger.error(f"Error building user class index: {e}", exc_info=True)
+            return {}
+
+    def get_users_by_class_indexed(self, user_service, school_id: str, class_name: str) -> List[int]:
+        """Возвращает пользователей класса, строя индекс один раз для school_id."""
+        if self._index_loaded_for_school != school_id:
+            self._build_user_class_index(user_service, school_id)
+        return self._user_class_index.get((school_id, class_name.lower()), [])
+
+    def reset_user_class_index(self):
+        """Сбрасывает индекс (например, после обновления данных)."""
+        self._user_class_index = {}
+        self._index_loaded_for_school = None
+
+    def _get_users_by_class(self, user_service, school_id: str, class_name: str) -> List[int]:
+        """Получает пользователей, следящих за классом (с индексом)."""
+        return self.get_users_by_class_indexed(user_service, school_id, class_name)
 
     @staticmethod
     def _get_cache_file() -> str:
@@ -163,32 +206,6 @@ class NotificationService:
             self.logger.error(f"Error in notify_exchange_updates: {e}", exc_info=True)
             return False
     
-    def _get_users_by_class(self, user_service, school_id: str, class_name: str) -> List[int]:
-        """Получает список пользователей, которые следят за указанным классом"""
-        try:
-            # Получаем всех пользователей
-            users_collection = user_service.db.get_collection('users')
-            all_users = users_collection.find()
-            
-            users_watching_class = []
-            for user_data in all_users:
-                user_id = user_data.get('user_id')
-                if not user_id:
-                    continue
-                
-                # Проверяем, следит ли пользователь за этим классом
-                user_class = user_service.get_user_class(user_id, school_id)
-                self.logger.info(f"Checking user {user_id}: user_class={user_class}, target_class={class_name}")
-                if user_class and user_class.lower() == class_name.lower():
-                    users_watching_class.append(user_id)
-                    self.logger.info(f"User {user_id} added to notification list for class {class_name}")
-            
-            self.logger.info(f"Found {len(users_watching_class)} users watching class {class_name}")
-            return users_watching_class
-            
-        except Exception as e:
-            self.logger.error(f"Error getting users by class: {e}", exc_info=True)
-            return []
     
     def _format_exchange_notification(self, class_name: str, exchanges: List[Dict], date: datetime = None) -> str:
         """Форматирует уведомление о заменах в кратком виде"""
