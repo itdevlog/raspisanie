@@ -2,7 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler
 import logging
 from config.schools import SCHOOLS_CONFIG
-from services.status_service import StatusService
+from services.status_service import StatusService, status_icon
 
 # Настройка логгера
 admin_logger = logging.getLogger('admin_panel')
@@ -46,7 +46,7 @@ def _build_admin_panel_text(schools_status: dict, message_text: str = None) -> s
         school_name = school_config.get('name', school_id)
         
         if status['loaded']:
-            icon = "✅" if "Актуально" in status['status'] else "⚠️"
+            icon = status_icon(status)
             text += f"• {icon} {school_name}: {status['details']}\n"
         else:
             text += f"• ❌ {school_name}: Данные не загружены\n"

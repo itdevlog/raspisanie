@@ -4,7 +4,7 @@ from telegram.ext import ContextTypes
 import asyncio
 import logging
 from config.schools import SCHOOLS_CONFIG
-from services.status_service import StatusService
+from services.status_service import StatusService, status_icon
 from core.data_loader import DataLoader
 from handlers.common.messaging import log_user_error
 
@@ -81,7 +81,7 @@ class AdminCallbackHandler:
             school_name = school_config.get('name', school_id)
             
             if status['loaded']:
-                icon = "✅" if "Актуально" in status['status'] else "⚠️"
+                icon = status_icon(status)
                 text += f"• {icon} {school_name}: {status['details']}\n"
             else:
                 text += f"• ❌ {school_name}: Данные не загружены\n"

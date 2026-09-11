@@ -6,6 +6,20 @@ from config.config import get_timezone
 
 logger = logging.getLogger(__name__)
 
+
+def status_icon(status: dict) -> str:
+    """Вытаскивает иконку статуса из status['status'] (уже содержит ✅/⚠️/🔴).
+
+    Единый источник иконки для `/status`, админ-панели и меню — раньше админка
+    сама выводила ⚠️ для всего, что не «Актуально», игнорируя 🔴 «Устарело».
+    """
+    s = status.get('status', '')
+    for icon in ('✅', '⚠️', '🔴', '❌'):
+        if icon in s:
+            return icon
+    return '⚠️'
+
+
 class StatusService:
     def __init__(self, schools_data: Dict):
         self.schools_data = schools_data
