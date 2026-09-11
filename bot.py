@@ -22,7 +22,7 @@ from handlers.common.main_menu import main_menu_handler
 from handlers.common.settings import settings_handler
 from handlers.common.callback_handler import callback_handler
 from handlers.schools.school_selection import school_selection_handler
-from handlers.admin.admin_panel import admin_panel_handler, admin_callback_handler, setup_admin_handlers
+from handlers.admin.admin_panel import admin_panel_handler, setup_admin_handlers
 from handlers.common.status import status_handler
 from services.cache_service import CacheService
 from services.notification_service import NotificationService

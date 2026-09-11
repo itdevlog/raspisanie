@@ -31,7 +31,7 @@
 - У школы 181 `SCHOOL_NAME` в выгрузке Nikasoft — **пустая строка**. `.get('SCHOOL_NAME', 'Неизвестно')` не срабатывает (ключ есть, значение `''`) → в стартовом списке `bot.py` выводится `- Загружено`, пустое имя в `/status`, «О школе», меню выбора класса. → ✅ **исправлено 11.09**: центральный helper `config/schools.py::get_display_name(school_id, school_data)` применён во всех 6 местах (`bot.py`, `status.py`, `school_info.py`, `callback_handler.py`, `background_updater.py`, `notification_service.py`).
 - Косметика: кривой отступ в стартовом `print` (bot.py, `load_schools_data`). → ✅ **исправлено 11.09**: выровнен («• Имя - Загружено»).
 
-**Осталось открытым** — см. таблицы ниже, прежде всего: дубли `admin_panel.py` ↔ `admin_callbacks.py`. П.4, п.9, п.10, двойной `query.answer()`, залипающие флаги, две системы настроек уведомлений и `print` → `logger` — ✅ закрыты.
+**Осталось открытым** — см. таблицы ниже: детектор «только сегодня» в заменах, инвалидация кэша расписания, `remove_school`/висячий `current_school`, `Message is not modified` в `callback_handler` (легаси-путь вне роутера), кнопки-заглушки, пагинация «Все классы», тесты. П.4, п.9, п.10, двойной `query.answer()`, залипшие флаги, уведомление-дефолты, `print`→`logger`, лог-ротация, конфиг-настройки и дубли `admin_panel.py`↔`admin_callbacks.py` — ✅ закрыты.
 
 ---
 
@@ -110,7 +110,7 @@
 
 ### Мёртвый код (удалить)
 
-- `handlers/admin/admin_panel.py` — **частично** дублирует `admin_callbacks.py` (callback-часть мерт­ва, но `setup_admin_handlers` регистрирует `/admin`, `/stats` — живой код). Требует аккуратного слияния, а не простого удаления. → открыто
+- `handlers/admin/admin_panel.py` — **частично** дублирует `admin_callbacks.py` (callback-часть мертва, но `setup_admin_handlers` регистрирует `/admin`, `/stats` — живой код). Требует аккуратного слияния, а не простого удаления. → ✅ **исправлено 11.09**: из `admin_panel.py` удалён мёртвый callback-код (`admin_callback_handler`, `_force_update`, `_refresh_all_schools`, `_refresh_school`, `_show_users_with_classes` — они жили/живут в `AdminCallbackHandler` в `handlers/callbacks/admin_callbacks.py`, куда роутер и направляет `admin_*`). Файл сокращён 306→130 строк, остался только живой код `/admin`/`/stats`. Бот больше не импортирует несуществующий `admin_callback_handler`.
 - `handlers/common/week_command.py` — команда `/week` **не регистрировалась**. → ✅ **исправлено 11.09**: `/week` и `/school` зарегистрированы в `bot.py`.
 - `callback_handler.py:282-333` (`handle_school_info`), `class_schedule.py:36-41` (флаг `waiting_for_teacher`), `navigation_callbacks.py:69-76,114-122` (недостижимые ветки), закомментированный блок `notification_service.py:247-317`, заглушка `_get_user_service:242-245`, `UserSchool`, `['order']` в конфиге школ. → открыто
 
