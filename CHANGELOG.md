@@ -162,3 +162,7 @@
 ### P2: кэш уведомлений — TTL 24 ч вместо случайного среза
 
 - `sent_notifications` хранит `{notification_key: timestamp}`, `_cleanup_old_notifications` удаляет записи старше 24 ч (было «последние 100» через `list(set)[-100:]` без гарантии порядка). Старый set-формат читается для совместимости. Юнит-тесты TTL и mark/is.
+
+### P2: CacheService — потокобезопасность, лимит размера, честная статистика
+
+- `CacheService` обёрнут в `threading.RLock`; добавлен параметр `max_entries` с вытеснением самых старых; `get_stats` больше не сериализует весь кэш в строки (O(n), оценочная память). Юнит-тесты (TTL/эviction/prefix/thread-safety).
