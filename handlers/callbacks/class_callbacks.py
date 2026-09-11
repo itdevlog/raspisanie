@@ -20,12 +20,8 @@ class ClassCallbackHandler:
             await query.answer("❌ Ошибка в данных класса")
             return
 
-        # ВАЖНО: Проверяем, что это НЕ callback выбора цифры
-        if parts[1] == "digit":
-            # Это выбор цифры, а не класса - не обрабатываем здесь
-            await query.answer()  # Просто закрываем уведомление
-            return
-
+        # ВАЖНО: callback выбора цифры (`class_digit_*`) перехватывается роутером
+        # и сюда не попадает; в этой ветке обрабатывается только выбор класса.
         schedule_type = parts[1]  # today, tomorrow, week
         class_name = '_'.join(parts[2:])  # на случай, если в названии класса есть _
 

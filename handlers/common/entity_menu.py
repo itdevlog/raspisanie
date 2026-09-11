@@ -15,7 +15,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from config.schools import SCHOOLS_CONFIG
-from handlers.common.messaging import clear_search_flags, edit_long_message
+from handlers.common.messaging import clear_search_flags, edit_long_message, log_user_error
 from services.state_service import UserStateService
 from services.text_utils import escape_markdown
 
@@ -103,7 +103,8 @@ class EntityMenuHandler:
 
         except Exception as e:
             return await self._edit_or_reply(
-                update, context, f"❌ Ошибка при загрузке списка {self.cfg.label_plural}: {e}")
+                update, context, log_user_error(
+                    f"Ошибка при загрузке списка {self.cfg.label_plural}", e))
 
     async def show_search_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                                school_name: str, available: list):
@@ -206,7 +207,7 @@ class EntityMenuHandler:
                                                  parse_mode='Markdown')
         except Exception as e:
             return await query.edit_message_text(
-                f"❌ Ошибка при загрузке списка {self.cfg.label_plural}: {e}")
+                log_user_error(f"Ошибка при загрузке списка {self.cfg.label_plural}", e))
 
     # ---------- выбор сущности (расписание) ----------
 
@@ -265,7 +266,7 @@ class EntityMenuHandler:
                 update, context, query, schedule, reply_markup=InlineKeyboardMarkup(keyboard))
         except Exception as e:
             return await query.edit_message_text(
-                f"❌ Произошла ошибка при загрузке расписания:\n{e}",
+                log_user_error("Произошла ошибка при загрузке расписания", e),
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🔙 Назад", callback_data=f"menu_{self.p}")]
                 ]))
@@ -388,4 +389,4 @@ class EntityMenuHandler:
             return await self._edit_or_reply(update, context, text, InlineKeyboardMarkup(keyboard))
         except Exception as e:
             return await self._edit_or_reply(
-                update, context, f"❌ Ошибка при поиске {self.cfg.label_plural}: {e}")
+                update, context, log_user_error(f"Ошибка при поиске {self.cfg.label_plural}", e))

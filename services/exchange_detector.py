@@ -294,16 +294,6 @@ class ExchangeDetector:
         # сложной структуры данных расписания требует более тщательной проверки типов данных
         return f"Урок {lesson_num}"
 
-    def get_current_exchanges_for_class(self, school_data: dict, class_name: str, date: datetime) -> dict:
-        """Получает текущие замены для конкретного класса"""
-        current_exchanges = self._get_current_exchanges(school_data, date)
-        return current_exchanges.get(class_name, {})
-
-    def _get_teacher_name(self, teacher_code: str, teachers_dict: dict) -> str:
-        """Получает полное ФИО преподавателя по коду"""
-        # Возвращаем полное имя преподавателя из словаря, если оно есть
-        return teachers_dict.get(teacher_code, teacher_code)
-
     def clear_school_cache(self, school_id: str):
         """Очищает кэш для школы (например, при принудительном обновлении)"""
         if school_id in self.previous_schedules:

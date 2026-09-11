@@ -10,9 +10,7 @@ class TeacherCallbackHandler:
         """Обрабатывает teacher_* callback'ы"""
         query = update.callback_query
 
-        if callback_data == "menu_teacher":
-            await self._handle_teacher_menu(update, context)
-        elif callback_data == "teacher_search_input":
+        if callback_data == "teacher_search_input":
             await self._handle_teacher_search_input(update, context)
         elif callback_data == "teacher_search_cancel":
             from handlers.teachers.teacher_menu import teacher_menu_handler
@@ -31,11 +29,6 @@ class TeacherCallbackHandler:
             await self._handle_teacher_selection(update, context, callback_data)
         else:
             await query.answer("❌ Неизвестная команда преподавателя")
-
-    async def _handle_teacher_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает переход в меню преподавателей"""
-        from handlers.teachers.teacher_menu import teacher_menu_handler
-        await teacher_menu_handler(update, context)
 
     async def _handle_teacher_search_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает запрос на ввод фамилии преподавателя"""

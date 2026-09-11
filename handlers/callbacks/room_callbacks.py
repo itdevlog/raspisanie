@@ -10,9 +10,7 @@ class RoomCallbackHandler:
         """Обрабатывает room_* callback'ы"""
         query = update.callback_query
 
-        if callback_data == "menu_room":
-            await self._handle_room_menu(update, context)
-        elif callback_data == "room_search_input":
+        if callback_data == "room_search_input":
             await self._handle_room_search_input(update, context)
         elif callback_data == "room_search_cancel":
             from handlers.rooms.room_schedule import room_menu_handler
@@ -31,11 +29,6 @@ class RoomCallbackHandler:
             await self._handle_room_selection(update, context, callback_data)
         else:
             await query.answer("❌ Неизвестная команда кабинета")
-
-    async def _handle_room_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает переход в меню кабинетов"""
-        from handlers.rooms.room_schedule import room_menu_handler
-        await room_menu_handler(update, context)
 
     async def _handle_room_search_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает запрос на ввод номера кабинета"""
