@@ -1,32 +1,30 @@
 # File: c:\Users\set\Downloads\telegram-schedule-bot1001\telegram-schedule-bot\bot.py
 import logging
 import logging.handlers
-import asyncio
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from config.config import Config
-from core.data_loader import DataLoader
 from config.schools import SCHOOLS_CONFIG, get_display_name
+from core.background_updater import BackgroundUpdater
+from core.data_loader import DataLoader
 from database.file_db import FileDB
+from handlers.admin.admin_panel import setup_admin_handlers
+from handlers.common.callback_handler import callback_handler
+from handlers.common.class_schedule import class_schedule_handler
+from handlers.common.school_info import school_info_handler
+from handlers.common.settings import settings_handler
+from handlers.common.status import status_handler
+from handlers.common.week_command import week_command_handler
+
+# Импорт обработчиков
+from handlers.start import help_handler, start_handler
+from services.cache_service import CacheService
+from services.notification_service import NotificationService
 from services.state_service import UserStateService
 from services.user_service import UserService
 
-# Импорт обработчиков
-from handlers.start import start_handler, help_handler
-from handlers.common.class_schedule import class_schedule_handler
-from handlers.common.week_command import week_command_handler
-from handlers.common.school_info import school_info_handler
-from handlers.common.main_menu import main_menu_handler
-from handlers.common.settings import settings_handler
-from handlers.common.callback_handler import callback_handler
-from handlers.schools.school_selection import school_selection_handler
-from handlers.admin.admin_panel import admin_panel_handler, setup_admin_handlers
-from handlers.common.status import status_handler
-from services.cache_service import CacheService
-from services.notification_service import NotificationService
-from core.background_updater import BackgroundUpdater
 
 class ScheduleBot:
     def __init__(self):
@@ -55,7 +53,7 @@ class ScheduleBot:
 
         # Загружаем данные при старте
         self.load_schools_data()
-    
+
     def setup_logging(self):
         """Настройка логирования: ротация файла + вывод в консоль.
 
@@ -95,29 +93,29 @@ class ScheduleBot:
         logging.getLogger('httpx').setLevel(logging.WARNING)
 
         self.logger = logging.getLogger(__name__)
-    
+
     def setup_services(self):
         """Инициализирует сервисы и базу данных"""
         # Инициализируем базу данных
         db = FileDB(self.config.DB_PATH)
-        
+
         # Инициализируем сервис кэширования расписания (короткий TTL, инвалидируется при обновлении)
         cache_service = CacheService(ttl=600)  # 10 минут TTL
-        
+
         # Отдельный кэш состояния пользователей: списки (учителя/кабинеты/классы)
         # должны жить долго, иначе индексные кнопки «протухают» и становятся мёртвыми.
         # Он НЕ инвалидируется вместе с расписанием.
         state_cache_service = CacheService(ttl=24 * 60 * 60)  # 24 часа
-        
+
         # Инициализируем сервис состояния пользователей (на своём долгом кэше)
         state_service = UserStateService(state_cache_service)
-        
+
         # Инициализируем сервис пользователей
         user_service = UserService(db)
-        
+
         # Инициализируем сервис уведомлений
         notification_service = NotificationService()
-        
+
         # Инициализируем детектор замен - ДОБАВЛЕНО
         from services.exchange_detector import ExchangeDetector
         exchange_detector = ExchangeDetector()
@@ -136,21 +134,21 @@ class ScheduleBot:
         """Загружает данные для всех активных школ"""
         self.logger.info("Загрузка данных расписания для всех школ...")
         loader = DataLoader()
-        
+
         # Загружаем данные для всех активных школ
         schools_data = loader.load_all_schools_data()
-        
+
         if schools_data:
             self.application.bot_data['schools_data'] = schools_data
             self.logger.info("✅ Данные расписания успешно загружены!")
-            
+
             for school_id, school_data in schools_data.items():
                 school_name = get_display_name(school_id, school_data)
                 self.logger.info(f"• {school_name} - Загружено")
         else:
             self.logger.error("❌ Не удалось загрузить данные расписания")
             self.application.bot_data['schools_data'] = {}
-    
+
     def setup_handlers(self):
         # Команды
         self.application.add_handler(CommandHandler("start", start_handler))
@@ -159,47 +157,47 @@ class ScheduleBot:
         self.application.add_handler(CommandHandler("settings", settings_handler))
         self.application.add_handler(CommandHandler("week", week_command_handler))
         self.application.add_handler(CommandHandler("school", school_info_handler))
-        
+
         # Админ-команды
         # Регистрация происходит в setup_admin_handlers
         # self.application.add_handler(CommandHandler("admin", admin_panel_handler))
         # self.application.add_handler(CommandHandler("stats", admin_panel_handler))
         # Команда для принудительной проверки уведомлений
         self.application.add_handler(CommandHandler("check_exchanges", self.force_check_exchanges))
-        
+
         # Установка админ-обработчиков
         setup_admin_handlers(self.application)
-                
+
         # Обработчик callback-ов от инлайн-кнопок (включая админ-панель)
         self.application.add_handler(CallbackQueryHandler(callback_handler))
-        
+
         # Обработчик текстовых сообщений
         self.application.add_handler(MessageHandler(
             filters.TEXT & ~filters.COMMAND,
             class_schedule_handler
         ))
-        
+
         # Глобальная обработка ошибок
         self.application.add_error_handler(self.error_handler)
-    
+
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Базовая обработка ошибок"""
         try:
             # Логируем ошибку с полным traceback
             self.logger.error(
-                f"Exception while handling an update: {context.error}", 
+                f"Exception while handling an update: {context.error}",
                 exc_info=context.error
             )
-            
+
             # Уведомление пользователю
             if update and update.effective_message:
                 await update.effective_message.reply_text(
                     "❌ Произошла непредвиденная ошибка. Попробуйте позже."
                 )
-                
+
         except Exception as e:
             self.logger.error(f"Error in error handler: {e}")
-    
+
     async def force_check_exchanges(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Принудительная проверка замен и отправка уведомлений"""
         # Проверяем, является ли пользователь администратором
@@ -207,18 +205,18 @@ class ScheduleBot:
         if not self.config.is_admin(self.config, user_id):
             await update.message.reply_text("❌ Эта команда доступна только администраторам")
             return
-        
+
         try:
             await update.message.reply_text("🔄 Начинаю принудительную проверку замен...")
-            
+
             # Вызываем метод из background_updater для проверки замен
             await self.background_updater.force_check_exchanges(context)
-            
+
             await update.message.reply_text("✅ Проверка замен завершена")
         except Exception as e:
             self.logger.error(f"Error in force_check_exchanges: {e}", exc_info=True)
             await update.message.reply_text(f"❌ Ошибка при проверке замен: {e}")
-    
+
     async def _post_init(self, application):
         """Вызывается после старта event loop, но до начала polling"""
         # Уведомляем админов о запуске
@@ -263,7 +261,7 @@ class ScheduleBot:
 if __name__ == "__main__":
     # Создаем необходимые директории
     Config.setup_directories()
-    
+
     # Запускаем бота
     bot = ScheduleBot()
     bot.run()

@@ -9,7 +9,7 @@ SCHOOLS_CONFIG = {
         "active": True
     },
     "school_181": {
-        "id": "school_181", 
+        "id": "school_181",
         "name": "МАОУ СОШ №181",
         "city": "Екатеринбург",
         "check_url": "https://raspisanie.nikasoft.ru/check/32911315.html",

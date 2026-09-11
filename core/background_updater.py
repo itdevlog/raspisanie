@@ -3,13 +3,12 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from types import SimpleNamespace
-from typing import Dict
-import pytz
 
+from config.config import Config, get_timezone
+from config.schools import get_display_name
 from core.data_loader import DataLoader
 from services.notification_service import NotificationService
-from config.schools import get_display_name
-from config.config import Config, get_timezone
+
 
 class BackgroundUpdater:
     def __init__(self, application):
@@ -60,7 +59,7 @@ class BackgroundUpdater:
             except asyncio.CancelledError:
                 self.logger.info("🔴 Цикл фонового обновления отменен")
                 break
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self.logger.error("❌ Таймаут при выполнении обновления")
             except Exception as e:
                 self.logger.error(f"❌ Ошибка в цикле обновления: {e}", exc_info=True)
@@ -77,7 +76,7 @@ class BackgroundUpdater:
             old_schools_data = self.application.bot_data.get('schools_data', {})
             # Оффлоадим синхронные HTTP-запросы в отдельный поток
             new_schools_data = await asyncio.to_thread(self.data_loader.load_all_schools_data)
-            
+
             if new_schools_data:
                 # Атомарно обновляем данные
                 self.application.bot_data['schools_data'] = new_schools_data
@@ -96,14 +95,14 @@ class BackgroundUpdater:
 
                 # Проверяем замены
                 await self._check_exchange_updates(old_schools_data, new_schools_data)
-                
+
                 # Анализ изменений
                 updated_schools = []
                 for school_id in new_schools_data:
                     if school_id not in old_schools_data or old_schools_data[school_id] != new_schools_data[school_id]:
                         school_name = get_display_name(school_id, new_schools_data[school_id])
                         updated_schools.append(school_name)
-                
+
                 if updated_schools:
                     self.logger.info(f"✅ Фоновое обновление завершено. Обновлено школ: {len(updated_schools)}")
 
@@ -111,7 +110,7 @@ class BackgroundUpdater:
                     notification_settings = self._get_admin_notification_settings()
                     if notification_settings.get('update_notifications', False):
                         # Уведомляем админов об успешном обновлении
-                        message = f"✅ *Автоматическое обновление*\n\nОбновлены школы:\n"
+                        message = "✅ *Автоматическое обновление*\n\nОбновлены школы:\n"
                         for school in updated_schools:
                             message += f"• {school}\n"
 
@@ -119,7 +118,7 @@ class BackgroundUpdater:
                         await self.notification_service.notify_admins(context, message)
                 else:
                     self.logger.info("✅ Фоновое обновление завершено. Изменений нет")
-                    
+
             else:
                 error_msg = "❌ Фоновое обновление не удалось - не получены данные"
                 self.logger.error(error_msg)
@@ -144,7 +143,7 @@ class BackgroundUpdater:
                     context,
                     f"❌ *Ошибка автоматического обновления*\n\n`{str(e)}`"
                 )
-            
+
     def _get_admin_notification_settings(self):
         """Получает настройки уведомлений для администраторов.
 
@@ -161,12 +160,12 @@ class BackgroundUpdater:
             if not user_service:
                 # Если нет user_service, возвращаем настройки по умолчанию
                 return {'update_notifications': False}
-            
+
             # Получаем настройки уведомлений для каждого администратора
             config = self.application.bot_data.get('config')
             if not config or not hasattr(config, 'ADMIN_IDS'):
                 return {'update_notifications': False}
-            
+
             # Для упрощения возвращаем настройки первого администратора
             # В реальном приложении может потребоваться более сложная логика
             admin_ids = config.ADMIN_IDS
@@ -176,17 +175,17 @@ class BackgroundUpdater:
                 preferences_service = UserPreferencesService(user_service.db)
                 settings = preferences_service.get_notification_settings(admin_ids[0])
                 return settings
-            
+
             return {'update_notifications': False}  # По умолчанию выключены
-            
+
         except Exception as e:
             self.logger.error(f"Ошибка получения настроек уведомлений администратора: {e}")
             return {'update_notifications': False}  # По умолчанию выключены
-            
+
     def get_update_log_file(self):
         """Возвращает путь к файлу лога обновлений"""
         return self.config.get_updatelog_path()
-            
+
     def log_update_activity(self, message: str):
         """Записывает сообщение в лог обновлений"""
         try:
@@ -195,8 +194,8 @@ class BackgroundUpdater:
                 f.write(f"[{timestamp}] {message}\n")
         except Exception as e:
             self.logger.error(f"Ошибка записи в лог обновлений: {e}")
-            
-    async def _check_exchange_updates(self, old_schools_data: Dict, new_schools_data: Dict):
+
+    async def _check_exchange_updates(self, old_schools_data: dict, new_schools_data: dict):
         """Проверяет обновления замен и отправляет уведомления"""
         try:
             if 'exchange_detector' not in self.application.bot_data:

@@ -1,4 +1,5 @@
 import os
+
 import pytz
 from dotenv import load_dotenv
 
@@ -61,11 +62,11 @@ class Config:
 
     # Администраторы
     ADMIN_IDS = _parse_admin_ids()
-    
+
     # База данных
     DB_PATH = os.getenv('DB_PATH', './data/database.json')
     CACHE_PATH = os.getenv('CACHE_PATH', './data/cache.json')
-    
+
     # Логирование
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_FILE = os.getenv('LOG_FILE', './logs/bot.log')
@@ -83,10 +84,10 @@ class Config:
         """
         ids = getattr(config, 'ADMIN_IDS', None) if config else None
         return bool(ids) and user_id in ids
-    
+
     # Логирование админ-панели
     ADMIN_LOG_FILE = os.getenv('ADMIN_LOG_FILE', './logs/admin.log')
-    
+
     # Создаем необходимые директории
     @staticmethod
     def setup_directories():

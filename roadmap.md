@@ -44,7 +44,7 @@
 
 ## 5. Тесты
 
-Есть pytest (39 тестов). Осталось:
+Есть pytest (64 теста: юнит + mock-интеграционные через pytest-asyncio, `tests/test_integration.py`). Осталось:
 
-- Юнит: добавлены `test_exchange_detector.py` (round-trip строковых ключей), `test_callback_router.py` (префиксы). Осталось: интеграционные (pytest-asyncio): ввод несуществующего класса текстом, клик по результату поиска, двойное нажатие «Обновить», `admin_force_update`; инструменты ruff/mypy/CI.
+- Инструменты: включить ruff/mypy/CI в пайплайн (конфиги `ruff.toml`, `mypy.ini` добавлены).
 

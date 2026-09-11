@@ -219,3 +219,10 @@
 
 - Добавлены `ruff.toml`, `mypy.ini`. Ruff-проверка кодовой базы: 841 автоисправление (импорты, стиль), вручную удалены 5 неиспользуемых переменных. `ruff check .` — чисто.
 - mypy настроен (mypy.ini), но строгий проход по всему коду вне скоупа текущей чистки (211 Optional-замечаний на живом коде).
+
+### Интеграционные mock-тесты + CI
+
+- `tests/test_integration.py` — 3 mock-теста через pytest-asyncio (навигация, рендер меню сущности).
+- `pytest.ini` — `asyncio_mode = auto`.
+- `requirements-dev.txt` — pytest, pytest-asyncio, ruff, mypy.
+- `.github/workflows/ci.yml` — CI: ruff + pytest на push/PR.

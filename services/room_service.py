@@ -1,39 +1,40 @@
 # services/room_service.py
-from typing import Dict, List, Optional
 from datetime import datetime, timedelta
+
 from .base_schedule_service import BaseScheduleService
+
 
 class RoomService(BaseScheduleService):
     """Сервис для работы с расписанием кабинетов"""
-    
-    def get_available_rooms(self) -> List[str]:
+
+    def get_available_rooms(self) -> list[str]:
         """Возвращает список всех кабинетов школы"""
         rooms = self.school_data.get('ROOMS', {})
         return list(rooms.values())
-    
-    def search_rooms(self, query: str) -> List[str]:
+
+    def search_rooms(self, query: str) -> list[str]:
         """Ищет кабинеты по номеру или названию"""
         if not query or len(query) < 1:
             return []
-        
+
         all_rooms = self.get_available_rooms()
         query = query.lower().strip()
-        
+
         found_rooms = []
         for room in all_rooms:
             if query in room.lower():
                 found_rooms.append(room)
-        
+
         return sorted(found_rooms)
-    
-    def find_room_id(self, room_name: str) -> Optional[str]:
+
+    def find_room_id(self, room_name: str) -> str | None:
         """Находит ID кабинета по названию"""
         rooms = self.school_data.get('ROOMS', {})
         for room_id, name in rooms.items():
             if room_name.lower() == name.lower():
                 return room_id
         return None
-    
+
     def get_room_schedule_today(self, room_name: str) -> str:
         """Получает расписание кабинета на сегодня"""
         today = datetime.now(self.moscow_tz)
@@ -43,11 +44,11 @@ class RoomService(BaseScheduleService):
         """Получает расписание кабинета на завтра"""
         tomorrow = datetime.now(self.moscow_tz) + timedelta(days=1)
         return self._get_room_schedule_for_date(room_name, tomorrow, include_header=True)
-    
+
     def get_room_schedule_week(self, room_name: str) -> str:
         """Получает расписание кабинета на текущую учебную неделю"""
         return self._get_week_schedule('room', room_name, self._get_room_schedule_for_date)
-    
+
     def _get_room_schedule_for_date(self, room_name: str, date: datetime, include_header: bool = False) -> str:
         """Основная логика получения расписания кабинета"""
         room_id = self.find_room_id(room_name)
@@ -55,12 +56,12 @@ class RoomService(BaseScheduleService):
             # Экранируем специальные символы Markdown в названии кабинета
             safe_room_name = room_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
             return f"❌ Кабинет '{safe_room_name}' не найден"
-        
+
         # Получаем период для даты
         period_id = self._get_period_for_date(date)
         if not period_id:
             return "❌ Не удалось определить учебный период"
-        
+
         # Получаем день недели (1-понедельник, 7-воскресенье)
         day_num = date.isoweekday()
         if day_num > 5:  # Выходные
@@ -69,17 +70,17 @@ class RoomService(BaseScheduleService):
             # Экранируем специальные символы Markdown в названии кабинета
             safe_room_name = room_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
             return f"📅 *Кабинет {safe_room_name} - {day_name}, {date_str}*\n\n🏖️ Выходной день"
-        
+
         # Получаем расписание кабинета
         schedule_data = self._get_room_schedule_data(period_id, room_id, day_num, date)
-        
+
         return self._format_schedule_response('room', room_name, date, schedule_data, include_header)
-    
-    def _get_room_schedule_data(self, period_id: str, room_id: str, day_num: int, date: datetime) -> List[Dict]:
+
+    def _get_room_schedule_data(self, period_id: str, room_id: str, day_num: int, date: datetime) -> list[dict]:
         """Получает данные расписания кабинета - СПЕЦИФИЧНАЯ ЛОГИКА"""
         schedule = []
         class_schedule = self.school_data.get('CLASS_SCHEDULE', {}).get(period_id, {})
-        
+
         # Ищем уроки, которые проходят в этом кабинете
         for class_id, class_lessons in class_schedule.items():
             for lesson_num in range(1, self.school_data.get('LESSONSINDAY', 12) + 1):
@@ -121,7 +122,7 @@ class RoomService(BaseScheduleService):
                                 'has_exchange': updated_lesson.get('has_exchange', False),
                                 'is_cancelled': updated_lesson.get('is_cancelled', False)
                             })
-        
+
         # Сортируем по номеру урока
         schedule.sort(key=lambda x: x['lesson_num'])
         return schedule

@@ -1,15 +1,16 @@
-import time
 import threading
-from typing import Any, Optional, Dict
+import time
+from typing import Any
+
 
 class CacheService:
-    def __init__(self, ttl: int = 300, max_entries: Optional[int] = 10_000):
-        self.cache: Dict[str, tuple] = {}
+    def __init__(self, ttl: int = 300, max_entries: int | None = 10_000):
+        self.cache: dict[str, tuple] = {}
         self.ttl = ttl
         self.max_entries = max_entries
         self._lock = threading.RLock()
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Получает значение из кэша"""
         with self._lock:
             entry = self.cache.get(key)
@@ -65,7 +66,7 @@ class CacheService:
             for key in [k for k, (_, ts) in self.cache.items() if now - ts >= self.ttl]:
                 del self.cache[key]
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Возвращает статистику кэша (O(n), без сериализации данных)."""
         now = time.time()
         with self._lock:

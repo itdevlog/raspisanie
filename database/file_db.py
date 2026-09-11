@@ -1,10 +1,9 @@
 import json
 import logging
 import os
-import threading
-import tempfile
 import shutil
-from typing import Dict, List, Any, Optional
+import tempfile
+import threading
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -15,11 +14,11 @@ class FileDB:
         self._lock = threading.RLock()
         self.data = self._load_data()
 
-    def _load_data(self) -> Dict:
+    def _load_data(self) -> dict:
         """Загружает данные из файла; при битом файле сохраняет копию .corrupt и возвращает {}"""
         if os.path.exists(self.db_path):
             try:
-                with open(self.db_path, 'r', encoding='utf-8') as f:
+                with open(self.db_path, encoding='utf-8') as f:
                     return json.load(f)
             except (json.JSONDecodeError, OSError) as e:
                 logger.error(f"Error loading database: {e}")
@@ -95,7 +94,7 @@ class Collection:
             if name not in self.db.data:
                 self.db.data[name] = []
 
-    def find_one(self, query: Dict) -> Optional[Dict]:
+    def find_one(self, query: dict) -> dict | None:
         """Находит один документ по запросу"""
         with self.db._lock:
             for doc in self.db.data[self.name]:
@@ -103,7 +102,7 @@ class Collection:
                     return self._clean_document(doc)
             return None
 
-    def find(self, query: Dict = None) -> List[Dict]:
+    def find(self, query: dict = None) -> list[dict]:
         """Находит все документы по запросу"""
         with self.db._lock:
             if query is None:
@@ -112,14 +111,14 @@ class Collection:
             return [self._clean_document(doc) for doc in self.db.data[self.name]
                     if all(doc.get(k) == v for k, v in query.items())]
 
-    def insert_one(self, document: Dict):
+    def insert_one(self, document: dict):
         """Вставляет один документ"""
         clean_doc = self._clean_document(document)
         with self.db._lock:
             self.db.data[self.name].append(clean_doc)
             self.db._save_data()
 
-    def update_one(self, query: Dict, update: Dict, upsert: bool = False):
+    def update_one(self, query: dict, update: dict, upsert: bool = False):
         """Обновляет один документ"""
         with self.db._lock:
             for doc in self.db.data[self.name]:
@@ -138,7 +137,7 @@ class Collection:
                 self.db.data[self.name].append(clean_doc)
                 self.db._save_data()
 
-    def delete_one(self, query: Dict):
+    def delete_one(self, query: dict):
         """Удаляет один документ"""
         with self.db._lock:
             for i, doc in enumerate(self.db.data[self.name]):
@@ -146,8 +145,8 @@ class Collection:
                     del self.db.data[self.name][i]
                     self.db._save_data()
                     return
-    
-    def _clean_document(self, document: Dict) -> Dict:
+
+    def _clean_document(self, document: dict) -> dict:
         """Очищает документ от несериализуемых объектов"""
         cleaned = {}
         for key, value in document.items():
@@ -161,7 +160,7 @@ class Collection:
                 # Для других типов преобразуем в строку
                 cleaned[key] = self._clean_value(value)
         return cleaned
-    
+
     def _clean_value(self, value):
         """Очищает значение от несериализуемых объектов"""
         if isinstance(value, (str, int, float, bool, type(None))):

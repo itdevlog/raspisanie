@@ -1,16 +1,15 @@
 # services/notification_service.py
-from telegram import Update
-from telegram.ext import ContextTypes
-from config.config import Config, get_timezone
-from config.schools import get_display_name
-from datetime import datetime
-from typing import Dict, List, Set
-import logging
-import hashlib
 import json
+import logging
 import os
 import time
-import pytz
+from datetime import datetime
+
+from telegram.ext import ContextTypes
+
+from config.config import Config, get_timezone
+from config.schools import get_display_name
+
 
 class NotificationService:
     def __init__(self):
@@ -18,13 +17,13 @@ class NotificationService:
          self.logger = logging.getLogger(__name__)
          # Кэш для отслеживания уже отправленных уведомлений.
          # Значение категории — dict {notification_key: timestamp_сек} (с TTL 24 ч).
-         self.sent_notifications: Dict[str, Dict[str, float]] = {}
+         self.sent_notifications: dict[str, dict[str, float]] = {}
          self.moscow_tz = get_timezone()  # ДОБАВЬТЕ ЭТУ СТРОКУ
          self.logger.info("NotificationService инициализирован с пустым кэшом отправленных уведомлений")
          self.notifications_cache_file = self._get_cache_file()
          self.load_notifications_cache()
          # Кэш индекса (school_id, class_lower) -> [user_id], строится один раз за цикл
-         self._user_class_index: Dict[tuple, List[int]] = {}
+         self._user_class_index: dict[tuple, list[int]] = {}
          self._index_loaded_for_school: str = None
 
     def _build_user_class_index(self, user_service, school_id: str):
@@ -35,7 +34,7 @@ class NotificationService:
         """
         try:
             users_collection = user_service.db.get_collection('users')
-            idx: Dict[tuple, List[int]] = {}
+            idx: dict[tuple, list[int]] = {}
             for user_data in users_collection.find():
                 user_id = user_data.get('user_id')
                 if not user_id:
@@ -52,7 +51,7 @@ class NotificationService:
             self.logger.error(f"Error building user class index: {e}", exc_info=True)
             return {}
 
-    def get_users_by_class_indexed(self, user_service, school_id: str, class_name: str) -> List[int]:
+    def get_users_by_class_indexed(self, user_service, school_id: str, class_name: str) -> list[int]:
         """Возвращает пользователей класса, строя индекс один раз для school_id."""
         if self._index_loaded_for_school != school_id:
             self._build_user_class_index(user_service, school_id)
@@ -63,7 +62,7 @@ class NotificationService:
         self._user_class_index = {}
         self._index_loaded_for_school = None
 
-    def _get_users_by_class(self, user_service, school_id: str, class_name: str) -> List[int]:
+    def _get_users_by_class(self, user_service, school_id: str, class_name: str) -> list[int]:
         """Получает пользователей, следящих за классом (с индексом)."""
         return self.get_users_by_class_indexed(user_service, school_id, class_name)
 
@@ -73,12 +72,12 @@ class NotificationService:
         db_path = Config().DB_PATH
         data_dir = os.path.dirname(db_path) or './data'
         return os.path.join(data_dir, 'notifications_cache.json')
-         
+
     def load_notifications_cache(self):
          """Загружает кэш отправленных уведомлений из файла"""
          try:
              if os.path.exists(self.notifications_cache_file):
-                 with open(self.notifications_cache_file, 'r', encoding='utf-8') as f:
+                 with open(self.notifications_cache_file, encoding='utf-8') as f:
                      cache_data = json.load(f)
                      # Старый формат хранил списки ключей -> преобразуем в dict с timestamp,
                      # а новые записи (dict) оставляем как есть.
@@ -92,13 +91,13 @@ class NotificationService:
          except Exception as e:
              self.logger.error(f"Ошибка загрузки кэша уведомлений: {e}")
              self.sent_notifications = {}
-             
+
     def save_notifications_cache(self):
          """Сохраняет кэш отправленных уведомлений в файл"""
          try:
              # Создаем директорию, если она не существует
              os.makedirs(os.path.dirname(self.notifications_cache_file), exist_ok=True)
-             
+
              # Множества (старый формат) — в списки; dict с timestamp оставляем как есть
              cache_data = {}
              for key, value in self.sent_notifications.items():
@@ -106,13 +105,13 @@ class NotificationService:
                      cache_data[key] = list(value)
                  else:
                      cache_data[key] = value
-             
+
              with open(self.notifications_cache_file, 'w', encoding='utf-8') as f:
                  json.dump(cache_data, f, ensure_ascii=False, indent=2)
              self.logger.info(f"Кэш уведомлений сохранен в {self.notifications_cache_file}")
          except Exception as e:
              self.logger.error(f"Ошибка сохранения кэша уведомлений: {e}")
-             
+
     async def notify_admins(self, context: ContextTypes.DEFAULT_TYPE, message: str, parse_mode: str = 'Markdown'):
         """Отправляет уведомление всем администраторам"""
         try:
@@ -127,37 +126,37 @@ class NotificationService:
                     self.logger.error(f"Failed to send notification to admin {admin_id}: {e}")
         except Exception as e:
             self.logger.error(f"Error in notify_admins: {e}")
-    
+
     async def notify_exchange_updates(self, context: ContextTypes.DEFAULT_TYPE, school_id: str,
-                                    class_name: str, exchanges: List[Dict]) -> bool:
+                                    class_name: str, exchanges: list[dict]) -> bool:
         """Уведомляет пользователей о новых заменах в формате полного расписания"""
         try:
             # Проверяем, доступен ли bot_data
             if not hasattr(context, 'bot_data') or context.bot_data is None:
                 self.logger.error("Context не содержит bot_data")
                 return False
-            
+
             user_service = context.bot_data.get('user_service')
             if not user_service:
                 self.logger.error("User service not available for exchange notifications")
                 return False
-            
+
             # Получаем пользователей, которые следят за этим классом
             users = self._get_users_by_class(user_service, school_id, class_name)
             self.logger.info(f"Найдено {len(users)} пользователей, следящих за классом {class_name} в школе {school_id}")
             if not users:
                 self.logger.info(f"No users found for class {class_name} in school {school_id}")
                 return False
-            
+
             # Получаем дату из первой замены (предполагаем, что все замены на одну дату)
             date = exchanges[0].get('timestamp') if exchanges else datetime.now(self.moscow_tz)
-            
+
             # Форматируем уведомление
             notification_text = self._format_exchange_notification(class_name, exchanges, date)
             if not notification_text:
                 self.logger.info(f"No new exchanges to notify for class {class_name}")
                 return False
-            
+
             # Проверяем, не отправляли ли мы уже эти конкретные замены
             # Создаем уникальный ключ для каждой комбинации замен
             import hashlib
@@ -166,11 +165,11 @@ class NotificationService:
                 for ex in exchanges
             ])
             notification_key = f"{school_id}_{class_name}_{date.strftime('%Y%m%d')}_{hashlib.md5(exchanges_signature.encode()).hexdigest()[:8]}"
-            
+
             if self._is_notification_sent(notification_key):
                 self.logger.info(f"Notification already sent for {notification_key}")
                 return False
-            
+
             # Отправляем уведомления только тем пользователям, у которых включены уведомления
             sent_count = 0
             for user_id in users:
@@ -204,32 +203,32 @@ class NotificationService:
 
             self.logger.info(f"Exchange notifications sent to {sent_count}/{len(users)} users for class {class_name}")
             return sent_count > 0
-            
+
         except Exception as e:
             self.logger.error(f"Error in notify_exchange_updates: {e}", exc_info=True)
             return False
-    
-    
-    def _format_exchange_notification(self, class_name: str, exchanges: List[Dict], date: datetime = None) -> str:
+
+
+    def _format_exchange_notification(self, class_name: str, exchanges: list[dict], date: datetime = None) -> str:
         """Форматирует уведомление о заменах в кратком виде"""
         if not exchanges:
             return ""
-        
+
         # Если дата не передана, используем текущую
         if not date:
             date = datetime.now(self.moscow_tz)
-        
+
         # Форматируем сообщение
         date_str = date.strftime('%d.%m.%Y')
         day_name = self._get_day_name(date)
-        
+
         message = [
             f"🔄 *{class_name.upper()} - {day_name}, {date_str}*",
             "",
             "📝 *Новые замены в расписании:*",
             ""
         ]
-        
+
         # Добавляем информацию о заменах
         for exchange in exchanges:
             lesson_num = exchange.get('lesson_num', '?')
@@ -238,7 +237,7 @@ class NotificationService:
             new_teacher = exchange.get('new_teacher', '')
             new_room = exchange.get('new_room', '')
             is_cancelled = exchange.get('is_cancelled', False)
-            
+
             # Формируем строку урока
             if is_cancelled:
                 lesson_line = f"❌ {lesson_num}. {original_subject} - *ОТМЕНЕНО*"
@@ -250,14 +249,14 @@ class NotificationService:
                     lesson_line += f" 👨‍🏫{new_teacher}"
                 if new_room:
                     lesson_line += f" 🏫{new_room}"
-            
+
             message.append(lesson_line)
-        
+
         message.extend([
             "",
             "💡 Уведомления о заменах можно отключить в /settings"
         ])
-        
+
         return "\n".join(message)
 
     def _get_day_name(self, date: datetime) -> str:
@@ -269,20 +268,20 @@ class NotificationService:
         """Проверяет, было ли уведомление уже отправлено"""
         # Очищаем старые уведомления (старше 24 часов)
         self._cleanup_old_notifications()
-        
+
         # Проверяем наличие ключа в любом месте словаря (set — старый формат, dict — новый с timestamp)
         for entries in self.sent_notifications.values():
             if notification_key in entries:
                 return True
         return False
-    
+
     def _mark_notification_sent(self, notification_key: str):
         """Помечает уведомление как отправленное (с временем отправки)."""
         # Значение хранит timestamp в секундах — это позволяет очищать по возрасту.
         if 'exchanges' not in self.sent_notifications:
             self.sent_notifications['exchanges'] = {}
         self.sent_notifications['exchanges'][notification_key] = time.time()
-    
+
     def _cleanup_old_notifications(self):
         """Удаляет уведомления старше 24 часов (порядок не важен)."""
         cutoff = time.time() - self._notifications_ttl_seconds()
@@ -298,7 +297,7 @@ class NotificationService:
     @staticmethod
     def _notifications_ttl_seconds() -> float:
         return 24 * 60 * 60
-    
+
     # Существующие методы оставляем без изменений
     async def notify_school_down(self, context: ContextTypes.DEFAULT_TYPE, school_name: str, error: str = ""):
         """Уведомляет о недоступности школы"""
@@ -309,29 +308,29 @@ class NotificationService:
         )
         if error:
             message += f"\n📝 Ошибка: `{error}`"
-        
+
         await self.notify_admins(context, message)
-    
+
     async def notify_bot_started(self, context: ContextTypes.DEFAULT_TYPE):
         """Уведомляет о запуске бота"""
         from services.status_service import StatusService
-        
+
         schools_data = context.bot_data.get('schools_data', {})
         status_service = StatusService(schools_data)
-        
+
         loaded_schools = len(schools_data)
         total_schools = len([s for s in context.bot_data.get('schools_config', {}).values() if s.get('active', True)])
-        
+
         message = (
             f"🤖 *Бот запущен*\n\n"
             f"✅ *Школы:* {loaded_schools}/{total_schools} загружены\n"
             f"🕒 *Время:* {datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
         )
-        
+
         # Добавляем статус каждой школы
         for school_id, school_data in schools_data.items():
             school_name = get_display_name(school_id, school_data)
             status = status_service.get_school_status(school_id)
             message += f"• {status['status']} {school_name}\n"
-        
+
         await self.notify_admins(context, message)
