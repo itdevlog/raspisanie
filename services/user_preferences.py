@@ -24,7 +24,6 @@ class UserPreferencesService:
         """Получает настройки уведомлений пользователя"""
         preferences = self.preferences_collection.find_one({'user_id': user_id}) or {}
         return preferences.get('notifications', {
-            'exchange_notifications': True,  # По умолчанию включены
             'update_notifications': False,
             'lesson_reminders': False
         })
@@ -46,18 +45,6 @@ class UserPreferencesService:
             upsert=True
         )
         return True
-
-    def disable_exchange_notifications(self, user_id: int) -> bool:
-        """Отключает уведомления о заменах для пользователя"""
-        settings = self.get_notification_settings(user_id)
-        settings['exchange_notifications'] = False
-        return self.set_notification_settings(user_id, settings)
-
-    def enable_exchange_notifications(self, user_id: int) -> bool:
-        """Включает уведомления о заменах для пользователя"""
-        settings = self.get_notification_settings(user_id)
-        settings['exchange_notifications'] = True
-        return self.set_notification_settings(user_id, settings)
 
     def disable_update_notifications(self, user_id: int) -> bool:
         """Отключает уведомления об обновлениях для пользователя"""

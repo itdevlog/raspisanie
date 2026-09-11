@@ -77,7 +77,7 @@ Telegram-бот для просмотра школьного расписани�
 | [services/exchange_detector.py](services/exchange_detector.py) | Обнаруживает *новые* замены, сравнивая текущее состояние с предыдущим. |
 | [services/notification_service.py](services/notification_service.py) | Отправляет уведомления о заменах пользователям и админам. |
 | [services/user_service.py](services/user_service.py) | Работа с пользователями: школа, класс, настройки уведомлений. |
-| [services/user_preferences.py](services/user_preferences.py) | Альтернативный слой настроек поверх `FileDB`. Используется в `background_updater._get_admin_notification_settings` для настроек админов. Частично пересекается с `UserService` по API, но хранит данные в отдельной коллекции `user_preferences`. |
+| [services/user_preferences.py](services/user_preferences.py) | Хранилище админ-флага `update_notifications` поверх `FileDB` (коллекция `user_preferences`). Используется в `background_updater._get_admin_notification_settings` и `settings.py`. Настройки замен (exchange) здесь не хранятся — их единственный источник `UserService`. |
 | [services/cache_service.py](services/cache_service.py) | In-memory кэш с TTL, потокобезопасный (`RLock`), с лимитом размера `max_entries` (вытеснение самых старых) и честной статистикой. |
 | [handlers/common/entity_menu.py](handlers/common/entity_menu.py) | Параметризованный `EntityMenuHandler` — общая логика меню/поиска/пагинации для учителей и кабинетов. |
 | [handlers/common/menu_builder.py](handlers/common/menu_builder.py) | Единые построители главного меню (`build_main_menu_keyboard`/`text`) и справки (`HELP_TEXT`). |
@@ -94,7 +94,7 @@ Telegram-бот для просмотра школьного расписани�
 | [handlers/callbacks/room_callbacks.py](handlers/callbacks/room_callbacks.py) | Callback'и кабинетов. |
 | [handlers/callbacks/navigation_callbacks.py](handlers/callbacks/navigation_callbacks.py) | Навигация: главное меню, смена класса/школы, настройки. |
 | [handlers/callbacks/admin_callbacks.py](handlers/callbacks/admin_callbacks.py) | Админ-панель и callback'и администратора. |
-| [handlers/admin/admin_panel.py](handlers/admin/admin_panel.py) | Содержит только живой код команд `/admin` и `/stats` (`admin_panel_handler`, `setup_admin_handlers`, построители панели). Мёртвый callback-код удалён 11.09 — callback'и админки живут в `handlers/callbacks/admin_callbacks.py`. |
+| [handlers/admin/admin_panel.py](handlers/admin/admin_panel.py) | Только команды `/admin` и `/stats` (`admin_panel_handler`, `setup_admin_handlers`). Делегируют в единую реализацию `AdminCallbackHandler`: `/admin` → `show_panel`, `/stats` → `_show_statistics`. Дублирующие построители панели удалены 11.09. |
 | [handlers/common/class_schedule.py](handlers/common/class_schedule.py) | Обработка текстового ввода класса. |
 | [handlers/common/week_command.py](handlers/common/week_command.py) | `/week <класс>` — недельное расписание. **Зарегистрирована** в `bot.py` с 11.09.2026. |
 | [handlers/common/school_info.py](handlers/common/school_info.py) | Информация о школе. Команда `/school` зарегистрирована в `bot.py` с 11.09.2026. |
@@ -124,7 +124,7 @@ Telegram-бот для просмотра школьного расписани�
    - `exchange_detector`
    - `schools_config`
 4. `load_schools_data()` вызывает `DataLoader.load_all_schools_data()` — синхронно загружает данные всех школ.
-5. `setup_handlers()` регистрирует обработчики команд и callback. Команды: `/start`, `/help`, `/status`, `/settings`, `/week <класс>`, `/school`, `/admin`, `/stats`, `/check_exchanges`.
+5. `setup_handlers()` регистрирует обработчики команд и callback. Команды: `/start`, `/help`, `/status`, `/settings`, `/week <класс>`, `/school`, `/cancel`, `/admin`, `/stats`, `/check_exchanges`.
 6. `background_updater.start_periodic_updates()` запускает фоновую задачу через `post_init` (после старта event loop, до polling).
 7. `application.run_polling()` блокирует основной поток и начинает слушать Telegram.
 
@@ -389,22 +389,20 @@ ADMIN_IDS=123456789,987654321
 
 - `/status` — статус загрузки данных по школам.
 - `/settings` — настройки уведомлений о заменах для текущей школы (+ для админов переключатель `update_notifications`). Реализовано в `handlers/common/settings.py`.
+- `/cancel` — сброс текущего ввода/поиска (`reset_user_flow`) и возврат в главное меню.
 - `/check_exchanges` — принудительная проверка замен.
-- `/admin` или `/stats` — админ-панель с кнопками:
-  - Принудительное обновление данных.
-  - Проверить замены.
-  - Очистить кэш замен.
-  - Статистика пользователей.
+- `/admin` — админ-панель (та же клавиатура, что и у callback'ов, включая «Принудительное обновление»).
+- `/stats` — статистика пользователей: всего с классами + разбивка по школам.
 
-> **Регистрация команд**: `/admin` и `/stats` регистрируются в `setup_admin_handlers()` (`handlers/admin/admin_panel.py:300-303`), вызов из `bot.py:127`. Прямой регистрации `CommandHandler("admin", …)` в `bot.py:114-130` **нет** (строки 121-122 закомментированы). Команда `/check_exchanges` регистрируется в `bot.py:124`.
+> **Единая реализация**: с 11.09.2026 `handlers/admin/admin_panel.py` не дублирует построители панели — `/admin` и `/stats` делегируют в `AdminCallbackHandler` (`handlers/callbacks/admin_callbacks.py`). `/admin` и `/stats` регистрируются в `setup_admin_handlers()` (`handlers/admin/admin_panel.py`), вызов из `bot.py`. Команда `/check_exchanges` регистрируется в `bot.py`.
 
 ### 12.3 Админ-уведомления
 
 [notification_service.py](services/notification_service.py) умеет слать сообщения всем админам.
 
 - Флаг `update_notifications` хранится в `user_preferences.notifications` (коллекция `user_preferences` в `data/database.json`).
-- Дефолт — `False` (см. `services/user_preferences.py:17`).
-- Считывается через `BackgroundUpdater._get_admin_notification_settings` **для первого `ADMIN_IDS`** — настройки остальных админов в текущей реализации игнорируются (упрощение, см. §16).
+- Дефолт — `False` (см. `services/user_preferences.py:26-29`).
+- Считывается через `BackgroundUpdater._get_admin_notification_settings` **по всем `ADMIN_IDS`** — флаг `True`, если он включён хотя бы у одного админа (`any(...)`), с 11.09.2026. Раздельная адресация (слать только подписанным админам) не реализована — осознанный компромисс, см. §16.
 - Если хотя бы у одного админа флаг `True`, фоновое обновление шлёт summary-сообщение «обновлены школы: …» и сообщение об ошибке, если данные не загрузились.
 
 ---
@@ -473,8 +471,8 @@ ADMIN_LOG_FILE=./logs/admin.log
 >
 > - **Критическое (P0)**: битый `database.json` → бэкап `.corrupt`; нарезка сообщений ≤4096; поиск учителей/кабинетов (чужие индексы + 64-байт callback); матчинг цифры класса («1» не матчит «11а»); `Message is not modified` во всех путях.
 > - **P1**: двойной `query.answer()`; залипающие флаги поиска; утечка `class_digit`; TTL-кнопки; удалён мёртвый `UserSchool`; экранирование до бизнес-логики (замены учителей/кабинетов); `ExchangeService` в цикле.
-> - **Рефакторинг/качество (P2)**: `EntityMenuHandler` (учителя/кабинеты — из дублей 913→500), `menu_builder`+`HELP_TEXT`, `is_admin`, `get_school_by_id`, `TIMEZONE`, `str(e)`→лог, мёртвый код, `ADMIN_LOG_FILE`, O(N) индекс получателей, TTL кэша уведомлений, `CacheService` (потокобезопасность + лимит), `@requires_school`, индикатор «печатает...», счётчик свежих школ.
-> - **Инструменты/тесты**: pytest (96 тестов: юнит + интеграционные моки), ruff (чистый), mypy (конфиг), CI-воркфлоу, `requirements-dev.txt`.
+> - **Рефакторинг/качество (P2)**: `EntityMenuHandler` (учителя/кабинеты — из дублей 913→500), `menu_builder`+`HELP_TEXT`, `is_admin`, `get_school_by_id`, `TIMEZONE`, `str(e)`→лог, мёртвый код, `ADMIN_LOG_FILE`, O(N) индекс получателей, TTL кэша уведомлений, `CacheService` (потокобезопасность + лимит), `@requires_school`, индикатор «печатает...», счётчик свежих школ. В Фазе 3: единая админ-панель (`/admin`/`/stats`), `/cancel` + `reset_user_flow`, общие `format_time_ago`/`find_class_id`, разделение хранилищ настроек уведомлений.
+> - **Инструменты/тесты**: pytest (110 тестов: юнит + интеграционные моки), ruff (чистый), mypy (конфиг), CI-воркфлоу, `requirements-dev.txt`.
 
 ### 16.1 Открытый техдолг (P2)
 
@@ -484,7 +482,7 @@ ADMIN_LOG_FILE=./logs/admin.log
 2. **`data_loader` ETag/If-Modified-Since** — не перекачивать данные при отсутствии изменений (метод `close()` уже добавлен).
 3. **Архитектурные** (крупные, по желанию): `JobQueue` вместо ручного цикла; `ConversationHandler` вместо FSM-флагов; `UserRepository`; `render.py` (HTML) вместо разрозненного экранирования; `@dataclass` конфиг + `SCHOOLS_CONFIG` в JSON; строгая типизация (mypy); единый `Services`-объект вместо `context.bot_data.get(...)`.
 
-> Открытых P0 нет; P1 из Фазы 2 закрыты, остальные улучшения — Фазы 3–4.
+> Открытых P0 нет; P1 из Фазы 2 и P2-минимум Фазы 3 закрыты, крупные сквозные рефакторинги (слой данных, clock-инъекция) и Фаза 4 — впереди.
 
 ---
 

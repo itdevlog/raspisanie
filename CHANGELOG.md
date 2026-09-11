@@ -29,6 +29,17 @@
 
 > Сознательно отложено: параллельная загрузка школ через `Semaphore` не реализована — `load_all_schools_data` уже уходит из event loop через `asyncio.to_thread`, а усложнение ради часовой задачи с двумя школами неоправданно. Нарезка недельного сообщения уже покрыта `handlers/common/messaging.py`.
 
+### Фаза 3 — рефакторинг и качество (P2)
+
+- **Единая админ-панель** — `handlers/admin/admin_panel.py` больше не дублирует построители панели: команды `/admin` и `/stats` делегируют в `AdminCallbackHandler` (`show_panel` / `_show_statistics`). Удалены дубли `_show_admin_panel`, `_build_admin_panel_text`, `_build_admin_keyboard`, `_get_schools_status`, `_update_callback_message`. `/stats` теперь показывает статистику (всего пользователей с классами + разбивка по школам), а `/admin` — ту же клавиатуру, что и callback'и (`0a21706`).
+- **`/cancel` и единый сброс состояния** — добавлена команда `/cancel`; общий `reset_user_flow(context)` сбрасывает `waiting_for_*`, `class_digit` и поисковые запросы. Переиспользован в `handle_change_class` (`c68467d`).
+- **Удалён мёртвый код** — ветки `menu_teacher`/`menu_room` и их обработчики, недостижимая ветка цифры класса (`parts[1] == "digit"`, роутер перехватывает раньше), неиспользуемые методы `ExchangeDetector` (`get_current_exchanges_for_class`, `_get_teacher_name`) (`3c53378`).
+- **Ошибки не утекают пользователю** — `str(e)` в ответах `entity_menu.py` заменён на `log_user_error` с общим `GENERIC_ERROR_MSG`; добавлен поведенческий тест на отсутствие текста исключения (`3c53378`, `51f5a7a`).
+- **Общие хелперы времени и класса** — `format_time_ago` и `find_class_id` вынесены в `services/base_schedule_service.py`; `ScheduleService`, `ExchangeService`, `StatusService` делегируют им вместо дублей (`3c7c478`).
+- **Разделение хранилищ настроек уведомлений** — модульный docstring `services/user_preferences.py` фиксирует: exchange (per-school) пишется только через `UserService`, update (админ) — только через `UserPreferencesService`; удалены мёртвые `enable/disable_exchange_notifications`. `BackgroundUpdater._get_admin_notification_settings` учитывает **всех** админов (`any(...)`, настройки второго больше не игнорируются) (`2bdded3`).
+
+> Сознательно отложено в Фазе 3 (записано в [roadmap.md](roadmap.md)): слой данных `UserRepository`/`TypedDict` и инъекция часов (clock) не реализованы — это крупные сквозные рефакторинги с низкой пользовательской ценностью.
+
 ### PR «Fix critical bugs» `80434ed`
 
 - `AttributeError` на `self.moscow_tz` в `log_update_activity` — `updatelog.txt` теперь заполняется (`core/background_updater.py`).
