@@ -129,8 +129,8 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
             row = []
             
             for digit in range(1, 12):  # 1-11
-                # Проверяем, есть ли классы с этой цифрой
-                has_classes = any(cls.startswith(str(digit)) for cls in available_classes)
+                # Проверяем, есть ли классы с этой цифрой (ровно с цифрой, а не с десятком)
+                has_classes = any(_class_matches_digit(cls, digit) for cls in available_classes)
                 if has_classes:
                     row.append(InlineKeyboardButton(str(digit), callback_data=f"class_digit_{digit}_{schedule_type}"))
                     if len(row) == 4:  # 4 кнопки в ряду
@@ -203,11 +203,25 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
         except Exception:
             pass
 
+def _class_matches_digit(class_name: str, digit: int) -> bool:
+    """True, если класс начинается с ровно этой цифры, за которой идёт БУКВА.
+
+    Сравнение по сегментам, а не по `startswith`: цифра «1» не должна матчить
+    класс «11а» (это отдельная цифра/десяток). Иначе кнопка «1» показывалась
+    даже когда классов вида «1x» нет.
+    """
+    s = str(digit)
+    if not class_name.startswith(s):
+        return False
+    rest = class_name[len(s):]
+    return bool(rest) and not rest[0].isdigit()
+
+
 def _get_class_letters_for_digit(available_classes: List[str], digit: int) -> List[str]:
     """Получает список букв для указанной цифры класса"""
     letters = set()
     for class_name in available_classes:
-        if class_name.startswith(str(digit)) and len(class_name) > len(str(digit)):
+        if _class_matches_digit(class_name, digit):
             # Извлекаем букву (все что после цифры)
             letter = class_name[len(str(digit)):]
             if letter:  # Убедимся что буква не пустая
