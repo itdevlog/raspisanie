@@ -6,14 +6,14 @@ import logging
 import json
 import os
 from services.exchange_service import ExchangeService
-from config.config import Config
+from config.config import get_timezone
 
 class ExchangeDetector:
     """Сервис для обнаружения новых замен в расписании"""
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+        self.moscow_tz = get_timezone()
         # Храним предыдущее состояние расписаний для сравнения
         self.previous_schedules: Dict[str, Dict] = {}
         self.cache_file = self._get_cache_file()

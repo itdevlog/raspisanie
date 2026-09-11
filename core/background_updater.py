@@ -9,7 +9,7 @@ import pytz
 from core.data_loader import DataLoader
 from services.notification_service import NotificationService
 from config.schools import get_display_name
-from config.config import Config
+from config.config import Config, get_timezone
 
 class BackgroundUpdater:
     def __init__(self, application):
@@ -20,7 +20,7 @@ class BackgroundUpdater:
         self.is_running = False
         self.update_interval = self.config.UPDATE_INTERVAL
         self.logger = logging.getLogger(__name__)
-        self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+        self.moscow_tz = get_timezone()
         self._update_task = None
 
     def start_periodic_updates(self):

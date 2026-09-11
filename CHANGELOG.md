@@ -132,3 +132,9 @@
 - `start.py` и `main_menu.py` используют общий построитель меню (дубль убран).
 - `start.py::help_handler` и `callback_handler.py::handle_help` используют единый `HELP_TEXT` (тексты больше не расходятся).
 - Юнит-тесты `tests/test_menu_builder.py`.
+
+### P2: is_admin, get_school_by_id, время в конфиге
+
+- `Config.is_admin(config, user_id)` — единая проверка админа; подключена в `admin_panel`, `admin_callbacks`, `settings`, `bot` (было 4 разных способа).
+- `config/schools.py::get_school_by_id()` — единый поиск школы по id (было 6 ручных мест, сейчас подключён в `EntityMenuHandler`).
+- `config.get_timezone()` + конфиг `TIMEZONE` (`.env`, по умолчанию `Asia/Yekaterinburg`) — вместо хардкода `'Asia/Yekaterinburg'` + ошибочного имени `moscow_tz` в 6 сервисах.

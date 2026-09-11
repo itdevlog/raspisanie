@@ -1,7 +1,18 @@
 import os
+import pytz
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Часовой пояс по умолчанию (Екатеринбург = UTC+5). Читается из TIMEZONE (.env),
+# чтобы не дублировать 'Asia/Yekaterinburg' в десятке сервисов.
+_TZ_NAME = os.getenv('TIMEZONE', 'Asia/Yekaterinburg')
+_TIMEZONE = pytz.timezone(_TZ_NAME)
+
+
+def get_timezone():
+    """Возвращает pytz-часовой пояс приложения (единая точка)."""
+    return _TIMEZONE
 
 
 def _parse_int(name: str, default: int) -> int:
@@ -58,6 +69,20 @@ class Config:
     # Логирование
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_FILE = os.getenv('LOG_FILE', './logs/bot.log')
+
+    # Часовой пояс (Екатеринбург = UTC+5). Раньше хардкодился как
+    # 'Asia/Yekaterinburg' в 5 местах и ошибочно назывался moscow_tz.
+    TIMEZONE = os.getenv('TIMEZONE', 'Asia/Yekaterinburg')
+
+    @staticmethod
+    def is_admin(config, user_id: int) -> bool:
+        """Единая проверка, является ли user_id администратором.
+
+        Раньше этот код дублировался в admin_panel.py, admin_callbacks.py,
+        settings.py и bot.py.
+        """
+        ids = getattr(config, 'ADMIN_IDS', None) if config else None
+        return bool(ids) and user_id in ids
     
     # Логирование админ-панели
     ADMIN_LOG_FILE = os.getenv('ADMIN_LOG_FILE', './logs/admin.log')

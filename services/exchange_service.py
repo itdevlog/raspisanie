@@ -1,11 +1,12 @@
 from typing import Dict, List, Optional
 from datetime import datetime
 import pytz
+from config.config import get_timezone
 
 class ExchangeService:
     def __init__(self, school_data: Dict):
         self.school_data = school_data
-        self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+        self.moscow_tz = get_timezone()
     
     def apply_exchanges_to_schedule(self, class_name: str, schedule_data: List[Dict], date: datetime) -> List[Dict]:
         """Применяет замены к расписанию"""

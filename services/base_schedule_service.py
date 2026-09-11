@@ -2,6 +2,7 @@
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 import pytz
+from config.config import get_timezone
 from services.exchange_service import ExchangeService
 
 class BaseScheduleService:
@@ -24,7 +25,7 @@ class BaseScheduleService:
     def __init__(self, school_data: Dict):
         self.school_data = school_data
         self.exchange_service = ExchangeService(school_data)
-        self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+        self.moscow_tz = get_timezone()
     
     def _get_period_for_date(self, date: datetime) -> Optional[str]:
         """Определяет учебный период для даты - ОБЩАЯ ЛОГИКА"""

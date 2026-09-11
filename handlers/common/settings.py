@@ -1,5 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from config.config import Config
 
 async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню настроек"""
@@ -19,7 +20,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     notifications_enabled = user_service.get_user_notification_settings(user_id)
     
     # Проверяем, является ли пользователь администратором
-    is_admin = config and hasattr(config, 'ADMIN_IDS') and user_id in config.ADMIN_IDS
+    is_admin = Config.is_admin(config, user_id)
     
     # Создаем клавиатуру с настройками
     keyboard = [
@@ -95,7 +96,7 @@ async def toggle_update_notifications(update: Update, context: ContextTypes.DEFA
     
     # Проверяем, является ли пользователь администратором
     config = context.bot_data.get('config')
-    is_admin = config and hasattr(config, 'ADMIN_IDS') and user_id in config.ADMIN_IDS
+    is_admin = Config.is_admin(config, user_id)
     
     if not is_admin:
         await query.answer("❌ Только администраторы могут изменять эти настройки")

@@ -193,7 +193,7 @@ class ScheduleBot:
         """Принудительная проверка замен и отправка уведомлений"""
         # Проверяем, является ли пользователь администратором
         user_id = update.effective_user.id
-        if user_id not in self.config.ADMIN_IDS:
+        if not self.config.is_admin(self.config, user_id):
             await update.message.reply_text("❌ Эта команда доступна только администраторам")
             return
         

@@ -1,7 +1,7 @@
 # services/notification_service.py
 from telegram import Update
 from telegram.ext import ContextTypes
-from config.config import Config
+from config.config import Config, get_timezone
 from config.schools import get_display_name
 from datetime import datetime
 from typing import Dict, List, Set
@@ -17,7 +17,7 @@ class NotificationService:
          self.logger = logging.getLogger(__name__)
          # Кэш для отслеживания уже отправленных уведомлений
          self.sent_notifications: Dict[str, Set[str]] = {}
-         self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')  # ДОБАВЬТЕ ЭТУ СТРОКУ
+         self.moscow_tz = get_timezone()  # ДОБАВЬТЕ ЭТУ СТРОКУ
          self.logger.info("NotificationService инициализирован с пустым кэшом отправленных уведомлений")
          self.notifications_cache_file = self._get_cache_file()
          self.load_notifications_cache()

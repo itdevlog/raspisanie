@@ -117,10 +117,9 @@ async def _handle_message_error(update: Update, error: Exception):
 
 def _is_admin(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Проверяет, является ли пользователь администратором"""
+    from config.config import Config
     config = context.bot_data.get('config')
-    if config and hasattr(config, 'ADMIN_IDS'):
-        return user_id in config.ADMIN_IDS
-    return False
+    return Config.is_admin(config, user_id)
 
 
 # Регистрация обработчиков

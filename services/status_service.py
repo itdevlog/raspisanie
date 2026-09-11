@@ -2,13 +2,14 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional
 import logging
 import pytz
+from config.config import get_timezone
 
 logger = logging.getLogger(__name__)
 
 class StatusService:
     def __init__(self, schools_data: Dict):
         self.schools_data = schools_data
-        self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+        self.moscow_tz = get_timezone()
     
     def get_school_status(self, school_id: str) -> Dict:
         """Получает статус данных для школы"""

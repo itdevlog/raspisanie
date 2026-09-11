@@ -47,10 +47,9 @@ class AdminCallbackHandler:
 
     def _is_admin(self, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
         """Проверяет, является ли пользователь администратором"""
+        from config.config import Config
         config = context.bot_data.get('config')
-        if config and hasattr(config, 'ADMIN_IDS'):
-            return user_id in config.ADMIN_IDS
-        return False
+        return Config.is_admin(config, user_id)
 
     async def _show_admin_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE, message_text: str = None):
         """Показывает админ-панель"""

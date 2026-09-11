@@ -36,3 +36,11 @@ def get_display_name(school_id: str, school_data: dict) -> str:
         return raw_name
     config_name = (SCHOOLS_CONFIG.get(school_id) or {}).get('name')
     return config_name or school_id
+
+
+def get_school_by_id(school_id: str) -> dict:
+    """Возвращает конфиг школы по id или {} — единая точка поиска школы.
+
+    Раньше поиск по SCHOOLS_CONFIG в ручную дублировался в ~6 местах.
+    """
+    return SCHOOLS_CONFIG.get(school_id, {})
