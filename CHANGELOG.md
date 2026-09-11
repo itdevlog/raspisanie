@@ -5,6 +5,17 @@
 
 ## 11.09.2026
 
+### Фаза 1 — критические исправления (P0)
+
+- **Кэш расписания привязан к школе** — ключи кэша теперь включают `school_id`, поэтому расписание одной школы больше не отдаётся в другой (`services/schedule_service.py`).
+- **Кэш замен привязан к дате** — детектор хранит данные по датам и пишет файл атомарно (temp + `os.replace`), перезапуск больше не «забывает» и не путает замены (`services/exchange_detector.py`).
+- **Блокирующий детект замен вынесен из event loop** — синхронная проверка выполняется в `asyncio.to_thread`, курсоры кэша сбрасываются один раз за цикл (`core/background_updater.py`).
+- **`KeyError` при неполных данных** — поиск преподавателя больше не падает на отсутствующих полях (`services/teacher_service.py`).
+- **`update.message` в callback-обработчиках** — заменён на `effective_message`/`effective_chat`, чтобы обработка не падала на callback-обновлениях (`handlers/common/entity_menu.py`).
+- **Пагинация списка классов сохраняет тип расписания** — формат кнопок `all_classes_page_{type}_{page}`, переходы больше не сбрасывают «Сегодня/Завтра/Неделю» (`handlers/common/callback_handler.py`).
+- **Валидация несуществующей школы + сброс флагов поиска** — выбор несуществующей школы отклоняется, «залипшие» флаги `waiting_for_*` сбрасываются при входе в меню (`handlers/common/callback_handler.py`, `handlers/common/messaging.py`).
+- **Общий текст ошибки** — глобальный обработчик использует `GENERIC_ERROR_MSG` вместо дублирующего литерала (`bot.py`, `handlers/common/messaging.py`).
+
 ### PR «Fix critical bugs» `80434ed`
 
 - `AttributeError` на `self.moscow_tz` в `log_update_activity` — `updatelog.txt` теперь заполняется (`core/background_updater.py`).

@@ -256,7 +256,7 @@ async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_
 
     При 60+ классах одностраничная клавиатура упиралась бы в лимит 100 кнопок,
     поэтому список классов кэшируется в state_service и разбивается на страницы
-    (кнопки-номера «◀️ Назад/Вперёд ▶️» через all_classes_page_N).
+    (кнопки-номера «◀️ Назад/Вперёд ▶️» через all_classes_page_{type}_{page}).
     """
     query = update.callback_query
     user_id = update.effective_user.id
