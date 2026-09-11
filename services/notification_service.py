@@ -2,6 +2,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from config.config import Config
+from config.schools import get_display_name
 from datetime import datetime
 from typing import Dict, List, Set
 import logging
@@ -373,7 +374,7 @@ class NotificationService:
         
         # Добавляем статус каждой школы
         for school_id, school_data in schools_data.items():
-            school_name = school_data.get('SCHOOL_NAME', school_id)
+            school_name = get_display_name(school_id, school_data)
             status = status_service.get_school_status(school_id)
             message += f"• {status['status']} {school_name}\n"
         

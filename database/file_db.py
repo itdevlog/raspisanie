@@ -16,15 +16,36 @@ class FileDB:
         self.data = self._load_data()
 
     def _load_data(self) -> Dict:
-        """Загружает данные из файла"""
+        """Загружает данные из файла; при битом файле сохраняет копию .corrupt и возвращает {}"""
         if os.path.exists(self.db_path):
             try:
                 with open(self.db_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except (json.JSONDecodeError, OSError) as e:
                 logger.error(f"Error loading database: {e}")
+                self._backup_corrupt()
                 return {}
         return {}
+
+    def _backup_corrupt(self):
+        """Перед перезаписью повреждённого файла сохраняет его копию, чтобы не потерять данные.
+
+        По умолчанию имя бэкапа — '<db_path>.corrupt'. Если такой файл уже существует,
+        сдвигаем его в '<db_path>.corrupt.1', '.corrupt.2', … , чтобы не удалять более
+        старые копии, потенциально более ценные.
+        """
+        try:
+            if not os.path.exists(self.db_path):
+                return
+            backup_path = self.db_path + '.corrupt'
+            counter = 1
+            while os.path.exists(backup_path):
+                backup_path = self.db_path + f'.corrupt.{counter}'
+                counter += 1
+            shutil.copy2(self.db_path, backup_path)
+            logger.warning(f"Corrupt database backed up to {backup_path}")
+        except OSError as e:
+            logger.error(f"Failed to back up corrupt database {self.db_path}: {e}")
 
     def _save_data(self):
         """Атомарно сохраняет данные в файл через временный файл и rename"""

@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes
 from services.state_service import UserStateService
 from services.teacher_service import TeacherService
 from config.schools import SCHOOLS_CONFIG
+from handlers.common.messaging import edit_long_message
 
 async def teacher_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню выбора преподавателя"""
@@ -123,24 +124,21 @@ async def handle_teacher_selection(update: Update, context: ContextTypes.DEFAULT
         # Создаем клавиатуру для навигации
         keyboard = []
         
-        # Кнопки других дней для этого же преподавателя
+        # Кнопки других дней для этого же преподавателя.
+        # Выясняем, из какого списка выбран преподаватель (поиск vs полный),
+        # чтобы дневные кнопки резолвили правильный индекс.
         other_days = []
-        if schedule_type != "today":
-            # Используем индекс через state_service - ПЕРЕДАЕМ state_service
-            teacher_index = _get_teacher_index(user_id, teacher_name, state_service)  # ИЗМЕНЕНО
-            if teacher_index is not None:
-                other_days.append(InlineKeyboardButton("📅 Сегодня", 
-                    callback_data=f"teacher_today_idx_{teacher_index}"))
-        if schedule_type != "tomorrow":
-            teacher_index = _get_teacher_index(user_id, teacher_name, state_service)  # ИЗМЕНЕНО
-            if teacher_index is not None:
-                other_days.append(InlineKeyboardButton("📆 Завтра", 
-                    callback_data=f"teacher_tomorrow_idx_{teacher_index}"))
-        if schedule_type != "week":
-            teacher_index = _get_teacher_index(user_id, teacher_name, state_service)  # ИЗМЕНЕНО
-            if teacher_index is not None:
-                other_days.append(InlineKeyboardButton("🗓️ Неделя", 
-                    callback_data=f"teacher_week_idx_{teacher_index}"))
+        source, teacher_index = _resolve_teacher_source(user_id, teacher_name, state_service)
+        idx_suffix = 'sidx' if source == 'search' else 'idx'
+        if schedule_type != "today" and teacher_index is not None:
+            other_days.append(InlineKeyboardButton("📅 Сегодня",
+                callback_data=f"teacher_today_{idx_suffix}_{teacher_index}"))
+        if schedule_type != "tomorrow" and teacher_index is not None:
+            other_days.append(InlineKeyboardButton("📆 Завтра",
+                callback_data=f"teacher_tomorrow_{idx_suffix}_{teacher_index}"))
+        if schedule_type != "week" and teacher_index is not None:
+            other_days.append(InlineKeyboardButton("🗓️ Неделя",
+                callback_data=f"teacher_week_{idx_suffix}_{teacher_index}"))
         
         if other_days:
             keyboard.append(other_days)
@@ -153,7 +151,7 @@ async def handle_teacher_selection(update: Update, context: ContextTypes.DEFAULT
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(schedule, reply_markup=reply_markup, parse_mode='Markdown')
+        await edit_long_message(update, context, query, schedule, reply_markup=reply_markup)
         
     except Exception as e:
         keyboard = [
@@ -325,6 +323,8 @@ async def handle_teacher_search_results(update: Update, context: ContextTypes.DE
         found_teachers = teacher_service.search_teachers(search_query)
         
         if not found_teachers:
+            # Сбрасываем сохранённый запрос, т.к. результатов нет
+            context.user_data.pop('teacher_search_query', None)
             text = f"❌ Преподаватели с фамилией '*{search_query}*' не найдены"
             keyboard = [
                 [InlineKeyboardButton("🔍 Попробовать снова", callback_data="teacher_search_input")],
@@ -356,14 +356,16 @@ async def handle_teacher_search_results(update: Update, context: ContextTypes.DE
         end_index = min(start_index + teachers_per_page, total_teachers)
         teachers_on_page = found_teachers[start_index:end_index]
 
-        # СОХРАНЯЕМ найденных преподавателей под тем же ключом,
-        # чтобы callback-и разрешали индексы корректно
+        # СОХРАНЯЕМ запрос и найденных преподавателей под ОТДЕЛЬНЫМ ключом
+        # 'search_teachers' (не 'teachers'), чтобы индексы из поиска не конфликтовали
+        # с полным списком преподавателей.
         if not state_service:
             await update.message.reply_text("❌ Сервис временно не доступен")
             return
 
-        state_service.set_user_list(user_id, 'teachers', found_teachers)
-        state_service.set_user_page(user_id, 'teachers', page)
+        context.user_data['teacher_search_query'] = search_query
+        state_service.set_user_list(user_id, 'search_teachers', found_teachers)
+        state_service.set_user_page(user_id, 'search_teachers', page)
         
         # Создаем клавиатуру с найденными преподавателями
         keyboard = []
@@ -374,8 +376,9 @@ async def handle_teacher_search_results(update: Update, context: ContextTypes.DE
             
             button_text = teacher[:20] + "..." if len(teacher) > 20 else teacher
             
-            # Используем индекс вместо имени для callback_data
-            callback_data = f"teacher_today_idx_{global_index}"
+            # Используем индекс + признак поиска ('sidx_') в callback_data,
+            # чтобы отличать индекс из результатов поиска от полного списка
+            callback_data = f"teacher_today_sidx_{global_index}"
             
             current_row.append(InlineKeyboardButton(button_text, callback_data=callback_data))
             
@@ -386,15 +389,17 @@ async def handle_teacher_search_results(update: Update, context: ContextTypes.DE
         if current_row:
             keyboard.append(current_row)
         
-        # Кнопки пагинации для поиска
+        # Кнопки пагинации для поиска.
+        # Запрос не кладём в callback_data (кириллица превышает лимит 64 байта),
+        # храним его в user_data и передаём только номер страницы.
         pagination_buttons = []
         if page > 0:
-            pagination_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data=f"teacher_search_{search_query}_{page-1}"))
+            pagination_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data=f"teacher_search_page_{page-1}"))
         
         pagination_buttons.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="teacher_search_pages_info"))
         
         if page < total_pages - 1:
-            pagination_buttons.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"teacher_search_{search_query}_{page+1}"))
+            pagination_buttons.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"teacher_search_page_{page+1}"))
         
         if pagination_buttons:
             keyboard.append(pagination_buttons)
@@ -430,10 +435,18 @@ async def handle_teacher_search_results(update: Update, context: ContextTypes.DE
         else:
             await update.message.reply_text(error_text)
 
-def _get_teacher_index(user_id: int, teacher_name: str, state_service: UserStateService) -> int | None:
-    """Получает индекс преподавателя по имени из state_service"""
-    for key in ('teachers',):
-        teachers_list = state_service.get_user_list(user_id, key)
-        if teachers_list and teacher_name in teachers_list:
-            return teachers_list.index(teacher_name)
-    return None
+def _resolve_teacher_source(user_id: int, teacher_name: str, state_service: UserStateService) -> tuple:
+    """Определяет список, из которого выбран учитель, и его индекс.
+
+    Возвращает (source, index): source — 'search' или 'full'.
+    Поиск хранится под отдельным ключом 'search_teachers', поэтому кнопки
+    «Сегодня/Завтра/Неделя» после выбора из результатов поиска должны
+    резолвить индекс по этому же списку (иначе клик уйдёт в чужого учителя).
+    """
+    search_list = state_service.get_user_list(user_id, 'search_teachers')
+    if search_list and teacher_name in search_list:
+        return ('search', search_list.index(teacher_name))
+    full_list = state_service.get_user_list(user_id, 'teachers')
+    if full_list and teacher_name in full_list:
+        return ('full', full_list.index(teacher_name))
+    return ('full', None)

@@ -1,6 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 from services.schedule_service import ScheduleService
+from handlers.common.messaging import reply_long_message
 
 async def week_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /week <класс> - показывает расписание на неделю"""
@@ -75,10 +76,7 @@ async def week_command_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         # Используем правильное написание класса
         week_schedule = schedule_service.get_class_schedule_week(exact_class_name or class_name)
         
-        await update.message.reply_text(
-            week_schedule,
-            parse_mode='Markdown'
-        )
+        await reply_long_message(update, context, week_schedule)
     
     except Exception as e:
         await update.message.reply_text(

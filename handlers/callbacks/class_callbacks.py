@@ -3,6 +3,7 @@ from telegram import Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from services.schedule_service import ScheduleService
+from handlers.common.messaging import edit_long_message
 
 class ClassCallbackHandler:
     """Обработчик callback'ов для работы с классами"""
@@ -82,7 +83,7 @@ class ClassCallbackHandler:
             reply_markup = create_class_navigation_keyboard(class_name, schedule_type)
 
             try:
-                await query.edit_message_text(schedule, reply_markup=reply_markup, parse_mode='Markdown')
+                await edit_long_message(update, context, query, schedule, reply_markup=reply_markup)
             except BadRequest as e:
                 if "not modified" not in str(e).lower():
                     raise

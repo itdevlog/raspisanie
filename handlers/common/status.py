@@ -1,6 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
-from config.schools import SCHOOLS_CONFIG
+from config.schools import SCHOOLS_CONFIG, get_display_name
 from services.status_service import StatusService
 
 async def status_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -19,7 +19,7 @@ async def status_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status_service = StatusService(schools_data)
         
         for school_id, school_data in schools_data.items():
-            school_name = school_data.get('SCHOOL_NAME', 'Неизвестно')
+            school_name = get_display_name(school_id, school_data)
             status_info = status_service.get_school_status(school_id)
             
             if status_info['loaded']:

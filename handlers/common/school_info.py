@@ -1,5 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler
+from config.schools import get_display_name
 
 async def school_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Информация о школе и данных"""
@@ -25,7 +26,7 @@ async def school_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.callback_query.edit_message_text("❌ Данные не загружены")
         return
     
-    school_name = school_data.get('SCHOOL_NAME', 'Неизвестно')
+    school_name = get_display_name(current_school_id, school_data)
     city = school_data.get('CITY_NAME', 'Неизвестно')
     export_date = school_data.get('EXPORT_DATE', 'Неизвестно')
     export_time = school_data.get('EXPORT_TIME', 'Неизвестно')

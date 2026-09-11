@@ -1,6 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from services.schedule_service import ScheduleService
+from handlers.common.messaging import reply_long_message
 
 async def class_schedule_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает текстовые сообщения (номера классов и поиск преподавателей)"""
@@ -100,4 +101,4 @@ async def class_schedule_handler(update: Update, context: ContextTypes.DEFAULT_T
     response += "➡️ *Завтра:*\n"
     response += schedule_tomorrow
     
-    await update.message.reply_text(response, parse_mode='Markdown')
+    await reply_long_message(update, context, response)

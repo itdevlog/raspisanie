@@ -17,7 +17,9 @@ class TeacherCallbackHandler:
             await self._handle_show_all_teachers(update, context)
         elif callback_data.startswith("teacher_show_all_"):
             await self._handle_teacher_pagination(update, context, callback_data)
-        elif callback_data.startswith("teacher_search_"):
+        elif callback_data == "teacher_search_pages_info":
+            await query.answer("Используйте кнопки навигации по страницам")
+        elif callback_data.startswith("teacher_search_page_"):
             await self._handle_teacher_search_pagination(update, context, callback_data)
         elif callback_data.startswith("teacher_"):
             await self._handle_teacher_selection(update, context, callback_data)
@@ -51,13 +53,11 @@ class TeacherCallbackHandler:
     async def _handle_teacher_search_pagination(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает пагинацию результатов поиска преподавателей"""
         try:
-            prefix = "teacher_search_"
-            if not callback_data.startswith(prefix):
-                await update.callback_query.answer("❌ Ошибка пагинации")
+            page = int(callback_data.replace("teacher_search_page_", ""))
+            search_query = context.user_data.get('teacher_search_query', '')
+            if not search_query:
+                await update.callback_query.answer("❌ Поисковый запрос не найден")
                 return
-            rest = callback_data[len(prefix):]
-            search_query, page_str = rest.rsplit('_', 1)
-            page = int(page_str)
             from handlers.teachers.teacher_menu import handle_teacher_search_results
             await handle_teacher_search_results(update, context, search_query, page)
         except (ValueError, IndexError):
@@ -77,8 +77,30 @@ class TeacherCallbackHandler:
         schedule_type = parts[1]  # today, tomorrow, week
         
         # Определяем формат callback_data
-        if parts[2].startswith("idx_") and len(parts[2]) > 4:
-            # Формат: teacher_today_idx_0 (по индексу)
+        if parts[2].startswith("sidx_") and len(parts[2]) > 5:
+            # Формат: teacher_today_sidx_0 — индекс из результатов поиска
+            try:
+                teacher_index = int(parts[2][5:])
+                state_service = context.bot_data.get('state_service')
+                
+                if state_service:
+                    teachers_list = state_service.get_user_list(user_id, 'search_teachers')
+                    if teachers_list and 0 <= teacher_index < len(teachers_list):
+                        teacher_name = teachers_list[teacher_index]
+                        from handlers.teachers.teacher_menu import handle_teacher_selection
+                        await handle_teacher_selection(update, context, teacher_name, schedule_type)
+                        return
+                    else:
+                        await query.answer("❌ Список результатов поиска устарел")
+                        return
+                else:
+                    await query.answer("❌ Сервис состояния не доступен")
+                    return
+            except (ValueError, IndexError):
+                await query.answer("❌ Ошибка в данных")
+                return
+        elif parts[2].startswith("idx_") and len(parts[2]) > 4:
+            # Формат: teacher_today_idx_0 (по индексу из полного списка)
             try:
                 teacher_index = int(parts[2][4:])
                 state_service = context.bot_data.get('state_service')

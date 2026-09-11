@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes
 from services.room_service import RoomService
 from config.schools import SCHOOLS_CONFIG
 from services.state_service import UserStateService
+from handlers.common.messaging import edit_long_message
 
 async def room_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню выбора кабинета"""
@@ -125,24 +126,21 @@ async def handle_room_selection(update: Update, context: ContextTypes.DEFAULT_TY
         # Создаем клавиатуру для навигации
         keyboard = []
         
-        # Кнопки других дней для этого же кабинета
+        # Кнопки других дней для этого же кабинета.
+        # Выясняем, из какого списка выбран кабинет (поиск vs полный),
+        # чтобы дневные кнопки резолвили правильный индекс.
         other_days = []
-        if schedule_type != "today":
-            # Используем индекс для надежности - ПЕРЕДАЕМ state_service
-            room_index = _get_room_index(user_id, room_name, state_service)  # ИЗМЕНЕНО
-            if room_index is not None:
-                other_days.append(InlineKeyboardButton("📅 Сегодня", 
-                    callback_data=f"room_today_idx_{room_index}"))
-        if schedule_type != "tomorrow":
-            room_index = _get_room_index(user_id, room_name, state_service)  # ИЗМЕНЕНО
-            if room_index is not None:
-                other_days.append(InlineKeyboardButton("📆 Завтра", 
-                    callback_data=f"room_tomorrow_idx_{room_index}"))
-        if schedule_type != "week":
-            room_index = _get_room_index(user_id, room_name, state_service)  # ИЗМЕНЕНО
-            if room_index is not None:
-                other_days.append(InlineKeyboardButton("🗓️ Неделя", 
-                    callback_data=f"room_week_idx_{room_index}"))
+        source, room_index = _resolve_room_source(user_id, room_name, state_service)
+        idx_suffix = 'sidx' if source == 'search' else 'idx'
+        if schedule_type != "today" and room_index is not None:
+            other_days.append(InlineKeyboardButton("📅 Сегодня",
+                callback_data=f"room_today_{idx_suffix}_{room_index}"))
+        if schedule_type != "tomorrow" and room_index is not None:
+            other_days.append(InlineKeyboardButton("📆 Завтра",
+                callback_data=f"room_tomorrow_{idx_suffix}_{room_index}"))
+        if schedule_type != "week" and room_index is not None:
+            other_days.append(InlineKeyboardButton("🗓️ Неделя",
+                callback_data=f"room_week_{idx_suffix}_{room_index}"))
         
         if other_days:
             keyboard.append(other_days)
@@ -155,7 +153,7 @@ async def handle_room_selection(update: Update, context: ContextTypes.DEFAULT_TY
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(schedule, reply_markup=reply_markup, parse_mode='Markdown')
+        await edit_long_message(update, context, query, schedule, reply_markup=reply_markup)
         
     except Exception as e:
         # В случае ошибки покажем сообщение и кнопку назад
@@ -327,6 +325,8 @@ async def handle_room_search_results(update: Update, context: ContextTypes.DEFAU
         found_rooms = room_service.search_rooms(search_query)
         
         if not found_rooms:
+            # Сбрасываем сохранённый запрос, т.к. результатов нет
+            context.user_data.pop('room_search_query', None)
             text = f"❌ Кабинеты с номером '*{search_query}*' не найдены"
             keyboard = [
                 [InlineKeyboardButton("🔍 Попробовать снова", callback_data="room_search_input")],
@@ -358,14 +358,16 @@ async def handle_room_search_results(update: Update, context: ContextTypes.DEFAU
         end_index = min(start_index + rooms_per_page, total_rooms)
         rooms_on_page = found_rooms[start_index:end_index]
 
-        # СОХРАНЯЕМ найденные кабинеты под тем же ключом,
-        # чтобы callback-и разрешали индексы корректно
+        # СОХРАНЯЕМ запрос и найденные кабинеты под ОТДЕЛЬНЫМ ключом
+        # 'search_rooms' (не 'rooms'), чтобы индексы из поиска не конфликтовали
+        # с полным списком кабинетов.
         if not state_service:
             await update.message.reply_text("❌ Сервис временно не доступен")
             return
 
-        state_service.set_user_list(user_id, 'rooms', found_rooms)
-        state_service.set_user_page(user_id, 'rooms', page)
+        context.user_data['room_search_query'] = search_query
+        state_service.set_user_list(user_id, 'search_rooms', found_rooms)
+        state_service.set_user_page(user_id, 'search_rooms', page)
         
         # Создаем клавиатуру с найденными кабинетами
         keyboard = []
@@ -376,8 +378,9 @@ async def handle_room_search_results(update: Update, context: ContextTypes.DEFAU
             
             button_text = room[:15] + "..." if len(room) > 15 else room
             
-            # Используем индекс вместо имени для callback_data
-            callback_data = f"room_today_idx_{global_index}"
+            # Используем индекс + признак поиска ('sidx_') в callback_data,
+            # чтобы отличать индекс из результатов поиска от полного списка
+            callback_data = f"room_today_sidx_{global_index}"
             
             current_row.append(InlineKeyboardButton(button_text, callback_data=callback_data))
             
@@ -388,15 +391,17 @@ async def handle_room_search_results(update: Update, context: ContextTypes.DEFAU
         if current_row:
             keyboard.append(current_row)
         
-        # Кнопки пагинации для поиска
+        # Кнопки пагинации для поиска.
+        # Запрос не кладём в callback_data (кириллица превышает лимит 64 байта),
+        # храним его в user_data и передаём только номер страницы.
         pagination_buttons = []
         if page > 0:
-            pagination_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data=f"room_search_{search_query}_{page-1}"))
+            pagination_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data=f"room_search_page_{page-1}"))
         
         pagination_buttons.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="room_search_pages_info"))
         
         if page < total_pages - 1:
-            pagination_buttons.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"room_search_{search_query}_{page+1}"))
+            pagination_buttons.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"room_search_page_{page+1}"))
         
         if pagination_buttons:
             keyboard.append(pagination_buttons)
@@ -432,10 +437,18 @@ async def handle_room_search_results(update: Update, context: ContextTypes.DEFAU
         else:
             await update.message.reply_text(error_text)
 
-def _get_room_index(user_id: int, room_name: str, state_service: UserStateService) -> int | None:
-    """Получает индекс кабинета по имени из state_service"""
-    for key in ('rooms',):
-        rooms_list = state_service.get_user_list(user_id, key)
-        if rooms_list and room_name in rooms_list:
-            return rooms_list.index(room_name)
-    return None
+def _resolve_room_source(user_id: int, room_name: str, state_service: UserStateService) -> tuple:
+    """Определяет список, из которого выбран кабинет, и его индекс.
+
+    Возвращает (source, index): source — 'search' или 'full'.
+    Поиск хранится под отдельным ключом 'search_rooms', поэтому кнопки
+    «Сегодня/Завтра/Неделя» после выбора из результатов поиска должны
+    резолвить индекс по этому же списку (иначе клик уйдёт в чужой кабинет).
+    """
+    search_list = state_service.get_user_list(user_id, 'search_rooms')
+    if search_list and room_name in search_list:
+        return ('search', search_list.index(room_name))
+    full_list = state_service.get_user_list(user_id, 'rooms')
+    if full_list and room_name in full_list:
+        return ('full', full_list.index(room_name))
+    return ('full', None)

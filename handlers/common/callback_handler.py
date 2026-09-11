@@ -3,7 +3,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from services.schedule_service import ScheduleService
-from config.schools import SCHOOLS_CONFIG
+from config.schools import SCHOOLS_CONFIG, get_display_name
 from typing import List
 
 # Импортируем новый роутер callback'ов
@@ -307,7 +307,7 @@ async def handle_school_info(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_text("❌ Данные не загружены")
         return
     
-    school_name = school_data.get('SCHOOL_NAME', 'Неизвестно')
+    school_name = get_display_name(current_school_id, school_data)
     city = school_data.get('CITY_NAME', 'Неизвестно')
     export_date = school_data.get('EXPORT_DATE', 'Неизвестно')
     export_time = school_data.get('EXPORT_TIME', 'Неизвестно')

@@ -22,3 +22,17 @@ SCHOOLS_CONFIG = {
 
 # Школа по умолчанию
 DEFAULT_SCHOOL_ID = "school_133"
+
+
+def get_display_name(school_id: str, school_data: dict) -> str:
+    """Возвращает отображаемое имя школы.
+
+    Использует переданный school_data['SCHOOL_NAME'], но устойчив к пустой строке
+    (в выгрузке Nikasoft у школы 181 ключ есть, а значение — ''). В этом случае
+    падает на имя из конфигурации, а при отсутствии школы — на school_id.
+    """
+    raw_name = (school_data or {}).get('SCHOOL_NAME')
+    if raw_name:
+        return raw_name
+    config_name = (SCHOOLS_CONFIG.get(school_id) or {}).get('name')
+    return config_name or school_id

@@ -8,6 +8,7 @@ import pytz
 
 from core.data_loader import DataLoader
 from services.notification_service import NotificationService
+from config.schools import get_display_name
 
 class BackgroundUpdater:
     def __init__(self, application):
@@ -91,7 +92,7 @@ class BackgroundUpdater:
                 updated_schools = []
                 for school_id in new_schools_data:
                     if school_id not in old_schools_data or old_schools_data[school_id] != new_schools_data[school_id]:
-                        school_name = new_schools_data[school_id].get('SCHOOL_NAME', school_id)
+                        school_name = get_display_name(school_id, new_schools_data[school_id])
                         updated_schools.append(school_name)
                 
                 if updated_schools:

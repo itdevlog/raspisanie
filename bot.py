@@ -7,7 +7,7 @@ from telegram.ext import ContextTypes
 
 from config.config import Config
 from core.data_loader import DataLoader
-from config.schools import SCHOOLS_CONFIG
+from config.schools import SCHOOLS_CONFIG, get_display_name
 from database.file_db import FileDB
 from services.state_service import UserStateService
 from services.user_service import UserService
@@ -108,8 +108,8 @@ class ScheduleBot:
             print("✅ Данные расписания успешно загружены!")
             
             for school_id, school_data in schools_data.items():
-                school_name = school_data.get('SCHOOL_NAME', 'Неизвестно')
-                print(f"   {school_name} - Загружено")
+                school_name = get_display_name(school_id, school_data)
+                print(f"• {school_name} - Загружено")
         else:
             print("❌ Не удалось загрузить данные расписания")
             self.application.bot_data['schools_data'] = {}
