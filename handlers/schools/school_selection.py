@@ -4,6 +4,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from config.schools import SCHOOLS_CONFIG
+from handlers.common.messaging import clear_search_flags
 
 logger = logging.getLogger(__name__)
 
@@ -83,10 +84,13 @@ async def handle_school_selection(update: Update, context: ContextTypes.DEFAULT_
         return
 
     # Сохраняем выбранную школу для пользователя
-    user_service.set_user_school(user_id, school_id)
+    if not user_service.set_user_school(user_id, school_id):
+        await query.edit_message_text("❌ Эта школа недоступна. Выберите другую.")
+        return
 
-    # Сбрасываем выбранную цифру класса — иначе при новой школе останется старый
-    # class_digit и список букв может оказаться пустым/чужим
+    # Сбрасываем залипшие флаги поиска и выбранную цифру класса — иначе при
+    # новой школе останется старый class_digit/поиск
+    clear_search_flags(context)
     context.user_data.pop('class_digit', None)
 
     # Логируем изменение
