@@ -1,9 +1,11 @@
 # File: c:\Users\set\Downloads\telegram-schedule-bot1001\telegram-schedule-bot\bot.py
 import logging
 import logging.handlers
+import socket
 
 from telegram import Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.request import HTTPXRequest
 
 from config.config import Config
 from config.schools import SCHOOLS_CONFIG, get_display_name
@@ -41,10 +43,40 @@ class ScheduleBot:
         # Создаем фоновый обновлятор временно без приложения
         self.background_updater = BackgroundUpdater(None)
 
-        # Создаем приложение бота с post_init и увеличенным таймаутом
+        # Создаем приложение бота с post_init и увеличенным таймаутом.
+        # connection_pool_size > 1: при обрыве TLS через прокси (fake-IP) один
+        # мёртвый сокет не должен блокировать все отправки. TCP keepalive
+        # помогает отбрасывать оборванные соединения вместо «залипания» в CLOSE-WAIT.
+        request = HTTPXRequest(
+            connection_pool_size=8,
+            connect_timeout=30,
+            read_timeout=30,
+            write_timeout=30,
+            pool_timeout=10,
+            socket_options=[
+                (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
+                (socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 30),
+                (socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10),
+                (socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3),
+            ],
+        )
         self.application = Application.builder().token(
             self.config.TELEGRAM_TOKEN
-        ).post_init(self._post_init).connect_timeout(30).read_timeout(30).write_timeout(30).build()
+        ).post_init(self._post_init).request(request).get_updates_request(
+            HTTPXRequest(
+                connection_pool_size=2,
+                connect_timeout=30,
+                read_timeout=30,
+                write_timeout=30,
+                pool_timeout=10,
+                socket_options=[
+                    (socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1),
+                    (socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 30),
+                    (socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10),
+                    (socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3),
+                ],
+            )
+        ).build()
 
         # Подключаем приложение к обновлятору
         self.background_updater.application = self.application
