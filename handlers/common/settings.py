@@ -31,6 +31,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     preferences_service = UserPreferencesService(user_service.db)
     user_notification_settings = preferences_service.get_notification_settings(user_id)
     lesson_reminders_enabled = user_notification_settings.get('lesson_reminders', False)
+    daily_digest_enabled = user_notification_settings.get('daily_digest', False)
     quiet_hours = user_notification_settings.get('quiet_hours') or {}
     quiet_hours_enabled = bool(quiet_hours.get('enabled'))
 
@@ -46,6 +47,12 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(
                 f"⏰ Напоминания об уроках: {'✅ Вкл' if lesson_reminders_enabled else '❌ Выкл'}",
                 callback_data=f"toggle_lesson_reminders_{'off' if lesson_reminders_enabled else 'on'}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"📋 Дайджест дня (за час до 1-го урока): {'✅ Вкл' if daily_digest_enabled else '❌ Выкл'}",
+                callback_data=f"toggle_daily_digest_{'off' if daily_digest_enabled else 'on'}"
             )
         ],
         [
@@ -203,6 +210,28 @@ async def toggle_quiet_hours(update: Update, context: ContextTypes.DEFAULT_TYPE,
         status_text = "отключены"
 
     await query.answer(f"🌙 Тихие часы {status_text}")
+    await settings_handler(update, context)
+
+
+async def toggle_daily_digest(update: Update, context: ContextTypes.DEFAULT_TYPE, state: str):
+    """Переключает утренний дайджест (доступно всем пользователям)."""
+    query = require_query(update)
+    user_id = require_user(update).id
+    user_service = context.bot_data.get('user_service')
+
+    if not user_service:
+        await query.answer("❌ Сервис не доступен")
+        return
+
+    preferences_service = UserPreferencesService(user_service.db)
+    if state == 'on':
+        preferences_service.enable_daily_digest(user_id)
+        status_text = "включён"
+    else:
+        preferences_service.disable_daily_digest(user_id)
+        status_text = "отключён"
+
+    await query.answer(f"📋 Дайджест дня {status_text}")
     await settings_handler(update, context)
 
 

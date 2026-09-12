@@ -26,6 +26,7 @@ class UserPreferencesService:
         return {
             'update_notifications': False,
             'lesson_reminders': False,
+            'daily_digest': False,
             'quiet_hours': {'enabled': False, 'start': 22, 'end': 7},
         }
 
@@ -92,6 +93,24 @@ class UserPreferencesService:
         """Переключает напоминания об уроках для пользователя"""
         settings = self.get_notification_settings(user_id)
         settings['lesson_reminders'] = not settings.get('lesson_reminders', False)
+        return self.set_notification_settings(user_id, settings)
+
+    def enable_daily_digest(self, user_id: int) -> bool:
+        """Включает дайджест дня для пользователя"""
+        settings = self.get_notification_settings(user_id)
+        settings['daily_digest'] = True
+        return self.set_notification_settings(user_id, settings)
+
+    def disable_daily_digest(self, user_id: int) -> bool:
+        """Отключает дайджест дня для пользователя"""
+        settings = self.get_notification_settings(user_id)
+        settings['daily_digest'] = False
+        return self.set_notification_settings(user_id, settings)
+
+    def toggle_daily_digest(self, user_id: int) -> bool:
+        """Переключает дайджест дня для пользователя"""
+        settings = self.get_notification_settings(user_id)
+        settings['daily_digest'] = not settings.get('daily_digest', False)
         return self.set_notification_settings(user_id, settings)
 
     def enable_quiet_hours(self, user_id: int, start: int = 22, end: int = 7) -> bool:

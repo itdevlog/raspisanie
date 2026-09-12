@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from config.config import Config, get_timezone
 from config.schools import get_display_name
 from core.data_loader import DataLoader
+from services.digest_service import DigestService
 from services.notification_service import NotificationService
 from services.reminder_service import ReminderService
 
@@ -33,6 +34,11 @@ class BackgroundUpdater:
         self.sent_reminders: dict[str, float] = {}
         self.sent_reminders_file = self._get_sent_reminders_file()
         self._load_sent_reminders()
+        # Утренний дайджест: тот же минутный цикл, отдельный кэш дедупа.
+        self.digest_service = DigestService()
+        self.sent_digests: dict[str, float] = {}
+        self.sent_digests_file = self._get_sent_digests_file()
+        self._load_sent_digests()
         # Дедуп уведомлений подписчиков преподавателей/кабинетов (ключ -> timestamp).
         self.sent_entity_notifications: dict[str, float] = {}
 
@@ -61,7 +67,7 @@ class BackgroundUpdater:
         return datetime.now(self.moscow_tz)
 
     async def _reminder_loop(self):
-        """Цикл напоминаний: раз в минуту проверяет ближайшие уроки."""
+        """Минутный цикл: напоминания об уроках и утренний дайджест."""
         self.logger.info("⏰ Цикл напоминаний об уроках начал работу")
         while self.is_running:
             try:
@@ -69,6 +75,7 @@ class BackgroundUpdater:
                 if not self.is_running:
                     break
                 await self._send_reminders()
+                await self._send_digests()
             except asyncio.CancelledError:
                 self.logger.info("🔴 Цикл напоминаний отменён")
                 break
@@ -187,6 +194,111 @@ class BackgroundUpdater:
             os.replace(tmp, path)
         except Exception as e:
             self.logger.error(f"Ошибка сохранения кэша напоминаний: {e}")
+
+    async def _send_digests(self):
+        """Считает и отправляет утренние дайджесты, дедуп за 48 часов."""
+        try:
+            bot_data = self.application.bot_data
+            user_service = bot_data.get('user_service')
+            schools_data = bot_data.get('schools_data', {})
+            if not user_service or not schools_data:
+                return
+
+            from services.user_preferences import UserPreferencesService
+
+            users = user_service.get_users_with_classes()
+            user_classes = self.reminder_service.to_user_classes(users)
+
+            preferences_service = UserPreferencesService(user_service.db)
+            enabled = {
+                user['user_id']
+                for user in users
+                if user.get('user_id')
+                and preferences_service.get_notification_settings(user['user_id']).get('daily_digest', False)
+            }
+            user_classes = {
+                user_id: target
+                for user_id, target in user_classes.items()
+                if user_id in enabled
+            }
+            if not user_classes:
+                return
+
+            now = self._now()
+            due = self.digest_service.get_due_digests(schools_data, user_classes, now)
+
+            self._cleanup_sent_digests()
+            notification_service = bot_data.get('notification_service') or self.notification_service
+            bot = bot_data.get('bot') or self.application.bot
+            for user_id, text, key in due:
+                if key in self.sent_digests:
+                    continue
+                # Тихие часы: не шлём, но помечаем ключ, чтобы не дублировать позже
+                settings = preferences_service.get_notification_settings(user_id)
+                if NotificationService._is_quiet_hours(settings, now):
+                    self.sent_digests[key] = time.time()
+                    self._save_sent_digests()
+                    self.logger.info(f"Тихие часы: пропуск дайджеста для {user_id}")
+                    continue
+                try:
+                    delivered = await notification_service._send_message(
+                        bot, user_id, text, parse_mode='Markdown'
+                    )
+                    if delivered:
+                        self.sent_digests[key] = time.time()
+                        self._save_sent_digests()
+                    else:
+                        self.logger.warning(f"Дайджест {user_id} не доставлен, будет повтор")
+                except Exception as e:
+                    self.logger.error(f"Ошибка отправки дайджеста {user_id}: {e}")
+                await asyncio.sleep(0.05)
+        except Exception as e:
+            self.logger.error(f"Ошибка в _send_digests: {e}", exc_info=True)
+
+    def _cleanup_sent_digests(self):
+        """Удаляет ключи дайджестов старше 48 часов."""
+        cutoff = time.time() - 48 * 60 * 60
+        stale = [k for k, ts in self.sent_digests.items() if ts < cutoff]
+        for key in stale:
+            del self.sent_digests[key]
+        if stale:
+            self._save_sent_digests()
+
+    @staticmethod
+    def _get_sent_digests_file() -> str:
+        """Путь к кэшу отправленных дайджестов в общей data-директории."""
+        db_path = Config().DB_PATH
+        data_dir = os.path.dirname(db_path) or './data'
+        return os.path.join(data_dir, 'sent_digests.json')
+
+    def _load_sent_digests(self):
+        """Загружает кэш дайджестов, отбрасывая записи старше 48 ч."""
+        try:
+            if os.path.exists(self.sent_digests_file):
+                with open(self.sent_digests_file, encoding='utf-8') as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    self.sent_digests = {
+                        str(k): float(v) for k, v in data.items()
+                    }
+            self._cleanup_sent_digests()
+        except Exception as e:
+            self.logger.error(f"Ошибка загрузки кэша дайджестов: {e}")
+            self.sent_digests = {}
+
+    def _save_sent_digests(self):
+        """Атомарно сохраняет кэш отправленных дайджестов."""
+        try:
+            path = getattr(self, 'sent_digests_file', None)
+            if not path:
+                return
+            os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+            tmp = f"{path}.tmp"
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(self.sent_digests, f, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception as e:
+            self.logger.error(f"Ошибка сохранения кэша дайджестов: {e}")
 
     def _cleanup_sent_entity_notifications(self):
         """Удаляет ключи уведомлений подписчиков старше 24 часов."""

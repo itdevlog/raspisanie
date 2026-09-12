@@ -26,6 +26,8 @@ class NavigationCallbackHandler:
             await self._handle_toggle_lesson_reminders(update, context, callback_data)
         elif callback_data.startswith("toggle_quiet_hours_"):
             await self._handle_toggle_quiet_hours(update, context, callback_data)
+        elif callback_data.startswith("toggle_daily_digest_"):
+            await self._handle_toggle_daily_digest(update, context, callback_data)
         elif callback_data.startswith("toggle_notifications_"):
             await self._handle_toggle_notifications(update, context, callback_data)
         elif callback_data.startswith("toggle_update_notifications_"):
@@ -171,6 +173,13 @@ class NavigationCallbackHandler:
 
         state = callback_data.replace("toggle_quiet_hours_", "")
         await toggle_quiet_hours(update, context, state)
+
+    async def _handle_toggle_daily_digest(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
+        """Обрабатывает переключение утреннего дайджеста"""
+        from handlers.common.settings import toggle_daily_digest
+
+        state = callback_data.replace("toggle_daily_digest_", "")
+        await toggle_daily_digest(update, context, state)
 
     async def _handle_toggle_update_notifications(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает переключение уведомлений обновлениях"""
