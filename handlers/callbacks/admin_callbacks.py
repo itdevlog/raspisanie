@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 from config.schools import SCHOOLS_CONFIG
 from core.data_loader import DataLoader
 from handlers.common.messaging import log_user_error
+from handlers.common.typing import require_message, require_query, require_user
 from services.status_service import StatusService, status_icon
 from services.text_utils import escape_markdown
 
@@ -42,8 +43,8 @@ class AdminCallbackHandler:
 
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает admin_* callback'ы"""
-        query = update.callback_query
-        user_id = update.effective_user.id
+        query = require_query(update)
+        user_id = require_user(update).id
 
         if not self._is_admin(user_id, context):
             await query.answer("❌ Нет прав доступа")
@@ -78,7 +79,7 @@ class AdminCallbackHandler:
         config = context.bot_data.get('config')
         return Config.is_admin(config, user_id)
 
-    async def show_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE, message_text: str = None):
+    async def show_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE, message_text: str | None = None):
         """Показывает админ-панель (публичный вход для /admin и callback'ов)"""
         await self._show_admin_panel(update, context, message_text)
 
@@ -88,7 +89,7 @@ class AdminCallbackHandler:
             user_service = context.bot_data.get('user_service')
             users = user_service.get_users_with_classes() if user_service else []
             total = len(users)
-            by_school = {}
+            by_school: dict = {}
             for u in users:
                 sid = u.get('current_school', '—')
                 by_school[sid] = by_school.get(sid, 0) + 1
@@ -97,17 +98,21 @@ class AdminCallbackHandler:
                 lines.append(f"• {escape_markdown(str(sid))}: {cnt}")
             text = "\n".join(lines)
             if getattr(update, 'callback_query', None):
-                await update.callback_query.edit_message_text(text, parse_mode='Markdown')
+                await require_query(update).edit_message_text(text, parse_mode='Markdown')
             else:
-                await update.message.reply_text(text, parse_mode='Markdown')
+                msg = update.message
+                if msg is not None:
+                    await msg.reply_text(text, parse_mode='Markdown')
         except Exception as e:
             error_msg = log_user_error("Failed to show statistics", e)
             if getattr(update, 'callback_query', None):
-                await update.callback_query.edit_message_text(error_msg)
+                await require_query(update).edit_message_text(error_msg)
             else:
-                await update.message.reply_text(error_msg)
+                msg = update.message
+                if msg is not None:
+                    await msg.reply_text(error_msg)
 
-    async def _show_admin_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE, message_text: str = None):
+    async def _show_admin_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE, message_text: str | None = None):
         """Показывает админ-панель"""
         schools_status = await self._get_schools_status(context)
 
@@ -121,11 +126,11 @@ class AdminCallbackHandler:
             if update.callback_query:
                 await self._update_callback_message(update, text, reply_markup)
             else:
-                await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+                await require_message(update).reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
         except Exception as e:
             await self._handle_message_error(update, e)
 
-    def _build_admin_panel_text(self, schools_status: dict, message_text: str = None) -> str:
+    def _build_admin_panel_text(self, schools_status: dict, message_text: str | None = None) -> str:
         """Формирует текст админ-панели"""
         text = "⚙️ *Админ-панель*\n\n"
 
@@ -195,8 +200,8 @@ class AdminCallbackHandler:
 
     async def _refresh_all_schools(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет данные всех школ"""
-        query = update.callback_query
-        user_id = update.effective_user.id
+        query = require_query(update)
+        user_id = require_user(update).id
 
         if self._updater_lock(context).locked():
             await query.edit_message_text("⏳ Обновление уже выполняется в фоне. Дождитесь завершения.")
@@ -242,8 +247,8 @@ class AdminCallbackHandler:
 
     async def _refresh_school(self, update: Update, context: ContextTypes.DEFAULT_TYPE, school_id: str):
         """Обновляет данные конкретной школы"""
-        query = update.callback_query
-        user_id = update.effective_user.id
+        query = require_query(update)
+        user_id = require_user(update).id
 
         school_config = SCHOOLS_CONFIG.get(school_id)
         if not school_config:
@@ -276,8 +281,8 @@ class AdminCallbackHandler:
 
     async def _force_update(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Принудительное обновление данных всех школ"""
-        query = update.callback_query
-        user_id = update.effective_user.id
+        query = require_query(update)
+        user_id = require_user(update).id
 
         await query.edit_message_text("🔄 *Принудительное обновление всех школ...*\n\nЭто может занять несколько минут.", parse_mode='Markdown')
 
@@ -337,28 +342,28 @@ class AdminCallbackHandler:
     async def _update_callback_message(self, update: Update, text: str, reply_markup: InlineKeyboardMarkup):
         """Обновляет сообщение callback"""
         try:
-            await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+            await require_query(update).edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
         except Exception as e:
             if "Message is not modified" in str(e):
-                await update.callback_query.answer("✅ Панель уже актуальна")
+                await require_query(update).answer("✅ Панель уже актуальна")
             else:
                 admin_logger.error(f"Error updating admin panel: {e}")
-                await update.callback_query.answer("❌ Ошибка при обновлении")
+                await require_query(update).answer("❌ Ошибка при обновлении")
 
     async def _handle_message_error(self, update: Update, error: Exception):
         """Обрабатывает ошибки сообщений"""
         if "Message is not modified" in str(error):
             if update.callback_query:
-                await update.callback_query.answer("✅ Панель уже актуальна")
+                await require_query(update).answer("✅ Панель уже актуальна")
         else:
             admin_logger.error(f"Error in admin panel: {error}")
             if update.callback_query:
-                await update.callback_query.answer("❌ Ошибка при обновлении")
+                await require_query(update).answer("❌ Ошибка при обновлении")
 
     async def _show_users_with_classes(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показывает список пользователей с выбранными классами"""
-        query = update.callback_query
-        user_id = update.effective_user.id
+        query = require_query(update)
+        user_id = require_user(update).id
 
         try:
             # Получаем UserService из bot_data

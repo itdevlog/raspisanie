@@ -2,13 +2,15 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from handlers.common.typing import require_query, require_user, require_user_data
+
 
 class RoomCallbackHandler:
     """Обработчик callback'ов для работы с кабинетами"""
 
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает room_* callback'ы"""
-        query = update.callback_query
+        query = require_query(update)
 
         if callback_data == "room_search_input":
             await self._handle_room_search_input(update, context)
@@ -50,25 +52,25 @@ class RoomCallbackHandler:
             from handlers.rooms.room_schedule import show_all_rooms
             await show_all_rooms(update, context, page)
         except ValueError:
-            await update.callback_query.answer("❌ Ошибка пагинации")
+            await require_query(update).answer("❌ Ошибка пагинации")
 
     async def _handle_room_search_pagination(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает пагинацию результатов поиска кабинетов"""
         try:
             page = int(callback_data.replace("room_search_page_", ""))
-            search_query = context.user_data.get('room_search_query', '')
+            search_query = require_user_data(context).get('room_search_query', '')
             if not search_query:
-                await update.callback_query.answer("❌ Поисковый запрос не найден")
+                await require_query(update).answer("❌ Поисковый запрос не найден")
                 return
             from handlers.rooms.room_schedule import handle_room_search_results
             await handle_room_search_results(update, context, search_query, page)
         except (ValueError, IndexError):
-            await update.callback_query.answer("❌ Ошибка пагинации")
+            await require_query(update).answer("❌ Ошибка пагинации")
 
     async def _handle_room_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает выбор кабинета"""
-        query = update.callback_query
-        user_id = update.effective_user.id
+        query = require_query(update)
+        user_id = require_user(update).id
 
         # Разбираем callback_data: "room_today_101" или "room_today_idx_0"
         parts = callback_data.split('_', 2)
@@ -97,7 +99,7 @@ class RoomCallbackHandler:
                         from handlers.rooms.room_schedule import handle_room_search_results
                         await handle_room_search_results(
                             update, context,
-                            context.user_data.get('room_search_query', ''),
+                            require_user_data(context).get('room_search_query', ''),
                             state_service.get_user_page(user_id, 'search_rooms', 0)
                         )
                         return

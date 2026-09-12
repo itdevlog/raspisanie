@@ -5,20 +5,21 @@ from telegram.ext import ContextTypes
 
 from config.schools import SCHOOLS_CONFIG
 from handlers.common.messaging import reset_user_flow
+from handlers.common.typing import require_message, require_query, require_user
 
 logger = logging.getLogger(__name__)
 
 async def school_selection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню выбора школы"""
-    user_id = update.effective_user.id
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
     schools_data = context.bot_data.get('schools_data', {})
 
     if not user_service:
         if update.message:
-            await update.message.reply_text("❌ Сервис пользователей не доступен")
+            await require_message(update).reply_text("❌ Сервис пользователей не доступен")
         elif update.callback_query:
-            await update.callback_query.edit_message_text("❌ Сервис пользователей не доступен")
+            await require_query(update).edit_message_text("❌ Сервис пользователей не доступен")
         return
 
     current_school_id = user_service.get_user_school(user_id)
@@ -65,18 +66,18 @@ async def school_selection_handler(update: Update, context: ContextTypes.DEFAULT
     )
 
     if update.message:
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        await require_message(update).reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
     elif update.callback_query:
-        query = update.callback_query
+        query = require_query(update)
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
 
 async def handle_school_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, school_id: str):
     """Обрабатывает выбор школы пользователем"""
-    query = update.callback_query
+    query = require_query(update)
     await query.answer()
 
-    user_id = update.effective_user.id
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
 
     if not user_service:

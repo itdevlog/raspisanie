@@ -2,13 +2,14 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from config.config import Config
+from handlers.common.typing import require_query, require_user
 from services.text_utils import escape_markdown
 from services.user_preferences import UserPreferencesService
 
 
 async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает меню настроек"""
-    user_id = update.effective_user.id
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
     config = context.bot_data.get('config')
 
@@ -106,8 +107,8 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def unsubscribe_by_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, payload: str):
     """Отписывает по callback `unsubscribe_{kind}_{index}` и обновляет меню."""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    query = require_query(update)
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
     subscription_service = context.bot_data.get('subscription_service')
 
@@ -141,8 +142,8 @@ async def unsubscribe_by_callback(update: Update, context: ContextTypes.DEFAULT_
 
 async def toggle_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE, state: str):
     """Переключает настройки уведомлений"""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    query = require_query(update)
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
 
     if not user_service:
@@ -163,8 +164,8 @@ async def toggle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def toggle_lesson_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE, state: str):
     """Переключает напоминания об уроках (доступно всем пользователям)."""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    query = require_query(update)
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
 
     if not user_service:
@@ -185,8 +186,8 @@ async def toggle_lesson_reminders(update: Update, context: ContextTypes.DEFAULT_
 
 async def toggle_quiet_hours(update: Update, context: ContextTypes.DEFAULT_TYPE, state: str):
     """Переключает тихие часы (доступно всем пользователям)."""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    query = require_query(update)
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
 
     if not user_service:
@@ -207,8 +208,8 @@ async def toggle_quiet_hours(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
 async def toggle_update_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE, state: str):
     """Переключает настройки уведомлений об обновлениях для администратора"""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    query = require_query(update)
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
 
     if not user_service:

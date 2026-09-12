@@ -4,13 +4,14 @@ from telegram.ext import ContextTypes
 
 from handlers.common.menu_builder import build_main_menu_keyboard, build_main_menu_text
 from handlers.common.messaging import reset_user_flow
+from handlers.common.typing import require_message, require_query, require_user
 from services.status_service import StatusService
 
 
 async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает главное меню с инлайн-клавиатурой"""
     reset_user_flow(context)
-    user_id = update.effective_user.id
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
 
     schools_data = context.bot_data.get('schools_data', {})
@@ -27,9 +28,9 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = build_main_menu_text(school_status, current_school_id, current_class)
 
     if update.message:
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        await require_message(update).reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
     elif update.callback_query:
-        query = update.callback_query
+        query = require_query(update)
         try:
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
         except BadRequest as e:

@@ -8,13 +8,14 @@ from handlers.common.menu_builder import (
     build_main_menu_text,
 )
 from handlers.common.messaging import reset_user_flow
+from handlers.common.typing import require_message, require_user
 from services.status_service import StatusService
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start - показывает главное меню"""
     reset_user_flow(context)
-    user = update.effective_user
+    user = require_user(update)
     user_service = context.bot_data.get('user_service')
     schools_data = context.bot_data.get('schools_data', {})
 
@@ -43,7 +44,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = build_main_menu_keyboard(current_class)
     text = build_main_menu_text(school_status, current_school_id, current_class, welcome=welcome_text)
 
-    await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    await require_message(update).reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
 async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сбрасывает текущее действие и возвращает в главное меню."""
@@ -53,4 +54,4 @@ async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help - показывает справку"""
     reply_markup = build_help_keyboard()
-    await update.message.reply_text(HELP_TEXT, reply_markup=reply_markup, parse_mode='Markdown')
+    await require_message(update).reply_text(HELP_TEXT, reply_markup=reply_markup, parse_mode='Markdown')

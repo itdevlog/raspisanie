@@ -1,6 +1,10 @@
 # handlers/callbacks/__init__.py
+from typing import Any
+
 from telegram import Update
 from telegram.ext import ContextTypes
+
+from handlers.common.typing import require_query
 
 from .admin_callbacks import AdminCallbackHandler
 from .class_callbacks import ClassCallbackHandler
@@ -16,7 +20,7 @@ class CallbackRouter:
     """
 
     def __init__(self):
-        self.handlers = {
+        self.handlers: dict[str, Any] = {
             'admin': AdminCallbackHandler(),
             'teacher': TeacherCallbackHandler(),
             'room': RoomCallbackHandler(),
@@ -37,8 +41,8 @@ class CallbackRouter:
 
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает все callback'ы через соответствующие обработчики"""
-        query = update.callback_query
-        callback_data = query.data
+        query = require_query(update)
+        callback_data = query.data or ""
 
         # Определяем тип обработчика по префиксу callback_data
         handler_key = self._get_handler_key(callback_data)

@@ -2,13 +2,15 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from handlers.common.typing import require_query, require_user_data
+
 
 class NavigationCallbackHandler:
     """Обработчик callback'ов для навигации и меню"""
 
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает навигационные callback'ы"""
-        query = update.callback_query
+        query = require_query(update)
 
         if callback_data == "main_menu":
             await self._handle_main_menu(update, context)
@@ -101,7 +103,7 @@ class NavigationCallbackHandler:
         if callback_data.startswith("all_classes_page_"):
             parsed = parse_all_classes_page(callback_data)
             if parsed is None:
-                await update.callback_query.answer("❌ Ошибка страницы")
+                await require_query(update).answer("❌ Ошибка страницы")
                 return
             schedule_type, page = parsed
         else:
@@ -114,8 +116,9 @@ class NavigationCallbackHandler:
         from handlers.common.callback_handler import show_class_selection
 
         schedule_type = callback_data.replace("clear_digit_", "")
-        if 'class_digit' in context.user_data:
-            del context.user_data['class_digit']
+        user_data = require_user_data(context)
+        if 'class_digit' in user_data:
+            del user_data['class_digit']
         await show_class_selection(update, context, schedule_type)
 
     async def _handle_class_digit(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
@@ -126,10 +129,10 @@ class NavigationCallbackHandler:
         if len(parts) >= 4:
             digit = parts[2]  # цифра класса
             schedule_type = parts[3]  # today, tomorrow, week
-            context.user_data['class_digit'] = digit
+            require_user_data(context)['class_digit'] = digit
             await show_class_selection(update, context, schedule_type)
         else:
-            await update.callback_query.answer("❌ Ошибка в данных цифры")
+            await require_query(update).answer("❌ Ошибка в данных цифры")
 
     async def _handle_teacher_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает переход в меню преподавателей"""

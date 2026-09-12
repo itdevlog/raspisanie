@@ -2,13 +2,15 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from handlers.common.typing import require_query, require_user, require_user_data
+
 
 class TeacherCallbackHandler:
     """Обработчик callback'ов для работы с преподавателями"""
 
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает teacher_* callback'ы"""
-        query = update.callback_query
+        query = require_query(update)
 
         if callback_data == "teacher_search_input":
             await self._handle_teacher_search_input(update, context)
@@ -50,25 +52,25 @@ class TeacherCallbackHandler:
             from handlers.teachers.teacher_menu import show_all_teachers
             await show_all_teachers(update, context, page)
         except ValueError:
-            await update.callback_query.answer("❌ Ошибка пагинации")
+            await require_query(update).answer("❌ Ошибка пагинации")
 
     async def _handle_teacher_search_pagination(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает пагинацию результатов поиска преподавателей"""
         try:
             page = int(callback_data.replace("teacher_search_page_", ""))
-            search_query = context.user_data.get('teacher_search_query', '')
+            search_query = require_user_data(context).get('teacher_search_query', '')
             if not search_query:
-                await update.callback_query.answer("❌ Поисковый запрос не найден")
+                await require_query(update).answer("❌ Поисковый запрос не найден")
                 return
             from handlers.teachers.teacher_menu import handle_teacher_search_results
             await handle_teacher_search_results(update, context, search_query, page)
         except (ValueError, IndexError):
-            await update.callback_query.answer("❌ Ошибка пагинации")
+            await require_query(update).answer("❌ Ошибка пагинации")
 
     async def _handle_teacher_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает выбор преподавателя"""
-        query = update.callback_query
-        user_id = update.effective_user.id
+        query = require_query(update)
+        user_id = require_user(update).id
 
         # Разбираем callback_data: "teacher_today_Иванов" или "teacher_today_idx_0"
         parts = callback_data.split('_', 2)
@@ -97,7 +99,7 @@ class TeacherCallbackHandler:
                         from handlers.teachers.teacher_menu import handle_teacher_search_results
                         await handle_teacher_search_results(
                             update, context,
-                            context.user_data.get('teacher_search_query', ''),
+                            require_user_data(context).get('teacher_search_query', ''),
                             state_service.get_user_page(user_id, 'search_teachers', 0)
                         )
                         return

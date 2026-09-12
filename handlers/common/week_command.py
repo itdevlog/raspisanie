@@ -3,30 +3,32 @@ from telegram.ext import ContextTypes
 
 from handlers.common.messaging import log_user_error, reply_long_message
 from handlers.common.requires_school import requires_school
+from handlers.common.typing import require_message, school_context
 from services.schedule_service import ScheduleService
 
 
 @requires_school
 async def week_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /week <класс> - показывает расписание на неделю"""
-    school_data = context.school_data
+    _user_service, _current_school_id, school_data = school_context(context)
+    message = require_message(update)
 
     # Создаем сервис ОДИН РАЗ
-    schedule_service = ScheduleService(school_data, school_id=context.current_school_id)
+    schedule_service = ScheduleService(school_data, school_id=_current_school_id)
 
     if not context.args:
         # Показываем список классов
         available_classes = schedule_service.get_available_classes()
 
         if not available_classes:
-            await update.message.reply_text("❌ Нет доступных классов в расписании")
+            await message.reply_text("❌ Нет доступных классов в расписании")
             return
 
         classes_text = "\n".join([f"• {cls}" for cls in available_classes[:10]])
         if len(available_classes) > 10:
             classes_text += f"\n• ... и еще {len(available_classes) - 10} классов"
 
-        await update.message.reply_text(
+        await message.reply_text(
             f"📚 *Расписание на неделю*\n\n"
             f"Доступные классы:\n{classes_text}\n\n"
             "Использование: /week <класс>\n"
@@ -51,7 +53,7 @@ async def week_command_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             break
 
     if not class_exists:
-        await update.message.reply_text(
+        await message.reply_text(
             f"❌ Класс '{class_name}' не найден\n\n"
             "Доступные классы:\n" +
             "\n".join([f"• {cls}" for cls in available_classes[:10]]),
@@ -60,7 +62,7 @@ async def week_command_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     # Показываем что идет обработка
-    processing_msg = await update.message.reply_text("🔄 Формируем расписание на неделю...")
+    processing_msg = await message.reply_text("🔄 Формируем расписание на неделю...")
 
     try:
         # Используем правильное написание класса
@@ -69,7 +71,7 @@ async def week_command_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await reply_long_message(update, context, week_schedule)
 
     except Exception as e:
-        await update.message.reply_text(
+        await message.reply_text(
             log_user_error("Failed to build week schedule", e),
             parse_mode='Markdown'
         )

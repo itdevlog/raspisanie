@@ -1,5 +1,8 @@
 """Хелперы типизации для сужения Optional-полей PTB (mypy)."""
+from typing import Any, cast
+
 from telegram import CallbackQuery, Message, Update, User
+from telegram.ext import ContextTypes
 
 
 def require_user(update: Update) -> User:
@@ -28,3 +31,19 @@ def require_user_data(context) -> dict:
     data = context.user_data
     assert data is not None
     return data
+
+
+def require_text(message: Message) -> str:
+    """Возвращает message.text (не None для текстовых сообщений)."""
+    text = message.text
+    assert text is not None
+    return text
+
+
+def school_context(context: ContextTypes.DEFAULT_TYPE) -> tuple[Any, Any, Any]:
+    """Возвращает (user_service, current_school_id, school_data), добавленные @requires_school."""
+    return (
+        cast(Any, context).user_service,
+        cast(Any, context).current_school_id,
+        cast(Any, context).school_data,
+    )

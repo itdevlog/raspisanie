@@ -9,6 +9,7 @@ from config.schools import SCHOOLS_CONFIG
 # Импортируем новый роутер callback'ов
 from handlers.callbacks import callback_handler as new_callback_handler
 from handlers.common.messaging import log_user_error, paginate, reset_user_flow, safe_edit_message
+from handlers.common.typing import require_message, require_query, require_user, require_user_data
 from services.schedule_service import ScheduleService
 
 
@@ -78,8 +79,8 @@ def create_error_keyboard() -> InlineKeyboardMarkup:
 
 async def handle_change_class(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает смену класса"""
-    query = update.callback_query
-    user_id = update.effective_user.id
+    query = require_query(update)
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
 
     if not user_service:
@@ -98,9 +99,10 @@ async def handle_change_class(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, schedule_type: str):
     """Показывает меню выбора класса с сначала цифрой, потом буквой"""
     query = update.callback_query
-    user_id = update.effective_user.id
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
     schools_data = context.bot_data.get('schools_data', {})
+    user_data = require_user_data(context)
 
     async def send_text(text: str, reply_markup: InlineKeyboardMarkup):
         if query:
@@ -111,7 +113,7 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
                     return
                 raise
         else:
-            await update.effective_message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+            await require_message(update).reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
     if not user_service or not schools_data:
         await send_text("❌ Сервис не доступен", InlineKeyboardMarkup([]))
@@ -148,7 +150,7 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
         }
 
         # Если нет callback_data с цифрой, показываем выбор цифры (1-11) - ИНЛАЙН-КНОПКАМИ
-        if not context.user_data.get('class_digit'):
+        if not user_data.get('class_digit'):
             # Создаем клавиатуру с цифрами 1-11
             keyboard = []
             row = []
@@ -183,7 +185,7 @@ async def show_class_selection(update: Update, context: ContextTypes.DEFAULT_TYP
 
         else:
             # Показываем буквы для выбранной цифры - ИНЛАЙН-КНОПКАМИ
-            class_digit = context.user_data['class_digit']
+            class_digit = user_data['class_digit']
             class_letters = _get_class_letters_for_digit(available_classes, int(class_digit))
 
             if not class_letters:
@@ -261,8 +263,8 @@ async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_
     поэтому список классов кэшируется в state_service и разбивается на страницы
     (кнопки-номера «◀️ Назад/Вперёд ▶️» через all_classes_page_{type}_{page}).
     """
-    query = update.callback_query
-    user_id = update.effective_user.id
+    query = require_query(update)
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
     schools_data = context.bot_data.get('schools_data', {})
 
@@ -295,7 +297,7 @@ async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_
         keyboard = []
 
         # Группируем классы текущей страницы по цифрам
-        classes_by_digit = {}
+        classes_by_digit: dict[str, list[str]] = {}
         for class_name in classes_on_page:
             digit = ''.join(filter(str.isdigit, class_name))
             if digit:
@@ -356,7 +358,7 @@ async def handle_show_all_classes(update: Update, context: ContextTypes.DEFAULT_
 
 async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает показ справки через меню"""
-    query = update.callback_query
+    query = require_query(update)
 
     help_text = (
         "📚 *Помощь по боту расписания*\n\n"

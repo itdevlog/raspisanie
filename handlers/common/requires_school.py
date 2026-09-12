@@ -14,12 +14,13 @@
 когда всё готово; иначе отправляет понятную ошибку (reply или edit) и return.
 """
 import functools
-from typing import Callable
+from typing import Any, Callable, cast
 
 from telegram import Update
 from telegram.ext import ContextTypes
 
 from handlers.common.messaging import safe_edit_message
+from handlers.common.typing import require_user
 
 
 async def _send(context, update, text: str):
@@ -41,7 +42,7 @@ def requires_school(func: Callable):
         if not user_service or not schools_data:
             return await _send(context, update, "❌ Сервис не доступен")
 
-        user_id = update.effective_user.id
+        user_id = require_user(update).id
         current_school_id = user_service.get_user_school(user_id)
         school_data = schools_data.get(current_school_id)
 
@@ -49,9 +50,10 @@ def requires_school(func: Callable):
             return await _send(context, update, "❌ Данные для вашей школы не загружены")
 
         # Подкладываем готовые значения в контекст для обработчика
-        context.user_service = user_service
-        context.current_school_id = current_school_id
-        context.school_data = school_data
+        ctx = cast(Any, context)
+        ctx.user_service = user_service
+        ctx.current_school_id = current_school_id
+        ctx.school_data = school_data
 
         return await func(update, context, *args, **kwargs)
 

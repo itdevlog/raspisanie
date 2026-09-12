@@ -4,6 +4,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from handlers.common.messaging import edit_long_message, log_user_error
+from handlers.common.typing import require_query, require_user
 from services.schedule_service import ScheduleService
 
 
@@ -12,7 +13,7 @@ class ClassCallbackHandler:
 
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает class_* callback'ы"""
-        query = update.callback_query
+        query = require_query(update)
 
         # Разбираем callback_data: "class_today_5и" или "class_week_10а"
         parts = callback_data.split('_')
@@ -30,8 +31,8 @@ class ClassCallbackHandler:
     async def handle_class_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE,  # ← УБРАТЬ нижнее подчеркивание
                                     class_name: str, schedule_type: str):
         """Обрабатывает выбор класса"""
-        query = update.callback_query
-        user_id = update.effective_user.id
+        query = require_query(update)
+        user_id = require_user(update).id
         user_service = context.bot_data.get('user_service')
         schools_data = context.bot_data.get('schools_data', {})
 

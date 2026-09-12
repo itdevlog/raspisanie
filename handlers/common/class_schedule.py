@@ -2,43 +2,46 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from handlers.common.messaging import reply_long_message
+from handlers.common.typing import require_message, require_text, require_user, require_user_data
 from services.schedule_service import ScheduleService
 
 
 async def class_schedule_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает текстовые сообщения (номера классов и поиск преподавателей)"""
-    user_id = update.effective_user.id
+    user_id = require_user(update).id
     user_service = context.bot_data.get('user_service')
     schools_data = context.bot_data.get('schools_data', {})
+    user_data = require_user_data(context)
+    message = require_message(update)
 
-    message_text = update.message.text.strip()
+    message_text = require_text(message).strip()
 
     # Ограничиваем длину запроса поиска (учитель/кабинет), чтобы не грузить огромные строки
-    if (context.user_data.get('waiting_for_room_search')
-            or context.user_data.get('waiting_for_teacher_search')) \
+    if (user_data.get('waiting_for_room_search')
+            or user_data.get('waiting_for_teacher_search')) \
             and len(message_text) > 80:
-        context.user_data.pop('waiting_for_room_search', None)
-        context.user_data.pop('waiting_for_teacher_search', None)
-        await update.message.reply_text(
+        user_data.pop('waiting_for_room_search', None)
+        user_data.pop('waiting_for_teacher_search', None)
+        await message.reply_text(
             "❌ Слишком длинный запрос (максимум 80 символов). Вернитесь в поиск и попробуйте ещё раз."
         )
         return
 
     # Если пользователь ввел номер кабинета для поиска
-    if context.user_data.get('waiting_for_room_search'):
+    if user_data.get('waiting_for_room_search'):
         # Очищаем флаг
-        del context.user_data['waiting_for_room_search']
+        del user_data['waiting_for_room_search']
 
         # Получаем данные школы пользователя
         if not user_service or not schools_data:
-            await update.message.reply_text("❌ Сервис не доступен")
+            await message.reply_text("❌ Сервис не доступен")
             return
 
         current_school_id = user_service.get_user_school(user_id)
         school_data = schools_data.get(current_school_id)
 
         if not school_data:
-            await update.message.reply_text("❌ Данные для вашей школы не загружены")
+            await message.reply_text("❌ Данные для вашей школы не загружены")
             return
 
         # Используем функцию поиска кабинетов
@@ -47,20 +50,20 @@ async def class_schedule_handler(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     # Если пользователь ввел фамилию учителя (поиск преподавателя)
-    if context.user_data.get('waiting_for_teacher_search'):
+    if user_data.get('waiting_for_teacher_search'):
         # Очищаем флаг
-        del context.user_data['waiting_for_teacher_search']
+        del user_data['waiting_for_teacher_search']
 
         # Получаем данные школы пользователя
         if not user_service or not schools_data:
-            await update.message.reply_text("❌ Сервис не доступен")
+            await message.reply_text("❌ Сервис не доступен")
             return
 
         current_school_id = user_service.get_user_school(user_id)
         school_data = schools_data.get(current_school_id)
 
         if not school_data:
-            await update.message.reply_text("❌ Данные для вашей школы не загружены")
+            await message.reply_text("❌ Данные для вашей школы не загружены")
             return
 
         # Используем функцию поиска преподавателей
@@ -70,7 +73,7 @@ async def class_schedule_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     # Обработка запроса расписания класса (существующая логика)
     if not user_service or not schools_data:
-        await update.message.reply_text("❌ Сервис не доступен")
+        await message.reply_text("❌ Сервис не доступен")
         return
 
     # Получаем выбранную школу пользователя
@@ -78,7 +81,7 @@ async def class_schedule_handler(update: Update, context: ContextTypes.DEFAULT_T
     school_data = schools_data.get(current_school_id)
 
     if not school_data:
-        await update.message.reply_text("❌ Данные для вашей школы не загружены")
+        await message.reply_text("❌ Данные для вашей школы не загружены")
         return
 
     class_name = message_text

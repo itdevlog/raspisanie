@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
 
 from handlers.callbacks.admin_callbacks import AdminCallbackHandler
+from handlers.common.typing import require_message, require_user
 
 # Единая реализация админ-панели живёт в AdminCallbackHandler.
 # Здесь — только команды /admin и /stats, делегирующие в неё.
@@ -10,10 +11,10 @@ _admin_handler = AdminCallbackHandler()
 
 async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /admin: делегирует в единую реализацию AdminCallbackHandler."""
-    user_id = update.effective_user.id
+    user_id = require_user(update).id
 
     if not _is_admin(user_id, context):
-        await update.message.reply_text("❌ У вас нет прав доступа к админ-панели")
+        await require_message(update).reply_text("❌ У вас нет прав доступа к админ-панели")
         return
 
     await _admin_handler.show_panel(update, context)
@@ -21,9 +22,9 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /stats: статистика пользователей."""
-    user_id = update.effective_user.id
+    user_id = require_user(update).id
     if not _is_admin(user_id, context):
-        await update.message.reply_text("❌ У вас нет прав доступа к админ-панели")
+        await require_message(update).reply_text("❌ У вас нет прав доступа к админ-панели")
         return
     await _admin_handler._show_statistics(update, context)
 

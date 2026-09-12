@@ -9,13 +9,14 @@ teacher_menu.py и room_schedule.py раньше дублировали ~90% к�
 """
 
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, cast
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from config.schools import SCHOOLS_CONFIG
 from handlers.common.messaging import clear_search_flags, edit_long_message, log_user_error
+from handlers.common.typing import require_message, require_query, require_user, require_user_data
 from services.state_service import UserStateService
 from services.text_utils import escape_markdown
 
@@ -38,7 +39,7 @@ class EntityConfig:
     search_query_key: str              # 'teacher_search_query' | 'room_search_query'
 
     # Фабрика сервиса из school_data
-    service_factory: Callable = field(default=None)
+    service_factory: Any = field(default=None)
     # методы сервиса (строки-имена)
     get_all_method: str = 'get_available_teachers'
     search_method: str = 'search_teachers'
@@ -68,17 +69,16 @@ class EntityMenuHandler:
         return cfg_school.get('name') or 'Неизвестно'
 
     def _edit_or_reply(self, update, context, text, reply_markup=None, parse_mode='Markdown'):
-        query = update.callback_query
-        if query:
-            return query.edit_message_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
-        return update.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+        if update.callback_query:
+            return require_query(update).edit_message_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+        return require_message(update).reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
 
     # ---------- меню ----------
 
     async def menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показывает меню сущности."""
         clear_search_flags(context)
-        user_id = update.effective_user.id
+        user_id = require_user(update).id
 
         user_service = context.bot_data.get('user_service')
         schools_data = context.bot_data.get('schools_data', {})
@@ -126,11 +126,11 @@ class EntityMenuHandler:
 
     async def show_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 0):
         clear_search_flags(context)
-        query = update.callback_query
-        user_id = update.effective_user.id
+        query = require_query(update)
+        user_id = require_user(update).id
         user_service = context.bot_data.get('user_service')
         schools_data = context.bot_data.get('schools_data', {})
-        state_service = context.bot_data.get('state_service')
+        state_service = cast(UserStateService, context.bot_data.get('state_service'))
 
         if not user_service or not schools_data:
             return await query.edit_message_text("❌ Сервис не доступен")
@@ -213,11 +213,11 @@ class EntityMenuHandler:
 
     async def select(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                      entity_name: str, schedule_type: str = "today"):
-        query = update.callback_query
-        user_id = update.effective_user.id
+        query = require_query(update)
+        user_id = require_user(update).id
         user_service = context.bot_data.get('user_service')
         schools_data = context.bot_data.get('schools_data', {})
-        state_service = context.bot_data.get('state_service')
+        state_service = cast(UserStateService, context.bot_data.get('state_service'))
 
         if not user_service or not schools_data:
             return await query.edit_message_text("❌ Сервис не доступен")
@@ -288,8 +288,8 @@ class EntityMenuHandler:
     async def toggle_subscription(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                                   entity_name: str, schedule_type: str = "today"):
         """Переключает подписку на сущность и перерисовывает расписание."""
-        query = update.callback_query
-        user_id = update.effective_user.id
+        query = require_query(update)
+        user_id = require_user(update).id
         user_service = context.bot_data.get('user_service')
         subscription_service = context.bot_data.get('subscription_service')
 
@@ -310,18 +310,19 @@ class EntityMenuHandler:
     async def handle_subscription_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                                            callback_data: str):
         """Разбирает `{p}_subscribe_{schedule_type}_{sidx|idx}_{index}` и переключает подписку."""
-        user_id = update.effective_user.id
+        user_id = require_user(update).id
         state_service = context.bot_data.get('state_service')
+        query = require_query(update)
         parts = callback_data.split('_', 3)
         # parts: [entity, 'subscribe', schedule_type, 'idx_0'|'sidx_0']
         if len(parts) < 4:
-            await update.callback_query.answer("❌ Ошибка в данных подписки")
+            await query.answer("❌ Ошибка в данных подписки")
             return
 
         schedule_type = parts[2]
         tail = parts[3]
         if not state_service:
-            await update.callback_query.answer("❌ Сервис состояния не доступен")
+            await query.answer("❌ Сервис состояния не доступен")
             return
 
         if tail.startswith('sidx_'):
@@ -329,18 +330,18 @@ class EntityMenuHandler:
         elif tail.startswith('idx_'):
             list_key, index = self.cfg.state_full_key, tail[4:]
         else:
-            await update.callback_query.answer("❌ Ошибка в данных подписки")
+            await query.answer("❌ Ошибка в данных подписки")
             return
 
         try:
             entity_index = int(index)
         except ValueError:
-            await update.callback_query.answer("❌ Ошибка в данных подписки")
+            await query.answer("❌ Ошибка в данных подписки")
             return
 
         items = state_service.get_user_list(user_id, list_key) or []
         if not (0 <= entity_index < len(items)):
-            await update.callback_query.answer("❌ Список устарел, откройте расписание заново")
+            await query.answer("❌ Список устарел, откройте расписание заново")
             return
 
         await self.toggle_subscription(update, context, items[entity_index], schedule_type)
@@ -358,8 +359,8 @@ class EntityMenuHandler:
     # ---------- поиск ----------
 
     async def search_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        query = update.callback_query
-        context.user_data[f'waiting_for_{self.p}_search'] = True
+        query = require_query(update)
+        require_user_data(context)[f'waiting_for_{self.p}_search'] = True
 
         keyboard = [
             [InlineKeyboardButton("❌ Отмена", callback_data=f"{self.p}_search_cancel")],
@@ -380,7 +381,8 @@ class EntityMenuHandler:
 
     async def search_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                              search_query: str, page: int = 0):
-        user_id = update.effective_user.id
+        user_id = require_user(update).id
+        user_data = require_user_data(context)
         user_service = context.bot_data.get('user_service')
         schools_data = context.bot_data.get('schools_data', {})
         state_service = context.bot_data.get('state_service')
@@ -397,7 +399,7 @@ class EntityMenuHandler:
             found = getattr(service, self.cfg.search_method)(search_query)
 
             if not found:
-                context.user_data.pop(self.cfg.search_query_key, None)
+                user_data.pop(self.cfg.search_query_key, None)
                 text = f"❌ {self.cfg.label_plural.capitalize()} со '{escape_markdown(search_query)}' не найдены"
                 keyboard = [
                     [InlineKeyboardButton("🔍 Попробовать снова", callback_data=f"{self.p}_search_input")],
@@ -421,7 +423,7 @@ class EntityMenuHandler:
             if not state_service:
                 return await self._edit_or_reply(update, context, "❌ Сервис временно не доступен")
 
-            context.user_data[self.cfg.search_query_key] = search_query
+            user_data[self.cfg.search_query_key] = search_query
             state_service.set_user_list(user_id, self.cfg.state_search_key, found)
             state_service.set_user_page(user_id, self.cfg.state_search_key, page)
 

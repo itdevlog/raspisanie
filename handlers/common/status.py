@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from config.schools import SCHOOLS_CONFIG, get_display_name
+from handlers.common.typing import require_message
 from services.status_service import StatusService
 
 
@@ -32,4 +33,4 @@ async def status_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         text += "❌ Нет загруженных данных школ\n"
 
-    await update.message.reply_text(text, parse_mode='Markdown')
+    await require_message(update).reply_text(text, parse_mode='Markdown')

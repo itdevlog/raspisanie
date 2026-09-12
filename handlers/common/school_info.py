@@ -4,14 +4,14 @@ from telegram.ext import ContextTypes
 from config.schools import get_display_name
 from handlers.common.messaging import safe_edit_message
 from handlers.common.requires_school import requires_school
+from handlers.common.typing import require_message, school_context
 from services.text_utils import escape_markdown
 
 
 @requires_school
 async def school_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Информация о школе и данных"""
-    school_data = context.school_data
-    current_school_id = context.current_school_id
+    _user_service, current_school_id, school_data = school_context(context)
     school_name = get_display_name(current_school_id, school_data)
     city = school_data.get('CITY_NAME', 'Неизвестно')
     export_date = school_data.get('EXPORT_DATE', 'Неизвестно')
@@ -45,4 +45,4 @@ async def school_info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         reply_markup = InlineKeyboardMarkup(keyboard)
         await safe_edit_message(update.callback_query, info_text, reply_markup=reply_markup)
     else:
-        await update.message.reply_text(info_text, parse_mode='Markdown')
+        await require_message(update).reply_text(info_text, parse_mode='Markdown')
