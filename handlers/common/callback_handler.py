@@ -39,9 +39,24 @@ def parse_all_classes_page(callback_data: str) -> tuple[str, int] | None:
 
 # ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ СОЗДАНИЯ КЛАВИАТУР ==========
 
-def create_class_navigation_keyboard(class_name: str, schedule_type: str) -> InlineKeyboardMarkup:
+def create_class_navigation_keyboard(class_name: str, schedule_type: str,
+                                    week_offset: int = 0) -> InlineKeyboardMarkup:
     """Создает клавиатуру навигации для расписания класса"""
     keyboard = []
+
+    # Навигация по неделям для недельного расписания (±2 недели)
+    if schedule_type == "week":
+        from handlers.callbacks.class_callbacks import WEEK_OFFSET_LIMIT
+
+        week_buttons = []
+        if week_offset > -WEEK_OFFSET_LIMIT:
+            week_buttons.append(InlineKeyboardButton(
+                "◀️ Прошлая", callback_data=f"class_week_{class_name}_o{week_offset - 1}"))
+        week_buttons.append(InlineKeyboardButton("📅 Текущая", callback_data=f"class_week_{class_name}"))
+        if week_offset < WEEK_OFFSET_LIMIT:
+            week_buttons.append(InlineKeyboardButton(
+                "Следующая ▶️", callback_data=f"class_week_{class_name}_o{week_offset + 1}"))
+        keyboard.append(week_buttons)
 
     # Кнопки других дней для этого же класса
     other_days = []
@@ -55,8 +70,12 @@ def create_class_navigation_keyboard(class_name: str, schedule_type: str) -> Inl
     if other_days:
         keyboard.append(other_days)
 
-    # Кнопка обновления
-    keyboard.append([InlineKeyboardButton("🔄 Обновить", callback_data=f"class_{schedule_type}_{class_name}")])
+    # Кнопка обновления (для недели сохраняем смещение)
+    if schedule_type == "week" and week_offset:
+        refresh_data = f"class_week_{class_name}_o{week_offset}"
+    else:
+        refresh_data = f"class_{schedule_type}_{class_name}"
+    keyboard.append([InlineKeyboardButton("🔄 Обновить", callback_data=refresh_data)])
 
     # Навигация
     keyboard.append([
