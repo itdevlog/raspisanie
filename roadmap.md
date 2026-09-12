@@ -70,5 +70,6 @@
 
 Есть pytest (165 тестов: юнит + mock-интеграционные через pytest-asyncio, `tests/test_integration.py`). 
 
-- Инструменты: ruff/mypy/CI подключены (конфиги `ruff.toml`, `mypy.ini`, `.github/workflows/ci.yml`); `ruff check .` — чисто.
+- Инструменты: ruff/mypy/CI подключены (конфиги `ruff.toml`, `mypy.ini`, `.github/workflows/ci.yml`); `ruff check .` — чисто; `mypy .` — 0 ошибок на всём репозитории (93 файла).
+- Для сужения Optional-полей PTB используются хелперы `handlers/common/typing.py` (`require_user`/`require_message`/`require_query`/`require_user_data`).
 

@@ -19,6 +19,8 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Lint (ruff)
         run: ruff check .
+      - name: Types (mypy)
+        run: mypy .
       - name: Tests (pytest)
         env:
           TELEGRAM_TOKEN: dummy

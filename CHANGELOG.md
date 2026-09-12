@@ -5,6 +5,13 @@
 
 ## 11.09.2026
 
+### mypy-чистота репозитория + CI
+
+- `mypy .` проходит без ошибок на всём репозитории (93 файла) — неявные `Optional`-дефолты, `union-attr`/`arg-type`/`index`/`var-annotated` устранены типами и сужениями, поведение не менялось.
+- Хелперы сужения PTB в `handlers/common/typing.py` (`require_user`, `require_message`, `require_query`, `require_user_data`) — заменяют `update.effective_user`/`effective_message`/`callback_query`/`context.user_data` без разбросанных `assert`.
+- В CI добавлен шаг `mypy .` после ruff (`.github/workflows/ci.yml`).
+- Счётчик тестов в документации синхронизирован: 165.
+
 ### Фаза 1 — критические исправления (P0)
 
 - **Кэш расписания привязан к школе** — ключи кэша теперь включают `school_id`, поэтому расписание одной школы больше не отдаётся в другой (`services/schedule_service.py`).
