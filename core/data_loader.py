@@ -25,7 +25,7 @@ class DataLoader:
         except Exception as e:
             self.logger.error(f"Ошибка закрытия сессии: {e}")
 
-    def get_current_filename(self, check_url: str, max_retries: int = None) -> str | None:
+    def get_current_filename(self, check_url: str, max_retries: int | None = None) -> str | None:
         """Получает актуальное имя файла из check страницы с повторными попытками"""
         if max_retries is None:
             max_retries = self.config.MAX_RETRIES
@@ -57,8 +57,9 @@ class DataLoader:
                     time.sleep(2 ** attempt)  # Exponential backoff
                 else:
                     return None
+        return None
 
-    def download_schedule_data(self, base_url: str, filename: str, max_retries: int = None) -> dict | None:
+    def download_schedule_data(self, base_url: str, filename: str, max_retries: int | None = None) -> dict | None:
         """Скачивает и парсит данные расписания с повторными попытками"""
         if max_retries is None:
             max_retries = self.config.MAX_RETRIES
@@ -94,8 +95,9 @@ class DataLoader:
                     time.sleep(2 ** attempt)  # Exponential backoff
                 else:
                     return None
+        return None
 
-    def load_school_data(self, school_config: dict, max_retries: int = None) -> dict | None:
+    def load_school_data(self, school_config: dict, max_retries: int | None = None) -> dict | None:
         """Полная загрузка данных для школы с повторными попытками"""
         if max_retries is None:
             max_retries = self.config.MAX_RETRIES
@@ -127,7 +129,7 @@ class DataLoader:
     def load_all_schools_data(self) -> dict[str, dict]:
         """Загружает данные всех активных школ; использует локальную сессию и закрывает её."""
         schools_data = {}
-        failed_schools = []
+        failed_schools: list[str] = []
         session = requests.Session()
         session.headers.update(self.session.headers)
         original = self.session

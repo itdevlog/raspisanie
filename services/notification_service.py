@@ -158,7 +158,7 @@ class NotificationService:
             return start <= hour < end
         return hour >= start or hour < end
 
-    async def _send_message(self, bot, chat_id: int, text: str, parse_mode: str = 'Markdown',
+    async def _send_message(self, bot, chat_id: int, text: str, parse_mode: str | None = 'Markdown',
                             max_attempts: int = 3) -> bool:
         """Отправляет сообщение, пережидая Telegram RetryAfter (429).
 
@@ -276,7 +276,8 @@ class NotificationService:
                 return False
 
             # Получаем дату из первой замены (предполагаем, что все замены на одну дату)
-            date = exchanges[0].get('timestamp') if exchanges else datetime.now(self.moscow_tz)
+            raw_date = exchanges[0].get('timestamp') if exchanges else None
+            date = raw_date if isinstance(raw_date, datetime) else datetime.now(self.moscow_tz)
 
             # Форматируем уведомление
             notification_text = self._format_exchange_notification(class_name, exchanges, date)
@@ -339,7 +340,7 @@ class NotificationService:
             return False
 
 
-    def _format_exchange_notification(self, class_name: str, exchanges: list[dict], date: datetime = None) -> str:
+    def _format_exchange_notification(self, class_name: str, exchanges: list[dict], date: datetime | None = None) -> str:
         """Форматирует уведомление о заменах в кратком виде"""
         if not exchanges:
             return ""

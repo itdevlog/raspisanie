@@ -38,7 +38,7 @@ class UserStateService:
         key = f"user_{user_id}_{list_type}_page"
         return self.cache_service.get(key) or default
 
-    def clear_user_state(self, user_id: int, list_type: str = None) -> None:
+    def clear_user_state(self, user_id: int, list_type: str | None = None) -> None:
         """Очищает состояние пользователя"""
         if list_type:
             # Очищаем только конкретный тип

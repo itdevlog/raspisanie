@@ -89,7 +89,7 @@ class ExchangeDetector:
             if not by_date:
                 del self.previous_schedules[school_id]
 
-    def clear_cache(self, school_id: str = None):
+    def clear_cache(self, school_id: str | None = None):
         """Очищает кэш замен"""
         if school_id:
             if school_id in self.previous_schedules:
@@ -199,7 +199,7 @@ class ExchangeDetector:
         return exchanges
 
     def _compare_class_exchanges(self, class_name: str, previous: dict, current: dict,
-                                 school_data: dict = None, date: datetime = None) -> list[dict]:
+                                 school_data: dict | None = None, date: datetime | None = None) -> list[dict]:
         """Сравнивает замены класса и возвращает новые. Ключи lesson_num — строки."""
         new_exchanges = []
 
@@ -251,7 +251,7 @@ class ExchangeDetector:
         return False
 
     def _format_exchange_for_notification(self, class_name: str, exchange: dict,
-                                          school_data: dict = None, date: datetime = None) -> dict:
+                                          school_data: dict | None = None, date: datetime | None = None) -> dict:
         """Форматирует замена для уведомления"""
         lesson_num = exchange.get('lesson_num')
         exchange_data = exchange.get('data', {})
@@ -321,7 +321,7 @@ class ExchangeDetector:
                 return name
             return name if name != codes_str else f"'{codes_str}'"
 
-    def _get_original_subject(self, class_name: str, lesson_num: int, school_data: dict = None) -> str:
+    def _get_original_subject(self, class_name: str, lesson_num: int | None, school_data: dict | None = None) -> str:
         """Получает оригинальное название предмета (упрощенная реализация)"""
         # Возвращаем стандартное обозначение урока, т.к. получение оригинального предмета из-за
         # сложной структуры данных расписания требует более тщательной проверки типов данных

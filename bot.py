@@ -17,6 +17,7 @@ from handlers.common.messaging import GENERIC_ERROR_MSG
 from handlers.common.school_info import school_info_handler
 from handlers.common.settings import settings_handler
 from handlers.common.status import status_handler
+from handlers.common.typing import require_message, require_user
 from handlers.common.week_command import week_command_handler
 
 # Импорт обработчиков
@@ -187,7 +188,7 @@ class ScheduleBot:
         # Глобальная обработка ошибок
         self.application.add_error_handler(self.error_handler)
 
-    async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
         """Базовая обработка ошибок"""
         try:
             # Логируем ошибку с полным traceback
@@ -197,8 +198,9 @@ class ScheduleBot:
             )
 
             # Уведомление пользователю
-            if update and update.effective_message:
-                await update.effective_message.reply_text(GENERIC_ERROR_MSG)
+            effective_message = getattr(update, 'effective_message', None)
+            if effective_message:
+                await effective_message.reply_text(GENERIC_ERROR_MSG)
 
         except Exception as e:
             self.logger.error(f"Error in error handler: {e}")
@@ -206,21 +208,22 @@ class ScheduleBot:
     async def force_check_exchanges(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Принудительная проверка замен и отправка уведомлений"""
         # Проверяем, является ли пользователь администратором
-        user_id = update.effective_user.id
+        user_id = require_user(update).id
+        message = require_message(update)
         if not self.config.is_admin(self.config, user_id):
-            await update.message.reply_text("❌ Эта команда доступна только администраторам")
+            await message.reply_text("❌ Эта команда доступна только администраторам")
             return
 
         try:
-            await update.message.reply_text("🔄 Начинаю принудительную проверку замен...")
+            await message.reply_text("🔄 Начинаю принудительную проверку замен...")
 
             # Вызываем метод из background_updater для проверки замен
             await self.background_updater.force_check_exchanges(context)
 
-            await update.message.reply_text("✅ Проверка замен завершена")
+            await message.reply_text("✅ Проверка замен завершена")
         except Exception as e:
             self.logger.error(f"Error in force_check_exchanges: {e}", exc_info=True)
-            await update.message.reply_text(f"❌ Ошибка при проверке замен: {e}")
+            await message.reply_text(f"❌ Ошибка при проверке замен: {e}")
 
     async def _post_init(self, application):
         """Вызывается после старта event loop, но до начала polling"""

@@ -82,8 +82,10 @@ class Config:
         Раньше этот код дублировался в admin_panel.py, admin_callbacks.py,
         settings.py и bot.py.
         """
-        ids = getattr(config, 'ADMIN_IDS', None) if config else None
-        return bool(ids) and user_id in ids
+        ids: list | None = getattr(config, 'ADMIN_IDS', None) if config else None
+        if not ids:
+            return False
+        return user_id in ids
 
     # Логирование админ-панели
     ADMIN_LOG_FILE = os.getenv('ADMIN_LOG_FILE', './logs/admin.log')

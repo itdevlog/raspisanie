@@ -418,7 +418,7 @@ class BackgroundUpdater:
                             self.logger.info(f"Найдено {len(new_exchanges)} новых замен для школы {school_id} на {date_str}")
 
                             # Группируем замены по классам
-                            exchanges_by_class = {}
+                            exchanges_by_class: dict[str, list[dict]] = {}
                             for exchange in new_exchanges:
                                 class_name = exchange['class_name']
                                 if class_name not in exchanges_by_class:

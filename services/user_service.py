@@ -46,7 +46,7 @@ class UserService:
             upsert=True
         )
 
-    def get_user_class(self, user_id: int, school_id: str = None) -> str | None:
+    def get_user_class(self, user_id: int, school_id: str | None = None) -> str | None:
         """Получает выбранный класс пользователя для конкретной школы"""
         user = self.users_collection.find_one({'user_id': user_id})
         if not user:
@@ -60,7 +60,7 @@ class UserService:
         school_classes = user.get('school_classes', {})
         return school_classes.get(school_id)
 
-    def set_user_class(self, user_id: int, class_name: str, school_id: str = None) -> bool:
+    def set_user_class(self, user_id: int, class_name: str, school_id: str | None = None) -> bool:
         """Устанавливает класс для пользователя для конкретной школы"""
         user = self.users_collection.find_one({'user_id': user_id})
 
@@ -96,7 +96,7 @@ class UserService:
             upsert=True
         )
 
-    def set_user_notification_settings(self, user_id: int, notifications_enabled: bool, school_id: str = None) -> bool:
+    def set_user_notification_settings(self, user_id: int, notifications_enabled: bool, school_id: str | None = None) -> bool:
         """Устанавливает настройки уведомлений для пользователя для конкретной школы"""
         user = self.users_collection.find_one({'user_id': user_id})
 
@@ -133,7 +133,7 @@ class UserService:
             upsert=True
         )
 
-    def get_user_notification_settings(self, user_id: int, school_id: str = None) -> bool:
+    def get_user_notification_settings(self, user_id: int, school_id: str | None = None) -> bool:
         """Получает настройки уведомлений пользователя для конкретной школы"""
         user = self.users_collection.find_one({'user_id': user_id})
         if not user:
@@ -147,12 +147,12 @@ class UserService:
         notification_settings = user.get('notification_settings', {})
         return notification_settings.get(school_id, True)  # По умолчанию включены
 
-    def get_notification_settings_batch(self, school_id: str = None) -> dict:
+    def get_notification_settings_batch(self, school_id: str | None = None) -> dict[int, bool]:
         """Возвращает {user_id: notifications_enabled} для школы одним проходом.
 
         Убирает линейный find_one на каждого получателя при массовой рассылке.
         """
-        result = {}
+        result: dict[int, bool] = {}
         for user in self.users_collection.find({}):
             user_id = user.get('user_id')
             if not user_id:
@@ -161,7 +161,7 @@ class UserService:
             result[user_id] = settings.get(school_id, True) if school_id else True
         return result
 
-    def clear_user_class(self, user_id: int, school_id: str = None) -> bool:
+    def clear_user_class(self, user_id: int, school_id: str | None = None) -> bool:
         """Очищает выбранный класс пользователя для конкретной школы"""
         user = self.users_collection.find_one({'user_id': user_id})
         if not user:

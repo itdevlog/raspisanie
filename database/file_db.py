@@ -104,7 +104,7 @@ class Collection:
                     return self._clean_document(doc)
             return None
 
-    def find(self, query: dict = None) -> list[dict]:
+    def find(self, query: dict | None = None) -> list[dict]:
         """Находит все документы по запросу"""
         with self.db._lock:
             if query is None:
@@ -150,7 +150,7 @@ class Collection:
 
     def _clean_document(self, document: dict) -> dict:
         """Очищает документ от несериализуемых объектов"""
-        cleaned = {}
+        cleaned: dict = {}
         for key, value in document.items():
             if isinstance(value, (str, int, float, bool, type(None))):
                 cleaned[key] = value

@@ -1,5 +1,7 @@
+from typing import cast
+
 # Конфигурация поддерживаемых школ
-SCHOOLS_CONFIG = {
+SCHOOLS_CONFIG: dict[str, dict] = {
     "school_133": {
         "id": "school_133",
         "name": "МАОУ СОШ №133",
@@ -33,7 +35,7 @@ def get_display_name(school_id: str, school_data: dict) -> str:
     if raw_name:
         return raw_name
     config_name = (SCHOOLS_CONFIG.get(school_id) or {}).get('name')
-    return config_name or school_id
+    return cast(str, config_name) if config_name else school_id
 
 
 def get_school_by_id(school_id: str) -> dict:
