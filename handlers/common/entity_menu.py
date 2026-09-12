@@ -36,7 +36,7 @@ class EntityConfig:
     button_truncate: int               # 20 (teacher) / 15 (room)
     state_full_key: str                # 'teachers' | 'rooms'
     state_search_key: str              # 'search_teachers' | 'search_rooms'
-    search_query_key: str              # 'teacher_search_query' | 'room_search_query'
+    search_query_key: str                # 'teacher_search_query' | 'room_search_query'
 
     # Фабрика сервиса из school_data
     service_factory: Any = field(default=None)
@@ -46,6 +46,9 @@ class EntityConfig:
     schedule_today_method: str = 'get_teacher_schedule_today'
     schedule_tomorrow_method: str = 'get_teacher_schedule_tomorrow'
     schedule_week_method: str = 'get_teacher_schedule_week'
+    # Доп. кнопка в меню сущности (напр. «Свободный кабинет»); None — нет
+    extra_button_label: str | None = None
+    extra_button_callback: str | None = None
 
 
 class EntityMenuHandler:
@@ -118,8 +121,11 @@ class EntityMenuHandler:
         keyboard = [
             [InlineKeyboardButton("🔍 Поиск", callback_data=f"{self.p}_search_input")],
             [InlineKeyboardButton("📋 Показать все", callback_data=f"{self.p}_show_all_0")],
-            [InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")],
         ]
+        if self.cfg.extra_button_label and self.cfg.extra_button_callback:
+            keyboard.append([InlineKeyboardButton(
+                self.cfg.extra_button_label, callback_data=self.cfg.extra_button_callback)])
+        keyboard.append([InlineKeyboardButton("🔙 Главное меню", callback_data="main_menu")])
         return await self._edit_or_reply(update, context, text, InlineKeyboardMarkup(keyboard))
 
     # ---------- показ всех (пагинация) ----------

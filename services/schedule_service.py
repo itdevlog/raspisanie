@@ -96,30 +96,51 @@ class ScheduleService(BaseScheduleService):
         if not period_id:
             return "❌ Не удалось определить учебный период"
 
-        # Получаем день недели (1-понедельник, 7-воскресенье)
-        day_num = date.isoweekday()
-        if day_num > 5:  # 6-суббота, 7-воскресенье
+        # Перенос праздников: каникулы — занятий нет; transfer —
+        # расписание другого дня недели (как на сайте)
+        info = self._get_holiday_info(date) or {}
+        week_num = int(info.get('weeknum') or 0)
+        effective = self._get_effective_day(date, period_id)
+        if effective is None:
+            day_name = self._get_day_name(date)
+            date_str = date.strftime('%d.%m.%Y')
+            return f"📅 *{class_name} - {day_name}, {date_str}*\n\n🏖️ Каникулы/праздник — занятий нет"
+        eff_period_id, day_num = effective
+        if not eff_period_id:
+            return "❌ Не удалось определить учебный период"
+
+        # Выходные (проверяем реальный день — перенесённый может быть рабочим,
+        # например пн→сб)
+        if date.isoweekday() > 5 and not self._get_holiday_info(date):
             day_name = self._get_day_name(date)
             date_str = date.strftime('%d.%m.%Y')
             return f"📅 *{class_name} - {day_name}, {date_str}*\n\n🏖️ Выходной день"
 
         # Получаем базовое расписание
-        schedule_data = self._get_schedule_data(period_id, class_id, day_num)
+        schedule_data = self._get_schedule_data(eff_period_id, class_id, day_num, week_num)
 
         # Применяем замены
         schedule_data = self.exchange_service.apply_exchanges_to_schedule(class_name, schedule_data, date)
 
         return self._format_schedule_response('class', class_name, date, schedule_data, include_header)
 
-    def _get_schedule_data(self, period_id: str, class_id: str, day_num: int) -> list[dict]:
-        """Получает данные расписания класса - СПЕЦИФИЧНАЯ ЛОГИКА"""
+    def _get_schedule_data(self, period_id: str, class_id: str, day_num: int,
+                           week_num: int = 0) -> list[dict]:
+        """Получает данные расписания класса - СПЕЦИФИЧНАЯ ЛОГИКА.
+
+        week_num > 0 — номер учебной недели (ключи с префиксом недели:
+        "{week}{day}{lesson}", как в Nikasoft при переносе на неделю N).
+        """
         schedule = []
         class_schedule = self.school_data.get('CLASS_SCHEDULE', {}).get(period_id, {}).get(class_id, {})
 
-        # ПРАВИЛЬНЫЙ ФОРМАТ: "401" = день4 урок1, "410" = день4 урок10
+        # ПРАВИЛЬНЫЙ ФОРМАТ: "401" = день4 урок1, "410" = день4 урок10;
+        # при week_num>0 — "{week}{day}{lesson}" (неделя с префиксом)
         for lesson_num in range(1, self.school_data.get('LESSONSINDAY', 12) + 1):
             # Формируем ключ: "401" для дня4 урока1, "410" для дня4 урока10
             key = f"{day_num}{lesson_num:02d}"
+            if week_num > 0:
+                key = f"{week_num}{key}"
 
             if key in class_schedule:
                 # Глубокая копия данных урока, чтобы замены не мутировали исходное расписание

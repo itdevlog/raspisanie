@@ -62,9 +62,21 @@ class TeacherService(BaseScheduleService):
         if not period_id:
             return "❌ Не удалось определить учебный период"
 
-        # Получаем день недели (1-понедельник, 7-воскресенье)
-        day_num = date.isoweekday()
-        if day_num > 5:  # Выходные
+        # Перенос праздников: каникулы — занятий нет; transfer —
+        # расписание другого дня недели (как на сайте)
+        effective = self._get_effective_day(date, period_id)
+        if effective is None:
+            day_name = self._get_day_name(date)
+            date_str = date.strftime('%d.%m.%Y')
+            # Экранируем специальные символы Markdown в имени преподавателя
+            safe_teacher_name = teacher_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+            return f"📅 *{safe_teacher_name} - {day_name}, {date_str}*\n\n🏖️ Каникулы/праздник — занятий нет"
+        eff_period_id, day_num = effective
+        if not eff_period_id:
+            return "❌ Не удалось определить учебный период"
+
+        # Выходные (реальный день — перенесённый может быть рабочим)
+        if date.isoweekday() > 5 and not self._get_holiday_info(date):
             day_name = self._get_day_name(date)
             date_str = date.strftime('%d.%m.%Y')
             # Экранируем специальные символы Markdown в имени преподавателя
@@ -72,7 +84,7 @@ class TeacherService(BaseScheduleService):
             return f"📅 *{safe_teacher_name} - {day_name}, {date_str}*\n\n🏖️ Выходной день"
 
         # Получаем расписание преподавателя
-        schedule_data = self._get_teacher_schedule_data(period_id, teacher_id, day_num, date)
+        schedule_data = self._get_teacher_schedule_data(eff_period_id, teacher_id, day_num, date)
 
         return self._format_schedule_response('teacher', teacher_name, date, schedule_data, include_header)
 
@@ -80,6 +92,7 @@ class TeacherService(BaseScheduleService):
         """Получает данные расписания преподавателя - СПЕЦИФИЧНАЯ ЛОГИКА"""
         schedule = []
         class_schedule = self.school_data.get('CLASS_SCHEDULE', {}).get(period_id, {})
+        teacher_exchanges = self._get_teacher_exchanges_for_date(teacher_id, date)
 
         # Ищем уроки, где преподает этот учитель
         for class_id, class_lessons in class_schedule.items():
@@ -123,6 +136,78 @@ class TeacherService(BaseScheduleService):
                                 'is_cancelled': updated_lesson.get('is_cancelled', False)
                             })
 
+        # Перекрытие классных замен замещающим уроком из TEACH_EXCHANGE
+        # (заменяющий учитель ведёт чужой урок в это время)
+        for lesson_num, exchange in teacher_exchanges.items():
+            self._apply_teacher_exchange(schedule, lesson_num, exchange, teacher_id)
+
         # Сортируем по номеру урока
         schedule.sort(key=lambda x: x['lesson_num'])
         return schedule
+
+    def _get_teacher_exchanges_for_date(self, teacher_id: str, date: datetime) -> dict[int, dict]:
+        """Замены учителя на дату: {номер урока (int): данные замены}."""
+        date_str = date.strftime('%d.%m.%Y')
+        raw = (self.school_data.get('TEACH_EXCHANGE', {})
+               .get(teacher_id, {}).get(date_str, {}))
+        result: dict[int, dict] = {}
+        for lesson_num, exchange in raw.items():
+            try:
+                result[int(lesson_num)] = exchange
+            except (TypeError, ValueError):
+                continue
+        return result
+
+    def _apply_teacher_exchange(self, schedule: list[dict], lesson_num: int,
+                                exchange: dict, teacher_id: str) -> None:
+        """Применяет TEACH_EXCHANGE к уже собранному списку уроков учителя.
+
+        Семантика Nikasoft: запись в TEACH_EXCHANGE[учитель][дата][урок]
+        полностью перекрывает слот на этот урок — у учителя в этот слот
+        ведётся урок из записи (классы c, предмет s, кабинет r),
+        а не то, что было в базовом расписании. `"s": "F"` — урок у
+        учителя отменён (свободный слот).
+        """
+        # Существующие уроки учителя в этом слоте заменяет новая запись
+        slot_items = [item for item in schedule if item['lesson_num'] == lesson_num]
+        for item in slot_items:
+            schedule.remove(item)
+
+        if exchange.get('s') == 'F':
+            # Урок отменён — слот остаётся пустым (как у сайта при
+            # StrikeOutFreeLsn=False: строка не показывается)
+            if slot_items:
+                schedule.append({
+                    'lesson_num': lesson_num,
+                    'class_name': slot_items[0]['class_name'],
+                    'data': slot_items[0]['data'],
+                    'has_exchange': True,
+                    'is_cancelled': True,
+                })
+            return
+
+        classes = self.school_data.get('CLASSES', {})
+        rooms = self.school_data.get('ROOMS', {})
+        class_names = [classes.get(str(c), '') for c in (exchange.get('c') or [])]
+        class_name = ', '.join(n for n in class_names if n) or (
+            slot_items[0]['class_name'] if slot_items else 'Неизвестно')
+
+        room = exchange.get('r')
+        rooms_list = [rooms.get(str(r), str(r)) for r in (room if isinstance(room, list) else [room])] if room else []
+
+        # Учитель записи сам ведёт этот урок; сохраняем исходных учителей
+        # слота, если они есть (групповые уроки)
+        base_teachers = list(slot_items[0]['data'].get('t', [])) if slot_items else []
+        teachers = base_teachers or ([teacher_id] if teacher_id else [])
+
+        schedule.append({
+            'lesson_num': lesson_num,
+            'class_name': class_name,
+            'data': {
+                's': [exchange['s']] if 's' in exchange else (slot_items[0]['data'].get('s', []) if slot_items else []),
+                't': teachers,
+                'r': rooms_list or (list(slot_items[0]['data'].get('r', [])) if slot_items else []),
+            },
+            'has_exchange': True,
+            'is_cancelled': False,
+        })

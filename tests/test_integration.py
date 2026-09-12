@@ -24,6 +24,7 @@ class FakeQuery:
 
     async def edit_message_text(self, text, **kwargs):
         self.edits.append(text)
+        self.last_markup = kwargs.get('reply_markup')
 
     async def answer(self, text=None, **kwargs):
         self.answers.append(text or '')
@@ -80,3 +81,67 @@ async def test_entity_search_render():
     ctx = _context(bot_data)
     await teacher_menu_handler(up, ctx)
     assert q.edits and 'Поиск преподавателя' in q.edits[-1]
+
+
+async def test_room_menu_has_free_rooms_button():
+    """В меню кабинетов есть кнопка «Свободный кабинет»."""
+    from handlers.rooms.room_schedule import room_menu_handler
+
+    q = FakeQuery()
+    up = _update(q)
+    school_data = {'CLASSES': {}, 'TEACHERS': {}, 'ROOMS': {'r1': '101'}, 'SUBJECTS': {}}
+    bot_data = {
+        'user_service': SimpleNamespace(get_user_school=lambda uid: 'school_133'),
+        'schools_data': {'school_133': school_data},
+    }
+    ctx = _context(bot_data)
+    await room_menu_handler(up, ctx)
+    assert q.edits and 'Расписание кабинетов' in q.edits[-1]
+    # Кнопка «Свободный кабинет» ведёт на room_free_now
+    buttons = [btn.text for row in (q.last_markup.inline_keyboard if q.last_markup else [])
+               for btn in row]
+    assert any('Свободный кабинет' in text for text in buttons)
+
+
+async def test_free_rooms_callback_renders():
+    """Callback room_free_now рендерит список свободных кабинетов."""
+    from datetime import datetime
+
+    import pytz
+
+    from handlers.rooms.room_schedule import free_rooms_handler
+
+    school_data = {
+        'CLASSES': {'c1': '5а'},
+        'TEACHERS': {'t1': 'Иванов'},
+        'ROOMS': {'r1': '101', 'r2': '102'},
+        'SUBJECTS': {'s1': 'Математика'},
+        'PERIODS': {'p1': {'b': '01.09.2026', 'e': '31.05.2027'}},
+        'LESSON_TIMES': {'1': ['08:00', '08:45'], '2': ['09:00', '09:45']},
+        'LESSONSINDAY': 12,
+        'CLASS_SCHEDULE': {'p1': {'c1': {'501': {'s': ['s1'], 't': ['t1'], 'r': ['r1']}}}},
+        'CLASS_EXCHANGE': {},
+    }
+    bot_data = {
+        'user_service': SimpleNamespace(get_user_school=lambda uid: 'school_133'),
+        'schools_data': {'school_133': school_data},
+    }
+    q = FakeQuery()
+    up = _update(q)
+    ctx = _context(bot_data)
+
+    # 08:30 пятницы — идёт урок 1 (101 занят, 102 свободен)
+    import handlers.rooms.room_schedule as rs
+    real_now = datetime.now
+    fake_now = datetime(2026, 9, 11, 8, 30, tzinfo=pytz.timezone('Asia/Yekaterinburg'))
+    rs.datetime = SimpleNamespace(now=lambda tz=None: fake_now)
+
+    try:
+        await free_rooms_handler(up, ctx)
+    finally:
+        rs.datetime = real_now
+
+    assert q.edits
+    assert 'Свободные кабинеты' in q.edits[-1]
+    assert '102' in q.edits[-1]
+    assert '101' not in q.edits[-1].replace('Свободные кабинеты на 1-й урок', '')

@@ -62,6 +62,51 @@ class BaseScheduleService:
 
         return None
 
+    def _get_holiday_info(self, date: datetime) -> dict | None:
+        """Информация о переносе/каникулах для даты (HOLIDAY_TRANSFER).
+
+        Формат Nikasoft: {"дд.мм.гггг": {"type": "vacation"|"transfer",
+        "daynum": 1..7, "weeknum": 1|2, "period": id}}.
+        """
+        date_str = date.strftime('%d.%m.%Y')
+        info = self.school_data.get('HOLIDAY_TRANSFER', {}).get(date_str)
+        return info if isinstance(info, dict) else None
+
+    def _is_vacation_day(self, date: datetime) -> bool:
+        """True, если дата — неучебный день (каникулы/праздник)."""
+        info = self._get_holiday_info(date)
+        return bool(info and info.get('type') == 'vacation')
+
+    def _get_effective_day(self, date: datetime,
+                           period_id: str | None = None) -> tuple[str | None, int] | None:
+        """(period_id, day_num) с учётом переноса праздников - ОБЩАЯ ЛОГИКА.
+
+        Возвращает None, если дата — каникулы (занятий нет).
+        При переносе ("transfer") день работает по расписанию daynum
+        (опционально weeknum-недели и period-периода), как на сайте.
+        period_id в результате может быть None, если период даты не найден —
+        вызывающие уже проверяют это выше по потоку.
+        """
+        info = self._get_holiday_info(date)
+        if not info:
+            return period_id, date.isoweekday()
+
+        htype = info.get('type')
+        if htype == 'vacation':
+            return None
+
+        if htype == 'transfer':
+            raw_day = info.get('daynum')
+            try:
+                day_num = int(raw_day) if raw_day is not None else date.isoweekday()
+            except (TypeError, ValueError):
+                day_num = date.isoweekday()
+            eff_period = info.get('period') or period_id
+            return eff_period, day_num
+
+        # неизвестный тип — обычный день
+        return period_id, date.isoweekday()
+
     def _format_time_ago(self, time_diff: timedelta) -> str:
         """Форматирует разницу во времени - ОБЩАЯ ЛОГИКА"""
         return format_time_ago(time_diff)
@@ -127,13 +172,21 @@ class BaseScheduleService:
         icon = type_icons.get(entity_type, '📅')
         return f"{icon} *{safe_entity_name} - {day_name}, {date_str}*\n\n"
 
-    def _format_lesson_line(self, lesson_data: dict, has_exchange: bool = False, is_cancelled: bool = False) -> str:
+    def _format_lesson_line(self, lesson_data: dict, has_exchange: bool = False,
+                            is_cancelled: bool = False) -> str:
         """Форматирует строку урока - ОБЩАЯ ЛОГИКА"""
         lesson_num = lesson_data['lesson_num']
         lesson_times = self._get_lesson_times(lesson_num)
 
         if is_cancelled:
             return f"❌ *{lesson_num}. {lesson_times[0]}-{lesson_times[1]} • ОТМЕНЕНО*"
+
+        # Класс урока (для расписаний учителя/кабинета)
+        class_name = lesson_data.get('class_name')
+        class_part = ''
+        if class_name:
+            safe_class = self._escape_markdown(str(class_name))
+            class_part = f" ({safe_class})"
 
         # Предметы (убираем дубли)
         subjects = []
@@ -153,10 +206,12 @@ class BaseScheduleService:
             if teacher_name not in teachers:
                 teachers.append(teacher_name)
 
-        # Кабинеты (убираем дубли)
+        # Кабинеты (убираем дубли).
+        # Значение может быть как id (базовое расписание), так и готовым
+        # именем (замены TEACH_EXCHANGE) — неизвестное показываем как есть.
         rooms = []
         for room_id in lesson_data['data'].get('r', []):
-            room_name = self.school_data.get('ROOMS', {}).get(room_id, '?')
+            room_name = self.school_data.get('ROOMS', {}).get(room_id, str(room_id))
             # Экранируем специальные символы Markdown в названии кабинета
             room_name = self._escape_markdown(room_name)
             if room_name not in rooms:
@@ -167,7 +222,7 @@ class BaseScheduleService:
             lines = []
             # Основная строка с временем и предметом в курсиве (в Telegram отображается как жирный)
             subject_part = f"{', '.join(subjects)}" if subjects else "?"
-            main_line = f"{'🔄 ' if has_exchange else ''}*{lesson_num}. {lesson_times[0]}-{lesson_times[1]} • {subject_part}*"
+            main_line = f"{'🔄 ' if has_exchange else ''}*{lesson_num}. {lesson_times[0]}-{lesson_times[1]} • {subject_part}{class_part}*"
             lines.append(main_line)
 
             # Создаем строки для каждой группы
@@ -192,7 +247,7 @@ class BaseScheduleService:
         else:
             # Стандартное форматирование для одного преподавателя/кабинета
             subject_part = f"{', '.join(subjects)}" if subjects else "?"
-            main_line = f"{'🔄 ' if has_exchange else ''}*{lesson_num}. {lesson_times[0]}-{lesson_times[1]} • {subject_part}*"
+            main_line = f"{'🔄 ' if has_exchange else ''}*{lesson_num}. {lesson_times[0]}-{lesson_times[1]} • {subject_part}{class_part}*"
 
             if teachers and rooms:
                 main_line += f"\n   {teachers[0]} • {rooms[0]}"

@@ -17,6 +17,9 @@ class RoomCallbackHandler:
         elif callback_data == "room_search_cancel":
             from handlers.rooms.room_schedule import room_menu_handler
             await room_menu_handler(update, context)
+        elif callback_data == "room_free_now":
+            from handlers.rooms.room_schedule import free_rooms_handler
+            await free_rooms_handler(update, context)
         elif callback_data == "room_show_all":
             await self._handle_show_all_rooms(update, context)
         elif callback_data.startswith("room_show_all_"):

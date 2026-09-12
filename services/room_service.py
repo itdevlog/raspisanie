@@ -62,9 +62,21 @@ class RoomService(BaseScheduleService):
         if not period_id:
             return "❌ Не удалось определить учебный период"
 
-        # Получаем день недели (1-понедельник, 7-воскресенье)
-        day_num = date.isoweekday()
-        if day_num > 5:  # Выходные
+        # Перенос праздников: каникулы — занятий нет; transfer —
+        # расписание другого дня недели (как на сайте)
+        effective = self._get_effective_day(date, period_id)
+        if effective is None:
+            day_name = self._get_day_name(date)
+            date_str = date.strftime('%d.%m.%Y')
+            # Экранируем специальные символы Markdown в названии кабинета
+            safe_room_name = room_name.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+            return f"📅 *Кабинет {safe_room_name} - {day_name}, {date_str}*\n\n🏖️ Каникулы/праздник — занятий нет"
+        eff_period_id, day_num = effective
+        if not eff_period_id:
+            return "❌ Не удалось определить учебный период"
+
+        # Выходные (реальный день — перенесённый может быть рабочим)
+        if date.isoweekday() > 5 and not self._get_holiday_info(date):
             day_name = self._get_day_name(date)
             date_str = date.strftime('%d.%m.%Y')
             # Экранируем специальные символы Markdown в названии кабинета
@@ -72,7 +84,7 @@ class RoomService(BaseScheduleService):
             return f"📅 *Кабинет {safe_room_name} - {day_name}, {date_str}*\n\n🏖️ Выходной день"
 
         # Получаем расписание кабинета
-        schedule_data = self._get_room_schedule_data(period_id, room_id, day_num, date)
+        schedule_data = self._get_room_schedule_data(eff_period_id, room_id, day_num, date)
 
         return self._format_schedule_response('room', room_name, date, schedule_data, include_header)
 
@@ -126,3 +138,90 @@ class RoomService(BaseScheduleService):
         # Сортируем по номеру урока
         schedule.sort(key=lambda x: x['lesson_num'])
         return schedule
+
+    # ---------- свободные кабинеты («Найти свободный кабинет» с сайта) ----------
+
+    def get_free_rooms(self, date: datetime, lesson_num: int) -> list[str]:
+        """Имена свободных кабинетов на урок lesson_num в дату.
+
+        Кабинет свободен, если после применения всех замен (CLASS_EXCHANGE,
+        TEACH_EXCHANGE, отмены 'F') в нём нет занятий в этот слот.
+        В каникулы/выходные свободны все.
+        """
+        all_rooms = self.school_data.get('ROOMS', {})
+        if not all_rooms:
+            return []
+
+        period_id = self._get_period_for_date(date)
+        if not period_id:
+            return []
+
+        effective = self._get_effective_day(date, period_id)
+        if effective is None:  # каникулы — все свободны
+            return list(all_rooms.values())
+        eff_period_id, day_num = effective
+        if not eff_period_id or day_num > 5:
+            return []
+
+        busy = self._get_busy_rooms_for_lesson(eff_period_id, day_num, date, lesson_num)
+        free = [name for room_id, name in all_rooms.items() if room_id not in busy]
+        return sorted(free, key=_room_sort_key)
+
+    def _get_busy_rooms_for_lesson(self, period_id: str, day_num: int,
+                                   date: datetime, lesson_num: int) -> set[str]:
+        """ID кабинетов, занятых на урок lesson_num (с учётом замен)."""
+        busy: set[str] = set()
+        rooms_dict = self.school_data.get('ROOMS', {})
+        date_str = date.strftime('%d.%m.%Y')
+        key = f"{day_num}{lesson_num:02d}"
+
+        # 1) Базовое расписание + CLASS_EXCHANGE
+        class_schedule = self.school_data.get('CLASS_SCHEDULE', {}).get(period_id, {})
+        for class_id, class_lessons in class_schedule.items():
+            lesson = class_lessons.get(key)
+            if not lesson:
+                continue
+            exchange = (self.school_data.get('CLASS_EXCHANGE', {})
+                        .get(class_id, {}).get(date_str, {}).get(str(lesson_num)))
+            if exchange is not None:
+                if isinstance(exchange.get('s'), str) and exchange['s'] == 'F':
+                    continue  # урок отменён — кабинет свободен
+                rooms = exchange.get('r', [])
+            else:
+                rooms = lesson.get('r', [])
+            for room in rooms if isinstance(rooms, list) else [rooms]:
+                if room in rooms_dict:
+                    busy.add(room)
+
+        # 2) TEACH_EXCHANGE: замещающий учитель ведёт урок в кабинете r
+        for teacher_id, by_date in self.school_data.get('TEACH_EXCHANGE', {}).items():
+            exchange = by_date.get(date_str, {}).get(str(lesson_num))
+            if not exchange or exchange.get('s') == 'F':
+                continue
+            for room in exchange.get('r', []) if isinstance(exchange.get('r'), list) else [exchange.get('r')]:
+                if room in rooms_dict:
+                    busy.add(room)
+
+        return busy
+
+    def get_free_rooms_message(self, date: datetime, lesson_num: int) -> str:
+        """Готовый текст «свободные кабинеты на урок N» (как на сайте)."""
+        free = self.get_free_rooms(date, lesson_num)
+        date_str = date.strftime('%d.%m.%Y')
+        times = self._get_lesson_times(lesson_num)
+        safe_date = self._escape_markdown(date_str)
+
+        header = f"🔍 *Свободные кабинеты на {lesson_num}-й урок*\n"
+        header += f"🕐 {times[0]}-{times[1]} • {safe_date}\n\n"
+
+        if not free:
+            return header + "❌ Все кабинеты заняты"
+
+        lines = [self._escape_markdown(name) for name in free]
+        return header + " ".join(lines)
+
+
+def _room_sort_key(name: str):
+    """Числовая сортировка кабинетов: 101, 102, 2а, актовый."""
+    digits = ''.join(ch for ch in name if ch.isdigit())
+    return (int(digits) if digits else 10 ** 9, name)
