@@ -68,7 +68,7 @@
 
 ## 5. Тесты
 
-Есть pytest (158 тестов: юнит + mock-интеграционные через pytest-asyncio, `tests/test_integration.py`). 
+Есть pytest (165 тестов: юнит + mock-интеграционные через pytest-asyncio, `tests/test_integration.py`). 
 
 - Инструменты: ruff/mypy/CI подключены (конфиги `ruff.toml`, `mypy.ini`, `.github/workflows/ci.yml`); `ruff check .` — чисто.
 

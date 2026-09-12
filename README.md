@@ -19,7 +19,7 @@
 - 👑 **Админ-панель** — статус школ, принудительное обновление, статистика пользователей, `/check_exchanges`.
 - 📊 **Мониторинг статуса** — команда `/status` показывает актуальность данных по каждой школе (иконка ✅/⚠️/🔴 «Устарело»).
 - 🔍 **Умный поиск** — учителя/кабинеты по имени с пагинацией, кнопками «Обновить»/«Отмена».
-- 🛠️ **Качество кода** — 158 юнит/интеграционных тестов, ruff (чистый), CI.
+- 🛠️ **Качество кода** — 165 юнит/интеграционных тестов, ruff (чистый), CI.
 
 ---
 
@@ -62,7 +62,7 @@ telegrambot/
 ├── services/                    # Бизнес-логика (расписание, замены, уведомления)
 ├── data/                        # database.json, exchange_cache.json, notifications_cache.json
 ├── logs/                        # bot.log (ротация 5МБ×3), admin.log
-└── tests/                       # 158 pytest (юнит + интеграционные моки)
+└── tests/                       # 165 pytest (юнит + интеграционные моки)
 ```
 
 ---
@@ -186,7 +186,7 @@ journalctl -u tg-schedule-bot.service -f
 pip install -r requirements-dev.txt
 
 .venv/bin/ruff check .        # линтер (чисто)
-.venv/bin/python -m pytest    # 158 тестов
+.venv/bin/python -m pytest    # 165 тестов
 ```
 
 - Юнит: нарезка сообщений, `paginate`, `get_display_name`, матчинг класса (p.11), `FileDB` (битый файл/upsert/delete_one), кэш-уведомления, callback-роутинг, `@requires_school`, exchange round-trip.
