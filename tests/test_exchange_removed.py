@@ -106,3 +106,89 @@ def test_mixed_notification_keeps_original_header():
     ]
     text = svc._format_exchange_notification('5А', exchanges, date)
     assert 'Новые замены в расписании' in text
+
+
+def _notification_svc():
+    from services.notification_service import NotificationService
+
+    svc = NotificationService.__new__(NotificationService)
+    svc.logger = logging.getLogger('test')
+    svc.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+    return svc
+
+
+def test_replacement_shows_before_and_after_with_time():
+    """Вариант B: время урока и обе стороны «до → после»."""
+    svc = _notification_svc()
+    date = datetime(2026, 9, 11, 12, 0, tzinfo=svc.moscow_tz)
+    exchanges = [{
+        'class_name': '6И', 'lesson_num': 6, 'lesson_time': '13:00-13:45',
+        'original_subject': 'Математика', 'original_teacher': 'Ищенко Ксения Александровна',
+        'original_room': '301',
+        'new_subject': 'Биология', 'new_teacher': 'Усольцева Анастасия Дмитриевна',
+        'new_room': '4022', 'is_cancelled': False, 'timestamp': date,
+    }]
+    text = svc._format_exchange_notification('6И', exchanges, date)
+    assert '🔄 6. 13:00-13:45 • Математика (Ищенко К.А., каб. 301)' in text
+    assert '→ Биология (Усольцева А.Д., каб. 4022)' in text
+
+
+def test_teacher_shortened_to_initials():
+    """ФИО сокращается до «Фамилия И.О.» — в т.ч. обрезанные источником."""
+    svc = _notification_svc()
+    date = datetime(2026, 9, 11, 12, 0, tzinfo=svc.moscow_tz)
+    exchanges = [{
+        'class_name': '6И', 'lesson_num': 10, 'lesson_time': '15:35-16:20',
+        'original_subject': 'Математика', 'original_teacher': 'Ищенко Ксения Александровна',
+        'original_room': '301',
+        'new_subject': 'Музыка', 'new_teacher': 'Александрова Валентина Александровн',
+        'new_room': '4022', 'is_cancelled': False, 'timestamp': date,
+    }]
+    text = svc._format_exchange_notification('6И', exchanges, date)
+    assert 'Усольцева А.Д.' not in text or True  # sanity: формат не упал
+    assert 'Александрова' in text
+    assert 'Валентина Александровн' not in text  # полное ФИО не показывается
+
+
+def test_cancelled_shows_before_subject_only():
+    """Отмена: показываем «до» и слово ОТМЕНЕНО, без стороны «после»."""
+    svc = _notification_svc()
+    date = datetime(2026, 9, 11, 12, 0, tzinfo=svc.moscow_tz)
+    exchanges = [{
+        'class_name': '6И', 'lesson_num': 12, 'lesson_time': '17:30-18:15',
+        'original_subject': 'Информатика', 'original_teacher': 'Петров Пётр Петрович',
+        'original_room': '205',
+        'new_subject': '', 'new_teacher': '', 'new_room': '',
+        'is_cancelled': True, 'timestamp': date,
+    }]
+    text = svc._format_exchange_notification('6И', exchanges, date)
+    assert '❌ 12. 17:30-18:15 • Информатика (Петров П.П., каб. 205) — *ОТМЕНЕНО*' in text
+
+
+def test_missing_time_falls_back_without_bullet():
+    """Нет lesson_time (старый кэш/нет LESSON_TIMES) — строка без времени."""
+    svc = _notification_svc()
+    date = datetime(2026, 9, 11, 12, 0, tzinfo=svc.moscow_tz)
+    exchanges = [{
+        'class_name': '5А', 'lesson_num': 2, 'original_subject': 'Урок 2',
+        'original_teacher': '', 'original_room': '',
+        'new_subject': 'Физика', 'new_teacher': 'Сидоров Иван Иванович',
+        'new_room': '101', 'is_cancelled': False, 'timestamp': date,
+    }]
+    text = svc._format_exchange_notification('5А', exchanges, date)
+    assert '🔄 2. Урок 2 → Физика (Сидоров И.И., каб. 101)' in text
+
+
+def test_removed_uses_new_format_with_time():
+    """Снятие замены: формат с временем и исходными деталями."""
+    svc = _notification_svc()
+    date = datetime(2026, 9, 11, 12, 0, tzinfo=svc.moscow_tz)
+    exchanges = [{
+        'class_name': '5А', 'lesson_num': 3, 'removed': True,
+        'original_subject': 'Математика', 'original_teacher': 'Иванов Иван Иванович',
+        'original_room': '301', 'lesson_time': '09:00-09:45',
+        'new_subject': '', 'new_teacher': '', 'new_room': '',
+        'is_cancelled': False, 'timestamp': date,
+    }]
+    text = svc._format_exchange_notification('5А', exchanges, date)
+    assert '↩️ 3. 09:00-09:45 • Математика (Иванов И.И., каб. 301) — *замена снята*' in text

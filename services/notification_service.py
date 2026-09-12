@@ -363,27 +363,32 @@ class NotificationService:
         # Добавляем информацию о заменах
         for exchange in exchanges:
             lesson_num = exchange.get('lesson_num', '?')
-            original_subject = escape_markdown(exchange.get('original_subject', 'Неизвестно'))
-            new_subject = escape_markdown(exchange.get('new_subject', ''))
-            new_teacher = escape_markdown(exchange.get('new_teacher', ''))
-            new_room = escape_markdown(exchange.get('new_room', ''))
+            lesson_time = exchange.get('lesson_time', '')
+            original_subject = exchange.get('original_subject', 'Неизвестно')
+            original_teacher = exchange.get('original_teacher', '')
+            original_room = exchange.get('original_room', '')
+            new_subject = exchange.get('new_subject', '')
+            new_teacher = exchange.get('new_teacher', '')
+            new_room = exchange.get('new_room', '')
             is_cancelled = exchange.get('is_cancelled', False)
+
+            # Человекочитаемая строка «до»: предмет (учитель, каб.)
+            before = self._format_before_after(original_subject, original_teacher, original_room)
+            after = self._format_before_after(
+                new_subject, new_teacher, new_room, fallback_subject=original_subject)
+
+            time_part = f"{lesson_time} • " if lesson_time else ""
+            prefix = f"{lesson_num}. {time_part}"
 
             # Формируем строку урока
             if exchange.get('removed'):
-                lesson_line = f"↩️ {lesson_num}. {original_subject} — *замена снята*"
+                lesson_line = f"↩️ {prefix}{before} — *замена снята*"
                 message.append(lesson_line)
                 continue
             if is_cancelled:
-                lesson_line = f"❌ {lesson_num}. {original_subject} - *ОТМЕНЕНО*"
+                lesson_line = f"❌ {prefix}{before} — *ОТМЕНЕНО*"
             else:
-                lesson_line = f"🔄 {lesson_num}. {original_subject}"
-                if new_subject:
-                    lesson_line += f" → {new_subject}"
-                if new_teacher:
-                    lesson_line += f" 👨‍🏫{new_teacher}"
-                if new_room:
-                    lesson_line += f" 🏫{new_room}"
+                lesson_line = f"🔄 {prefix}{before} → {after}"
 
             message.append(lesson_line)
 
@@ -400,6 +405,26 @@ class NotificationService:
         if exchanges and all(e.get('removed') for e in exchanges):
             return "📝 *Замены сняты:*"
         return "📝 *Новые замены в расписании:*"
+
+    @staticmethod
+    def _format_before_after(subject: str, teacher: str, room: str,
+                             fallback_subject: str = '') -> str:
+        """Строка «предмет (Фамилия И.О., каб.)» для стороны «до»/«после».
+
+        Экранируются компоненты по отдельности — структурные скобки
+        и запятые остаются литеральными.
+        """
+        from services.text_utils import escape_markdown, short_name
+
+        text = escape_markdown(subject or fallback_subject or '?')
+        details = []
+        if teacher:
+            details.append(escape_markdown(short_name(teacher)))
+        if room:
+            details.append(f"каб. {escape_markdown(room)}")
+        if details:
+            text += f" ({', '.join(details)})"
+        return text
 
     def _get_day_name(self, date: datetime) -> str:
         """Получает название дня недели"""

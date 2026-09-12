@@ -225,6 +225,9 @@ class ExchangeDetector:
                 'lesson_num': int(lesson_num),
                 'removed': True,
                 'original_subject': formatted.get('original_subject', f'Урок {lesson_num}'),
+                'original_teacher': formatted.get('original_teacher', ''),
+                'original_room': formatted.get('original_room', ''),
+                'lesson_time': formatted.get('lesson_time', ''),
                 'new_subject': '', 'new_teacher': '', 'new_room': '',
                 'is_cancelled': False,
                 'timestamp': date,
@@ -258,7 +261,16 @@ class ExchangeDetector:
         is_cancelled = exchange.get('is_cancelled', False)
 
         # Получаем информацию о предмете, преподавателе, кабинете
-        original_subject = self._get_original_subject(class_name, lesson_num, school_data)
+        original = self._get_original_lesson(class_name, lesson_num, date, school_data) or {}
+        original_subject = original.get('subject') or f"Урок {lesson_num}"
+        original_teacher = original.get('teacher', '')
+        original_room = original.get('room', '')
+
+        lesson_time = ''
+        times = (school_data.get('LESSON_TIMES', {}).get(str(lesson_num))
+                 if school_data and lesson_num is not None else None)
+        if times and len(times) >= 2 and times[0] != '?' and times[1] != '?':
+            lesson_time = f"{times[0]}-{times[1]}"
 
         # Преобразуем коды в реальные названия, если school_data доступен
         new_subject_code = exchange_data.get('s', '')
@@ -278,14 +290,17 @@ class ExchangeDetector:
         teachers_dict = school_data.get('TEACHERS', {}) if school_data else {}
         rooms_dict = school_data.get('ROOMS', {}) if school_data else {}
 
-        new_subject = self._convert_codes_to_names(new_subject_code, subjects_dict, 'subject') if new_subject_code and new_subject_code != 'F' else ''
-        new_teacher = self._convert_codes_to_names(new_teacher_code, teachers_dict, 'teacher') if new_teacher_code else ''
-        new_room = self._convert_codes_to_names(new_room_code, rooms_dict, 'room') if new_room_code else ''
+        new_subject = self._convert_codes_to_names(new_subject_code, subjects_dict) if new_subject_code and new_subject_code != 'F' else ''
+        new_teacher = self._convert_codes_to_names(new_teacher_code, teachers_dict) if new_teacher_code else ''
+        new_room = self._convert_codes_to_names(new_room_code, rooms_dict) if new_room_code else ''
 
         return {
             'class_name': class_name,
             'lesson_num': int(lesson_num) if lesson_num is not None else None,
             'original_subject': original_subject,
+            'original_teacher': original_teacher,
+            'original_room': original_room,
+            'lesson_time': lesson_time,
             'new_subject': new_subject,
             'new_teacher': new_teacher,
             'new_room': new_room,
@@ -293,8 +308,12 @@ class ExchangeDetector:
             'timestamp': date or datetime.now(self.moscow_tz)
         }
 
-    def _convert_codes_to_names(self, codes_str, names_dict, type_name: str) -> str:
-        """Преобразует коды в названия для предметов, преподавателей или кабинетов"""
+    def _convert_codes_to_names(self, codes_str, names_dict) -> str:
+        """Преобразует коды в названия для предметов, преподавателей или кабинетов.
+
+        Кабинеты в CLASS_EXCHANGE приходят уже именами (не id), поэтому
+        неизвестное значение возвращаем как есть — без кавычек.
+        """
         if not codes_str or not names_dict:
             return codes_str
 
@@ -303,29 +322,68 @@ class ExchangeDetector:
             codes = [code.strip() for code in codes_str.split(',')]
             names = []
             for code in codes:
-                name = names_dict.get(code, code)  # Если нет в словаре, возвращаем сам код
-                if type_name == 'teacher':
-                    # Для преподавателей возвращаем полное имя
-                    names.append(name)
-                elif name != code:  # Добавляем только если нашли реальное имя
-                    names.append(name)
-                else:
-                    # Если не нашли имя, добавляем код в кавычках как в текущем уведомлении
-                    names.append(f"'{code}'")
+                names.append(names_dict.get(code, code))
             return ', '.join(names)
-        else:
-            # Один код
-            name = names_dict.get(codes_str, codes_str)
-            if type_name == 'teacher':
-                # Для преподавателей возвращаем полное имя
-                return name
-            return name if name != codes_str else f"'{codes_str}'"
+        return names_dict.get(codes_str, codes_str)
 
     def _get_original_subject(self, class_name: str, lesson_num: int | None, school_data: dict | None = None) -> str:
-        """Получает оригинальное название предмета (упрощенная реализация)"""
-        # Возвращаем стандартное обозначение урока, т.к. получение оригинального предмета из-за
-        # сложной структуры данных расписания требует более тщательной проверки типов данных
-        return f"Урок {lesson_num}"
+        """Название исходного предмета урока по базовому расписанию."""
+        original = self._get_original_lesson(class_name, lesson_num, None, school_data)
+        subject: str = original.get('subject', '') if original else ''
+        return subject or f"Урок {lesson_num}"
+
+    def _get_original_lesson(self, class_name: str, lesson_num: int | None,
+                             date: datetime | None, school_data: dict | None = None) -> dict | None:
+        """Исходный урок (предмет, преподаватель, кабинет) из CLASS_SCHEDULE.
+
+        Ищет учебный период по дате и ключ `день*100 + урок` в расписании
+        класса. Возвращает None, если данных нет — вызовы деградируют
+        к заглушкам («Урок N», без деталей), а не падают.
+        """
+        if not school_data or lesson_num is None:
+            return None
+        try:
+            lesson_num_int = int(lesson_num)
+        except (TypeError, ValueError):
+            return None
+        from services.base_schedule_service import find_class_id
+
+        class_id = find_class_id(school_data, class_name)
+        if not class_id or not date:
+            return None
+
+        periods = school_data.get('PERIODS', {})
+        period_id = None
+        for pid, pdata in periods.items():
+            try:
+                if (datetime.strptime(pdata['b'], '%d.%m.%Y').date()
+                        <= date.date()
+                        <= datetime.strptime(pdata['e'], '%d.%m.%Y').date()):
+                    period_id = pid
+                    break
+            except (ValueError, KeyError):
+                continue
+        if not period_id:
+            return None
+
+        day_num = date.isoweekday()
+        key = f"{day_num}{lesson_num_int:02d}"
+        lesson_data = (school_data.get('CLASS_SCHEDULE', {})
+                       .get(period_id, {}).get(class_id, {}).get(key))
+        if not lesson_data:
+            return None
+
+        subjects = school_data.get('SUBJECTS', {})
+        teachers = school_data.get('TEACHERS', {})
+        rooms = school_data.get('ROOMS', {})
+
+        def names(codes, dictionary):
+            return [dictionary.get(str(c), '') for c in codes or []]
+
+        subject = ', '.join(n for n in names(lesson_data.get('s', []), subjects) if n)
+        teacher = ', '.join(n for n in names(lesson_data.get('t', []), teachers) if n)
+        room = ', '.join(n for n in names(lesson_data.get('r', []), rooms) if n)
+        return {'subject': subject, 'teacher': teacher, 'room': room}
 
     def clear_school_cache(self, school_id: str):
         """Очищает кэш для школы (например, при принудительном обновлении)"""
