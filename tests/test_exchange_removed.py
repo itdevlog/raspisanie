@@ -21,7 +21,7 @@ def test_removed_exchange_is_reported():
     school = {'SUBJECTS': {'1': 'Математика'}, 'TEACHERS': {}, 'ROOMS': {}}
     previous = {'3': {'lesson_num': '3', 'data': {'s': ['1']}, 'is_cancelled': False,
                       'formatted': {'lesson_num': 3, 'original_subject': 'Урок 3'}}}
-    current = {}
+    current: dict = {}
     events = d._compare_class_exchanges('5А', previous, current, school, date)
     removals = [e for e in events if e.get('removed')]
     assert len(removals) == 1

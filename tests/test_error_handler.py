@@ -1,6 +1,7 @@
 """Глобальный обработчик ошибок отдаёт общий безопасный текст."""
 import logging
 from types import SimpleNamespace
+from typing import Any
 
 from bot import ScheduleBot
 from handlers.common.messaging import GENERIC_ERROR_MSG
@@ -15,9 +16,9 @@ async def test_error_handler_uses_generic_message():
     async def reply_text(text, **kwargs):
         replies.append(text)
 
-    update = SimpleNamespace(
+    update: Any = SimpleNamespace(
         effective_message=SimpleNamespace(reply_text=reply_text))
-    context = SimpleNamespace(error=RuntimeError('boom'))
+    context: Any = SimpleNamespace(error=RuntimeError('boom'))
 
     await bot.error_handler(update, context)
 

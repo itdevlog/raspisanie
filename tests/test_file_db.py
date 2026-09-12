@@ -2,6 +2,7 @@
 """Юнит-тесты FileDB: битый файл (.corrupt бэкап), upsert, delete_one."""
 import os
 import tempfile
+from typing import cast
 
 from database.file_db import FileDB
 
@@ -26,7 +27,7 @@ def test_insert_and_upsert():
     col = db.get_collection('users')
     col.update_one({'user_id': 1}, {'user_id': 1, 'name': 'A'}, upsert=True)
     col.update_one({'user_id': 1}, {'name': 'B'}, upsert=True)
-    assert col.find_one({'user_id': 1})['name'] == 'B'
+    assert cast(dict, col.find_one({'user_id': 1}))['name'] == 'B'
     assert len(col.find({'user_id': 1})) == 1  # upsert не плодит дубли
 
 

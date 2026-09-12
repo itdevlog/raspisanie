@@ -14,7 +14,7 @@ def test_empty_name_falls_back():
 
 
 def test_missing_school_data():
-    assert get_display_name("school_181", None) == "МАОУ СОШ №181"
+    assert get_display_name("school_181", None) == "МАОУ СОШ №181"  # type: ignore[arg-type]  # None обрабатывается функцией
 
 
 def test_unknown_school_id():

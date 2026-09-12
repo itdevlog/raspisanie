@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from types import SimpleNamespace
+from typing import Any
 
 from core.background_updater import BackgroundUpdater
 
@@ -35,8 +36,8 @@ def _bare_updater(bot_data):
     up = BackgroundUpdater.__new__(BackgroundUpdater)
     up.logger = logging.getLogger('test')
     up.application = SimpleNamespace(bot_data=bot_data, bot=None)
-    up.notification_service = _FakeNotif()
-    up.data_loader = None
+    up.notification_service = _FakeNotif()  # type: ignore[assignment]
+    up.data_loader = None  # type: ignore[assignment]
     up._update_lock = asyncio.Lock()
     return up
 
@@ -77,7 +78,7 @@ async def test_perform_update_keeps_failed_school():
     # old has s1 and s2; fresh load only has s1 -> s2 (last-known-good) must survive
     notif = _FakeNotif()
     cache = _FakeCache()
-    bot_data = {
+    bot_data: dict[str, Any] = {
         'schools_data': {'s1': {'v': 1}, 's2': {'v': 2}},
         'cache_service': cache,
         'notification_service': notif,
@@ -99,7 +100,7 @@ async def test_perform_update_keeps_failed_school():
 
 async def test_perform_update_skips_when_locked():
     notif = _FakeNotif()
-    bot_data = {'schools_data': {'s1': {'v': 1}}, 'notification_service': notif, 'cache_service': _FakeCache()}
+    bot_data: dict[str, Any] = {'schools_data': {'s1': {'v': 1}}, 'notification_service': notif, 'cache_service': _FakeCache()}
     up = _bare_updater(bot_data)
     up.data_loader = _FakeLoader({'s1': {'v': 9}})
 

@@ -2,6 +2,7 @@ import os
 import tempfile
 from datetime import datetime
 from types import SimpleNamespace
+from typing import Any
 
 import pytz
 
@@ -25,7 +26,7 @@ def test_quiet_hours_malformed_settings_not_quiet():
     svc = NotificationService.__new__(NotificationService)
     now = datetime(2026, 9, 11, 23, 0, tzinfo=TZ)
     assert svc._is_quiet_hours({}, now) is False
-    assert svc._is_quiet_hours(None, now) is False
+    assert svc._is_quiet_hours(None, now) is False  # type: ignore[arg-type]  # None обрабатывается функцией
     assert svc._is_quiet_hours({'quiet_hours': {'enabled': True}}, now) is False
     assert svc._is_quiet_hours({'quiet_hours': {'enabled': True, 'start': 'x', 'end': 7}}, now) is False
 
@@ -136,8 +137,8 @@ async def test_toggle_quiet_hours_handler_roundtrip():
             self.answers.append(text)
 
     query = _Query()
-    update = SimpleNamespace(effective_user=SimpleNamespace(id=1), callback_query=query)
-    context = SimpleNamespace(bot_data={'user_service': us})
+    update: Any = SimpleNamespace(effective_user=SimpleNamespace(id=1), callback_query=query)
+    context: Any = SimpleNamespace(bot_data={'user_service': us})
 
     redraws = []
 
@@ -179,10 +180,10 @@ def test_exchange_notification_skipped_and_marked_during_quiet(monkeypatch):
     svc._index_loaded_for_school = None
     svc._settings_for_school = {}
     svc._last_sent_at = {}
-    svc.save_notifications_cache = lambda: None
+    svc.save_notifications_cache = lambda: None  # type: ignore[method-assign]
 
     bot = _fake_bot()
-    context = SimpleNamespace(bot=bot, bot_data={'user_service': us})
+    context: Any = SimpleNamespace(bot=bot, bot_data={'user_service': us})
 
     quiet_now = datetime(2026, 9, 11, 23, 0)  # naive; hour matters only
 

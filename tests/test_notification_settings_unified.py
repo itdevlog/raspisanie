@@ -27,7 +27,7 @@ def test_update_notification_roundtrip():
 
 def _make_updater(db: FileDB, admin_ids: list[int]) -> BackgroundUpdater:
     updater = object.__new__(BackgroundUpdater)
-    updater.logger = SimpleNamespace(error=lambda *a, **k: None)
+    updater.logger = SimpleNamespace(error=lambda *a, **k: None)  # type: ignore[assignment]
     updater.application = SimpleNamespace(
         bot_data={
             'user_service': SimpleNamespace(db=db),

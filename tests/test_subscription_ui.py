@@ -1,6 +1,7 @@
 # tests/test_subscription_ui.py
 """UI-интеграция подписок: разбор callback и переключатель настроек."""
 from types import SimpleNamespace
+from typing import Any
 
 from handlers.common.entity_menu import EntityConfig, EntityMenuHandler
 from handlers.common.settings import unsubscribe_by_callback
@@ -112,7 +113,7 @@ async def test_toggle_callback_unsubscribes_when_already_subscribed(monkeypatch)
 
 async def test_settings_unsubscribe_removes_subscription():
     query = _FakeQuery()
-    update = SimpleNamespace(effective_user=SimpleNamespace(id=1), callback_query=query)
+    update: Any = SimpleNamespace(effective_user=SimpleNamespace(id=1), callback_query=query)
 
     class _Svc:
         def __init__(self):
@@ -125,7 +126,7 @@ async def test_settings_unsubscribe_removes_subscription():
             self.removed.append((user_id, school_id, kind, name))
 
     svc = _Svc()
-    context = SimpleNamespace(
+    context: Any = SimpleNamespace(
         bot_data={
             'user_service': SimpleNamespace(get_user_school=lambda uid: 'school_133'),
             'subscription_service': svc,

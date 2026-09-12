@@ -1,6 +1,7 @@
 # tests/test_school_selection.py
 """Регрессия: выбор несуществующей школы не показывает успех и чистит флаги."""
 from types import SimpleNamespace
+from typing import Any
 
 import handlers.common.main_menu as main_menu_module
 from handlers.schools import school_selection
@@ -36,7 +37,7 @@ async def test_invalid_school(monkeypatch):
 
     query = _Query()
     user_service = SimpleNamespace(set_user_school=lambda uid, sid: False)
-    context = SimpleNamespace(
+    context: Any = SimpleNamespace(
         bot_data={'user_service': user_service},
         user_data={'waiting_for_teacher_search': True, 'class_digit': '5'},
     )
@@ -57,7 +58,7 @@ async def test_valid_school_clears_flags(monkeypatch):
 
     query = _Query()
     user_service = SimpleNamespace(set_user_school=lambda uid, sid: True)
-    context = SimpleNamespace(
+    context: Any = SimpleNamespace(
         bot_data={'user_service': user_service},
         user_data={'waiting_for_teacher_search': True, 'class_digit': '5'},
     )

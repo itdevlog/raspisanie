@@ -1,5 +1,7 @@
 """Админ-панель: одна реализация, /stats показывает статистику."""
+from datetime import datetime
 from types import SimpleNamespace
+from typing import Any
 
 from telegram import Chat, Message, MessageEntity, Update, User
 from telegram.ext import CommandHandler
@@ -38,7 +40,7 @@ def _stats_update(bot):
     chat = Chat(id=100, type='private')
     text = '/stats'
     entity = MessageEntity(type=MessageEntity.BOT_COMMAND, offset=0, length=len(text))
-    message = Message(message_id=1, date=None, chat=chat, from_user=user, text=text, entities=[entity])
+    message = Message(message_id=1, date=datetime(2026, 9, 11), chat=chat, from_user=user, text=text, entities=[entity])
     message.set_bot(bot)
     return Update(update_id=1, message=message)
 
@@ -52,7 +54,7 @@ async def test_stats_command_handler_shows_user_statistics():
 
     assert check_result, "CommandHandler должен распознать /stats"
     context = _admin_context()
-    handler.collect_additional_context(context, update, None, check_result)
+    handler.collect_additional_context(context, update, None, check_result)  # type: ignore[arg-type]
     assert context.args == []
 
     await handler.callback(update, context)
@@ -69,7 +71,7 @@ async def test_stats_handler_uses_statistics():
     async def reply_text(text, **k):
         sent.append(text)
 
-    update = SimpleNamespace(effective_user=SimpleNamespace(id=1), message=SimpleNamespace(reply_text=reply_text))
+    update: Any = SimpleNamespace(effective_user=SimpleNamespace(id=1), message=SimpleNamespace(reply_text=reply_text))
     await ap.stats_handler(update, _admin_context())
 
     assert sent
@@ -83,7 +85,7 @@ async def test_show_statistics_callback_branch():
     async def edit_message_text(text, **k):
         edits.append(text)
 
-    update = SimpleNamespace(
+    update: Any = SimpleNamespace(
         callback_query=SimpleNamespace(edit_message_text=edit_message_text),
         message=None,
     )
@@ -102,8 +104,8 @@ async def test_admin_panel_handler_delegates_to_callback_handler(monkeypatch):
 
     monkeypatch.setattr(AdminCallbackHandler, '_show_admin_panel', show_panel)
 
-    update = SimpleNamespace(effective_user=SimpleNamespace(id=1), message=SimpleNamespace())
-    context = SimpleNamespace(
+    update: Any = SimpleNamespace(effective_user=SimpleNamespace(id=1), message=SimpleNamespace())
+    context: Any = SimpleNamespace(
         bot_data={'config': SimpleNamespace(ADMIN_IDS=[1])},
         args=None,
     )

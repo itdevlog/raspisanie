@@ -2,6 +2,7 @@ import os
 import tempfile
 from datetime import datetime
 from types import SimpleNamespace
+from typing import Any
 
 import pytz
 
@@ -68,7 +69,7 @@ def test_reminder_skips_weekend():
 
 
 def test_to_user_classes_builds_map():
-    users = [
+    users: list[dict[str, Any]] = [
         {'user_id': 1, 'school_classes': {'school_133': '5а'}},
         {'user_id': 2, 'school_classes': {'school_181': '7б'}},
         {'user_id': 3},
@@ -112,7 +113,7 @@ def test_reminder_loop_dedups_and_respects_toggle(monkeypatch):
         sent.append((chat_id, text))
         return True
 
-    updater.notification_service = SimpleNamespace(_send_message=_fake_send)
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)  # type: ignore[assignment]
 
     now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
     monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
@@ -155,7 +156,7 @@ def test_reminder_loop_two_enabled_users_same_class_both_notified(monkeypatch):
         sent.append((chat_id, text))
         return True
 
-    updater.notification_service = SimpleNamespace(_send_message=_fake_send)
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)  # type: ignore[assignment]
 
     now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
     monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
@@ -203,7 +204,7 @@ def test_reminder_loop_skips_quiet_hours_but_dedups(monkeypatch):
         sent.append((chat_id, text))
         return True
 
-    updater.notification_service = SimpleNamespace(_send_message=_fake_send)
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)  # type: ignore[assignment]
 
     # 06:55, урок в 07:00 попадает в окно, но идёт тихий час (22–8)
     now = datetime(2026, 9, 11, 6, 55, tzinfo=TZ)
@@ -242,7 +243,7 @@ def test_reminder_loop_does_not_mark_sent_on_send_failure(monkeypatch):
     async def _fake_send(bot, chat_id, text, parse_mode='Markdown'):
         return False
 
-    updater.notification_service = SimpleNamespace(_send_message=_fake_send)
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)  # type: ignore[assignment]
 
     now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
     monkeypatch.setattr(updater, '_now', lambda: now, raising=False)

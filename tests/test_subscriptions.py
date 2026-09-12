@@ -4,6 +4,7 @@ import os
 import tempfile
 from datetime import datetime
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -104,7 +105,7 @@ async def test_notify_subscribers_sends_to_each():
 
     bot = _FakeBot()
     svc = NotificationService()
-    context = SimpleNamespace(bot=bot, bot_data={'subscription_service': s})
+    context: Any = SimpleNamespace(bot=bot, bot_data={'subscription_service': s})
 
     delivered, skipped_quiet = await svc.notify_subscribers(
         context, 'school_133', 'teacher', 'Иванов', 'Текст замены')
@@ -120,7 +121,7 @@ async def test_notify_subscribers_no_subscribers_returns_zero():
     s = _svc()
     bot = _FakeBot()
     svc = NotificationService()
-    context = SimpleNamespace(bot=bot, bot_data={'subscription_service': s})
+    context: Any = SimpleNamespace(bot=bot, bot_data={'subscription_service': s})
 
     count = await svc.notify_subscribers(context, 'school_133', 'room', '101', 'Текст')
 
@@ -132,7 +133,7 @@ async def test_notify_subscribers_no_subscribers_returns_zero():
 async def test_notify_subscribers_without_service_returns_zero():
     bot = _FakeBot()
     svc = NotificationService()
-    context = SimpleNamespace(bot=bot, bot_data={})
+    context: Any = SimpleNamespace(bot=bot, bot_data={})
 
     count = await svc.notify_subscribers(context, 'school_133', 'room', '101', 'Текст')
 
@@ -206,7 +207,7 @@ async def test_notify_subscribers_skips_quiet_hours(monkeypatch):
         raising=False,
     )
 
-    context = SimpleNamespace(
+    context: Any = SimpleNamespace(
         bot=bot, bot_data={'subscription_service': s, 'user_service': us})
     count = await svc.notify_subscribers(context, 'school_133', 'teacher', 'Иванов', 'Текст')
 

@@ -24,7 +24,7 @@ class _Stub(ScheduleService):
 
 def test_schedule_cache_isolated_by_school():
     cache = CacheService(ttl=300)
-    calls = []
+    calls: list[str] = []
     a = _Stub('school_a', cache, calls)
     b = _Stub('school_b', cache, calls)
 

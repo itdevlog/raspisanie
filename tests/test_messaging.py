@@ -1,6 +1,8 @@
 # tests/test_messaging.py
 """Юнит-тесты для handlers/common/messaging.py — чистые функции разбивки сообщений."""
 
+from typing import cast
+
 from handlers.common.messaging import MAX_MESSAGE_LENGTH, paginate, split_long_message
 
 
@@ -42,14 +44,14 @@ def test_split_single_long_token_hard_cut():
 
 def test_paginate_zero_one_many():
     assert paginate([], 0, 30) == (0, [])
-    assert paginate(list(range(1)), 0, 30)[1] == [0]
-    assert paginate(list(range(30)), 0, 30)[1] == list(range(30))
-    assert paginate(list(range(31)), 0, 30)[1] == list(range(30))
-    assert paginate(list(range(31)), 1, 30)[1] == [30]
+    assert paginate(cast(list[str], list(range(1))), 0, 30)[1] == [0]
+    assert paginate(cast(list[str], list(range(30))), 0, 30)[1] == list(range(30))
+    assert paginate(cast(list[str], list(range(31))), 0, 30)[1] == list(range(30))
+    assert paginate(cast(list[str], list(range(31))), 1, 30)[1] == [30]
 
 
 def test_paginate_page_bounds():
-    items = list(range(100))
+    items = cast(list[str], list(range(100)))
     # page=-1 -> 0
     assert paginate(items, -1, 30)[0] == 0
     # page=total -> последняя валидная

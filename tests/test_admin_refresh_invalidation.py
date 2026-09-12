@@ -1,5 +1,6 @@
 """Регрессия: ручной refresh вызывает _on_data_replaced()."""
 from types import SimpleNamespace
+from typing import Any
 
 import handlers.callbacks.admin_callbacks as ac
 
@@ -30,12 +31,12 @@ async def test_refresh_school_invalidates(monkeypatch):
 
     h = ac.AdminCallbackHandler()
     query = _Query()
-    update = SimpleNamespace(
+    update: Any = SimpleNamespace(
         callback_query=query,
         effective_user=SimpleNamespace(id=1),
         effective_chat=SimpleNamespace(id=1),
     )
-    context = SimpleNamespace(
+    context: Any = SimpleNamespace(
         bot_data={'background_updater': updater, 'config': SimpleNamespace(ADMIN_IDS=[1])},
         bot=SimpleNamespace(),
     )
@@ -70,12 +71,12 @@ async def test_refresh_all_merges_failed_school(monkeypatch):
 
     h = ac.AdminCallbackHandler()
     query = _Query()
-    update = SimpleNamespace(
+    update: Any = SimpleNamespace(
         callback_query=query,
         effective_user=SimpleNamespace(id=1),
         effective_chat=None,
     )
-    context = SimpleNamespace(
+    context: Any = SimpleNamespace(
         bot_data={
             'background_updater': updater,
             'schools_data': {
@@ -109,12 +110,12 @@ async def test_force_update_reports_skip_when_locked(monkeypatch):
     updater = SimpleNamespace(_perform_update=_skipped)
     h = ac.AdminCallbackHandler()
     query = _Query()
-    update = SimpleNamespace(
+    update: Any = SimpleNamespace(
         callback_query=query,
         effective_user=SimpleNamespace(id=1),
         effective_chat=None,
     )
-    context = SimpleNamespace(
+    context: Any = SimpleNamespace(
         bot_data={'background_updater': updater, 'config': SimpleNamespace(ADMIN_IDS=[1])},
         bot=SimpleNamespace(),
     )

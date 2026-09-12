@@ -1,5 +1,6 @@
 """Сброс «залипшего» состояния: reset_user_flow и /cancel."""
 from types import SimpleNamespace
+from typing import Any
 
 from handlers.common.messaging import reset_user_flow
 from handlers.start import cancel_handler
@@ -32,9 +33,10 @@ async def test_cancel_handler_replies_main_menu():
     async def reply_text(text, **k):
         sent.append(text)
 
-    update = SimpleNamespace(effective_user=SimpleNamespace(id=1, first_name='Тест'),
-                             message=SimpleNamespace(reply_text=reply_text))
-    ctx = _context()
+    message = SimpleNamespace(reply_text=reply_text)
+    update: Any = SimpleNamespace(effective_user=SimpleNamespace(id=1, first_name='Тест'),
+                                 message=message, effective_message=message)
+    ctx: Any = _context()
     await cancel_handler(update, ctx)
     assert sent and 'меню' in sent[-1].lower()
     assert ctx.user_data == {}

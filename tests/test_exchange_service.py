@@ -1,6 +1,7 @@
 # tests/test_exchange_service.py
 """Юнит-тесты ExchangeService: точный матчинг класса и нет мутации исходных данных."""
 from datetime import datetime
+from typing import Any
 
 import pytz
 
@@ -31,8 +32,8 @@ def test_apply_exchanges_does_not_mutate_input():
     )
     svc = ExchangeService(school)
     date = datetime(2026, 9, 11, 12, 0, tzinfo=pytz.timezone('Asia/Yekaterinburg'))
-    lesson = {'lesson_num': 1, 'data': {'s': ['Физра'], 't': ['Иванов'], 'r': ['101']},
-              'has_exchange': False, 'is_cancelled': False}
+    lesson: Any = {'lesson_num': 1, 'data': {'s': ['Физра'], 't': ['Иванов'], 'r': ['101']},
+                   'has_exchange': False, 'is_cancelled': False}
 
     before = {k: (list(v) if isinstance(v, list) else v) for k, v in lesson['data'].items()}
     res = svc.apply_exchanges_to_schedule('5А', [lesson], date)

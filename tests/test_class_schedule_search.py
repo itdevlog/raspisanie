@@ -1,6 +1,7 @@
 # tests/test_class_schedule_search.py
 """Регрессия: длинный запрос в поиске учителя не падает с KeyError."""
 from types import SimpleNamespace
+from typing import Any
 
 from handlers.common.class_schedule import class_schedule_handler
 
@@ -12,8 +13,9 @@ async def test_long_teacher_search_does_not_keyerror():
         replies.append(text)
 
     message = SimpleNamespace(text='x' * 81, reply_text=reply_text)
-    update = SimpleNamespace(effective_user=SimpleNamespace(id=1), message=message)
-    context = SimpleNamespace(
+    update: Any = SimpleNamespace(
+        effective_user=SimpleNamespace(id=1), message=message, effective_message=message)
+    context: Any = SimpleNamespace(
         bot_data={},
         user_data={'waiting_for_teacher_search': True},
     )

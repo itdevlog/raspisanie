@@ -2,10 +2,11 @@
 """Юнит-тесты декоратора @requires_school."""
 import asyncio
 from types import SimpleNamespace
+from typing import Any
 
 from handlers.common.requires_school import requires_school
 
-pytest_plugins = []
+pytest_plugins: list[str] = []
 
 
 class FakeUserService:
@@ -25,7 +26,7 @@ def _update(query=None, msg=None):
 
 
 def _context(has_user_service=True, schools=None, school_id="school_133"):
-    bot_data = {}
+    bot_data: dict[str, Any] = {}
     if has_user_service:
         bot_data['user_service'] = FakeUserService(school_id)
         # None -> default present school; {} -> explicitly empty (no schools)
