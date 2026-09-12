@@ -6,6 +6,8 @@
 > ✅ 11.09 (Фаза 2 — надёжность и консистентность, P1): `FileDB` сообщает об ошибках записи; общий `escape_markdown`; пакетные настройки уведомлений + индекс получателей с учётом настроек; merge частичной загрузки + `asyncio.Lock` + единый `_on_data_replaced()`; инвалидация и guard в админ-refresh; `RetryAfter` + троттлинг рассылки; один слой ретраев и сессия на вызов в `DataLoader`; mypy-аннотация. Осталось опционально: параллельная загрузка школ через `Semaphore` — сознательно отложена (см. §2). Подробности — в [CHANGELOG.md](CHANGELOG.md).
 > ✅ 11.09 (завершающий блок Фазы 1): декоратор `@requires_school` (применён к school_info/week_command); индикатор «печатает...» в админ-операциях; счётчик свежих школ; интеграционные mock-тесты (3); инструменты ruff (чистый) + mypy (конфиг) + CI; `requirements-dev.txt`.
 > ✅ 11.09 (Фаза 3 — рефакторинг и качество, P2): единая админ-панель (`/admin`/`/stats` делегируют в `AdminCallbackHandler`, `/stats` показывает статистику); `/cancel` + единый `reset_user_flow`; удалён мёртвый код и утечки `str(e)`; общие хелперы `format_time_ago`/`find_class_id`; разделение хранилищ настроек уведомлений (exchange → `UserService`, update → `UserPreferencesService`; `_get_admin_notification_settings` учитывает всех админов). Подробности — в [CHANGELOG.md](CHANGELOG.md).
+> ✅ 12.09 (после Фазы 4): информативный формат уведомлений о заменах «до → после» с временем урока; утренний дайджест (`DigestService`, за час до первого урока — учитывает смены); навигация по неделям в недельном расписании (±2 недели). Подробности — в [CHANGELOG.md](CHANGELOG.md).
+>
 > ✅ 11.09 (Фаза 4 — новый функционал): уведомления о снятии замен (`↩️ … — замена снята`); подписки на преподавателей/кабинеты (`SubscriptionService`, кнопка в расписании, рассылка подписчикам, список в `/settings`); напоминания об уроках (`ReminderService` + цикл `BackgroundUpdater._reminder_loop` на существующем asyncio-loop, без новых зависимостей); тихие часы + анти-флуд; смещение недели и helper `get_next_lesson` (только внутренние, без пользовательской команды). Подробности — в [CHANGELOG.md](CHANGELOG.md).
 >
 > ✅ **Оригинальный аудит закрыт: P0/P1/P2-минимум и все четыре фазы (1–4) выполнены.** Остались только явно отложенные/рискованные пункты:
@@ -68,7 +70,7 @@
 
 ## 5. Тесты
 
-Есть pytest (165 тестов: юнит + mock-интеграционные через pytest-asyncio, `tests/test_integration.py`). 
+Есть pytest (202 тестов: юнит + mock-интеграционные через pytest-asyncio, `tests/test_integration.py`). 
 
 - Инструменты: ruff/mypy/CI подключены (конфиги `ruff.toml`, `mypy.ini`, `.github/workflows/ci.yml`); `ruff check .` — чисто; `mypy .` — 0 ошибок на всём репозитории (93 файла).
 - Для сужения Optional-полей PTB используются хелперы `handlers/common/typing.py` (`require_user`/`require_message`/`require_query`/`require_user_data`).

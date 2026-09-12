@@ -78,8 +78,9 @@ Telegram-бот для просмотра школьного расписани�
 | [services/notification_service.py](services/notification_service.py) | Отправляет уведомления о заменах пользователям и админам; `_is_quiet_hours` (тихие часы), анти-флуд в `_send_message`; `notify_subscribers` для подписок. |
 | [services/subscription_service.py](services/subscription_service.py) | Подписки на преподавателей/кабинеты (коллекция `subscriptions`): `subscribe`/`unsubscribe`/`is_subscribed`/`get_subscriptions`/`get_subscribers`. |
 | [services/reminder_service.py](services/reminder_service.py) | Чистая логика напоминаний об уроках: `get_due_reminders`/`get_due_reminders_detailed` по времени `LESSON_TIMES`; отправляет `BackgroundUpdater._reminder_loop`. |
+| [services/digest_service.py](services/digest_service.py) | Чистая логика утреннего дайджеста: за 60 мин до первого урока (`DIGEST_OFFSET_MINUTES`), окно догона 15 мин, дедуп `digest:{user}:{school}:{class}:{дата}`; текст — расписание дня с заменами. Отправляет `BackgroundUpdater._send_digests` из того же минутного цикла. |
 | [services/user_service.py](services/user_service.py) | Работа с пользователями: школа, класс, настройки уведомлений. |
-| [services/user_preferences.py](services/user_preferences.py) | Хранилище настроек поверх `FileDB` (коллекция `user_preferences`): `update_notifications`, `lesson_reminders`, `quiet_hours`. Используется в `background_updater` и `settings.py`. Настройки замен (exchange) здесь не хранятся — их единственный источник `UserService`. |
+| [services/user_preferences.py](services/user_preferences.py) | Хранилище настроек поверх `FileDB` (коллекция `user_preferences`): `update_notifications`, `lesson_reminders`, `daily_digest`, `quiet_hours`. Используется в `background_updater` и `settings.py`. Настройки замен (exchange) здесь не хранятся — их единственный источник `UserService`. |
 | [services/cache_service.py](services/cache_service.py) | In-memory кэш с TTL, потокобезопасный (`RLock`), с лимитом размера `max_entries` (вытеснение самых старых) и честной статистикой. |
 | [handlers/common/entity_menu.py](handlers/common/entity_menu.py) | Параметризованный `EntityMenuHandler` — общая логика меню/поиска/пагинации для учителей и кабинетов. |
 | [handlers/common/menu_builder.py](handlers/common/menu_builder.py) | Единые построители главного меню (`build_main_menu_keyboard`/`text`) и справки (`HELP_TEXT`). |
@@ -184,6 +185,7 @@ Telegram-бот для просмотра школьного расписани�
 - Синхронные HTTP-запросы `requests` оффлоадятся в отдельный поток через `asyncio.to_thread(...)`.
 - Мержит свежие данные поверх last-known-good (`_merge_schools_data`), чтобы школа, чья загрузка не удалась, не исчезала до следующего цикла; замена `bot_data['schools_data']` сериализована `asyncio.Lock` (повторный запуск сообщает о пропуске).
 - После замены данных единый хук `_on_data_replaced()` очищает кэш расписания и сбрасывает индекс уведомлений; тот же хук переиспользуется ручным refresh в админке.
+- Параллельно с часовым циклом обновления работает минутный цикл `_reminder_loop`: `_send_reminders` (напоминания об уроках) и `_send_digests` (утренний дайджест). Оба дедуплицируются и уважают тихие часы; кэши — `data/sent_reminders.json` и `data/sent_digests.json`.
 
 > ✅ **Исправлено 11.09.2026**: `self.moscow_tz` инициализирован в `BackgroundUpdater.__init__` (`core/background_updater.py`) — `log_update_activity()` работает, `updatelog.txt` заполняется. Дополнительно: дублирующийся `stop()` удалён; фейковый контекст `context = ContextTypes.DEFAULT_TYPE` (мутация класса PTB) заменён на `SimpleNamespace` в `_make_context()`; синхронные HTTP-запросы `requests` во всех async-путях (`_perform_update` + админ-callback'и) оффлоадятся через `asyncio.to_thread(...)`. В Фазе 2 добавлены merge частичной загрузки, `asyncio.Lock` на `_perform_update` и единый `_on_data_replaced()`.
 
@@ -297,7 +299,7 @@ Telegram-бот для просмотра школьного расписани�
 2. Формирует текст уведомления (динамические значения экранируются общим `services/text_utils.escape_markdown`).
 3. Создаёт уникальный ключ (`school_id + class + date + hash замен`) и проверяет, не отправлялось ли уже.
 4. Отправляет сообщения через `_send_message`, который пережидает Telegram `RetryAfter` (429) и не дропает сообщения при анти-флуд-паузе; между отправками пауза `asyncio.sleep(0.05)` против flood-лимитов. Помечает ключ отправленным и сохраняет в `data/notifications_cache.json`.
-5. Если замена была снята, позиция формируется как `↩️ N. <предмет> — *замена снята*` (`exchange.get('removed')`).
+5. Формат строки замены — «до → после» с временем урока: `🔄 6. 13:00-13:45 • Математика (Ищенко К.А., каб. 301) → Биология (Усольцева А.Д., каб. 4022)`; отмена — `❌ N. время • Предмет (Фамилия И.О., каб.) — *ОТМЕНЕНО*`; снятие замены — `↩️ N. … — *замена снята*`. Исходный урок детектор берёт из базового расписания (`_get_original_lesson`: `CLASS_SCHEDULE[period][class][день+урок]`), время — из `LESSON_TIMES`; ФИО сокращаются до «Фамилия И.О.» хелпером `services/text_utils.short_name` (скрывает обрезанные источником ФИО). Если базового урока нет — деградация к заглушке «Урок N» без деталей.
 6. Тихие часы: при включённом окне у пользователя уведомления не отправляются (`_is_quiet_hours`). При заменах у преподавателя/кабинета дополнительно вызывается `notify_subscribers`, который рассылает текст всем подписчикам сущности.
 
 > ✅ Исправлено: уведомление помечается отправленным и кэш сохраняется только при `sent_count > 0`. Если все отправки не удались, ключ остаётся неотмеченным и повторная попытка будет предпринята позже.
@@ -481,7 +483,7 @@ ADMIN_LOG_FILE=./logs/admin.log
 > - **P1**: двойной `query.answer()`; залипающие флаги поиска; утечка `class_digit`; TTL-кнопки; удалён мёртвый `UserSchool`; экранирование до бизнес-логики (замены учителей/кабинетов); `ExchangeService` в цикле.
 > - **Рефакторинг/качество (P2)**: `EntityMenuHandler` (учителя/кабинеты — из дублей 913→500), `menu_builder`+`HELP_TEXT`, `is_admin`, `get_school_by_id`, `TIMEZONE`, `str(e)`→лог, мёртвый код, `ADMIN_LOG_FILE`, O(N) индекс получателей, TTL кэша уведомлений, `CacheService` (потокобезопасность + лимит), `@requires_school`, индикатор «печатает...», счётчик свежих школ. В Фазе 3: единая админ-панель (`/admin`/`/stats`), `/cancel` + `reset_user_flow`, общие `format_time_ago`/`find_class_id`, разделение хранилищ настроек уведомлений.
 > - **Фаза 4 (новый функционал)**: уведомления о снятии замен (`↩️ … — замена снята`); подписки на преподавателей/кабинеты (`SubscriptionService`, кнопка в расписании, рассылка подписчикам, список в `/settings`); напоминания об уроках (`ReminderService` + `BackgroundUpdater._reminder_loop` на существующем asyncio-loop); тихие часы + анти-флуд; смещение недели и `get_next_lesson` (внутренние хелперы).
-> - **Инструменты/тесты**: pytest (165 тестов: юнит + интеграционные моки), ruff (чистый), mypy (конфиг), CI-воркфлоу, `requirements-dev.txt`.
+> - **Инструменты/тесты**: pytest (202 тестов: юнит + интеграционные моки), ruff (чистый), mypy (конфиг), CI-воркфлоу, `requirements-dev.txt`.
 
 ### 16.1 Открытый техдолг (P2)
 
