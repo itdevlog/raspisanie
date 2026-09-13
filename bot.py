@@ -5,7 +5,15 @@ import logging.handlers
 import socket
 
 from telegram import Update
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    InlineQueryHandler,
+    MessageHandler,
+    filters,
+)
 from telegram.request import HTTPXRequest
 
 from config.config import Config
@@ -22,6 +30,7 @@ from handlers.common.settings import settings_handler
 from handlers.common.status import status_handler
 from handlers.common.typing import require_message, require_user
 from handlers.common.week_command import week_command_handler
+from handlers.inline_schedule import inline_query_handler
 
 # Импорт обработчиков
 from handlers.start import cancel_handler, help_handler, start_handler
@@ -219,6 +228,9 @@ class ScheduleBot:
             filters.TEXT & ~filters.COMMAND,
             class_schedule_handler
         ))
+
+        # Inline-режим: расписание в любом чате (@bot 9а)
+        self.application.add_handler(InlineQueryHandler(inline_query_handler))
 
         # Глобальная обработка ошибок
         self.application.add_error_handler(self.error_handler)
