@@ -1,6 +1,6 @@
 import os
+from zoneinfo import ZoneInfo
 
-import pytz
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -8,11 +8,11 @@ load_dotenv()
 # Часовой пояс по умолчанию (Екатеринбург = UTC+5). Читается из TIMEZONE (.env),
 # чтобы не дублировать 'Asia/Yekaterinburg' в десятке сервисов.
 _TZ_NAME = os.getenv('TIMEZONE', 'Asia/Yekaterinburg')
-_TIMEZONE = pytz.timezone(_TZ_NAME)
+_TIMEZONE = ZoneInfo(_TZ_NAME)
 
 
 def get_timezone():
-    """Возвращает pytz-часовой пояс приложения (единая точка)."""
+    """Возвращает часовой пояс приложения (zoneinfo, единая точка)."""
     return _TIMEZONE
 
 

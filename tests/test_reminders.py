@@ -3,8 +3,7 @@ import tempfile
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
-
-import pytz
+from zoneinfo import ZoneInfo
 
 from core.background_updater import BackgroundUpdater
 from database.file_db import FileDB
@@ -12,7 +11,7 @@ from services.reminder_service import ReminderService
 from services.user_preferences import UserPreferencesService
 from services.user_service import UserService
 
-TZ = pytz.timezone('Asia/Yekaterinburg')
+TZ = ZoneInfo('Asia/Yekaterinburg')
 
 
 def test_due_reminder_within_window():

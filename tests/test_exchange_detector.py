@@ -3,8 +3,7 @@
 import json
 import logging
 from datetime import datetime
-
-import pytz
+from zoneinfo import ZoneInfo
 
 from services.exchange_detector import ExchangeDetector
 
@@ -12,7 +11,7 @@ from services.exchange_detector import ExchangeDetector
 def _make_detector():
     d = ExchangeDetector.__new__(ExchangeDetector)
     d.logger = logging.getLogger('test')
-    d.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+    d.moscow_tz = ZoneInfo('Asia/Yekaterinburg')
     d.previous_schedules = {}
     return d
 

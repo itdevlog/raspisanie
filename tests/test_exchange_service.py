@@ -2,8 +2,7 @@
 """Юнит-тесты ExchangeService: точный матчинг класса и нет мутации исходных данных."""
 from datetime import datetime
 from typing import Any
-
-import pytz
+from zoneinfo import ZoneInfo
 
 from services.exchange_service import ExchangeService
 
@@ -31,7 +30,7 @@ def test_apply_exchanges_does_not_mutate_input():
         {'c1': {'11.09.2026': {'1': {'s': 'Математика', 't': 'Петров', 'r': '201'}}}},
     )
     svc = ExchangeService(school)
-    date = datetime(2026, 9, 11, 12, 0, tzinfo=pytz.timezone('Asia/Yekaterinburg'))
+    date = datetime(2026, 9, 11, 12, 0, tzinfo=ZoneInfo('Asia/Yekaterinburg'))
     lesson: Any = {'lesson_num': 1, 'data': {'s': ['Физра'], 't': ['Иванов'], 'r': ['101']},
                    'has_exchange': False, 'is_cancelled': False}
 

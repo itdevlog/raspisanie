@@ -1,10 +1,9 @@
 from datetime import datetime
-
-import pytz
+from zoneinfo import ZoneInfo
 
 from services.schedule_service import ScheduleService
 
-TZ = pytz.timezone('Asia/Yekaterinburg')
+TZ = ZoneInfo('Asia/Yekaterinburg')
 
 
 def _svc():

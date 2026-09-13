@@ -106,8 +106,7 @@ async def test_room_menu_has_free_rooms_button():
 async def test_free_rooms_callback_renders():
     """Callback room_free_now рендерит список свободных кабинетов."""
     from datetime import datetime
-
-    import pytz
+    from zoneinfo import ZoneInfo
 
     from handlers.rooms.room_schedule import free_rooms_handler
 
@@ -133,7 +132,7 @@ async def test_free_rooms_callback_renders():
     # 08:30 пятницы — идёт урок 1 (101 занят, 102 свободен)
     import handlers.rooms.room_schedule as rs
     real_now = datetime.now
-    fake_now = datetime(2026, 9, 11, 8, 30, tzinfo=pytz.timezone('Asia/Yekaterinburg'))
+    fake_now = datetime(2026, 9, 11, 8, 30, tzinfo=ZoneInfo('Asia/Yekaterinburg'))
     rs.datetime = SimpleNamespace(now=lambda tz=None: fake_now)
 
     try:

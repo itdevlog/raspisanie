@@ -9,12 +9,11 @@ TEACH_EXCHANGE[teacher_id][дата.дд.мм.гггг][номер урока] =
 }
 """
 from datetime import datetime
-
-import pytz
+from zoneinfo import ZoneInfo
 
 from services.teacher_service import TeacherService
 
-TZ = pytz.timezone('Asia/Yekaterinburg')
+TZ = ZoneInfo('Asia/Yekaterinburg')
 
 
 def _school_data():

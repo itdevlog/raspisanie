@@ -183,7 +183,7 @@ async def test_force_check_exchanges_notifies_entity_subscribers(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_notify_subscribers_skips_quiet_hours(monkeypatch):
-    import pytz
+    from zoneinfo import ZoneInfo
 
     d = tempfile.mkdtemp()
     db = FileDB(os.path.join(d, 'database.json'))
@@ -200,10 +200,10 @@ async def test_notify_subscribers_skips_quiet_hours(monkeypatch):
     svc.logger = __import__('logging').getLogger('test')
     svc._min_send_interval = 0
     svc._last_sent_at = {}
-    svc.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+    svc.moscow_tz = ZoneInfo('Asia/Yekaterinburg')
     monkeypatch.setattr(
         svc, '_now',
-        lambda: datetime(2026, 9, 11, 23, 0, tzinfo=pytz.timezone('Asia/Yekaterinburg')),
+        lambda: datetime(2026, 9, 11, 23, 0, tzinfo=ZoneInfo('Asia/Yekaterinburg')),
         raising=False,
     )
 

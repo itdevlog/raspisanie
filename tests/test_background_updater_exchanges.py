@@ -1,8 +1,7 @@
 # tests/test_background_updater_exchanges.py
 """Регрессия: детектор замен не пишет кэш на каждый вызов и не блокирует loop."""
 from types import SimpleNamespace
-
-import pytz
+from zoneinfo import ZoneInfo
 
 from core.background_updater import BackgroundUpdater
 
@@ -11,7 +10,7 @@ class _FakeDetector:
     def __init__(self):
         self.calls = 0
         self.saved = 0
-        self.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+        self.moscow_tz = ZoneInfo('Asia/Yekaterinburg')
 
     def detect_exchanges(self, school_id, school_data, date, persist=True):
         self.calls += 1

@@ -6,8 +6,7 @@ import os
 import tempfile
 from datetime import datetime
 from types import SimpleNamespace
-
-import pytz
+from zoneinfo import ZoneInfo
 
 from core.background_updater import BackgroundUpdater
 from database.file_db import FileDB
@@ -15,7 +14,7 @@ from services.digest_service import DigestService
 from services.user_preferences import UserPreferencesService
 from services.user_service import UserService
 
-TZ = pytz.timezone('Asia/Yekaterinburg')
+TZ = ZoneInfo('Asia/Yekaterinburg')
 
 
 def _school_data(first_lesson_start='08:00'):

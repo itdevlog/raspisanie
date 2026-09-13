@@ -1,13 +1,12 @@
 # tests/test_schedule_cache.py
 """Регрессия: кэш расписания не пересекается между школами."""
 from datetime import datetime
-
-import pytz
+from zoneinfo import ZoneInfo
 
 from services.cache_service import CacheService
 from services.schedule_service import ScheduleService
 
-TZ = pytz.timezone('Asia/Yekaterinburg')
+TZ = ZoneInfo('Asia/Yekaterinburg')
 
 
 class _Stub(ScheduleService):

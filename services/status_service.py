@@ -70,7 +70,7 @@ class StatusService:
                         # Если дата тоже не парсится, используем текущее время
                         export_datetime = datetime.now()
 
-                export_datetime = self.moscow_tz.localize(export_datetime)
+                export_datetime = export_datetime.replace(tzinfo=self.moscow_tz)
 
                 now = datetime.now(self.moscow_tz)
                 time_diff = now - export_datetime

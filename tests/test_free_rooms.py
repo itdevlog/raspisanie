@@ -6,12 +6,11 @@ TEACH_EXCHANGE) в это время нет занятий: базовый ур�
 или привязанный урок отменён ('F'), или кабинет в замене указан иной.
 """
 from datetime import datetime
-
-import pytz
+from zoneinfo import ZoneInfo
 
 from services.room_service import RoomService
 
-TZ = pytz.timezone('Asia/Yekaterinburg')
+TZ = ZoneInfo('Asia/Yekaterinburg')
 
 
 def _school_data():

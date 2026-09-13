@@ -3,15 +3,14 @@ import tempfile
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
-
-import pytz
+from zoneinfo import ZoneInfo
 
 from database.file_db import FileDB
 from services.notification_service import NotificationService
 from services.user_preferences import UserPreferencesService
 from services.user_service import UserService
 
-TZ = pytz.timezone('Asia/Yekaterinburg')
+TZ = ZoneInfo('Asia/Yekaterinburg')
 
 
 def test_quiet_hours_detection():

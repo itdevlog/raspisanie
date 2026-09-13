@@ -4,12 +4,11 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-
-import pytz
+from zoneinfo import ZoneInfo
 
 from services.exchange_detector import ExchangeDetector
 
-TZ = pytz.timezone('Asia/Yekaterinburg')
+TZ = ZoneInfo('Asia/Yekaterinburg')
 
 
 def _detector(tmp_path):

@@ -1,8 +1,7 @@
 """Симметричный diff: исчезнувшая замена даёт событие «снята»."""
 import logging
 from datetime import datetime
-
-import pytz
+from zoneinfo import ZoneInfo
 
 from services.exchange_detector import ExchangeDetector
 
@@ -10,7 +9,7 @@ from services.exchange_detector import ExchangeDetector
 def _detector():
     d = ExchangeDetector.__new__(ExchangeDetector)
     d.logger = logging.getLogger('test')
-    d.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+    d.moscow_tz = ZoneInfo('Asia/Yekaterinburg')
     d.previous_schedules = {}
     return d
 
@@ -56,7 +55,7 @@ def test_removal_is_rendered_in_notification():
 
     svc = NotificationService.__new__(NotificationService)
     svc.logger = logging.getLogger('test')
-    svc.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+    svc.moscow_tz = ZoneInfo('Asia/Yekaterinburg')
     date = datetime(2026, 9, 11, 12, 0, tzinfo=svc.moscow_tz)
     exchanges = [{
         'class_name': '5А', 'lesson_num': 3, 'removed': True,
@@ -73,7 +72,7 @@ def test_removal_only_notification_header():
 
     svc = NotificationService.__new__(NotificationService)
     svc.logger = logging.getLogger('test')
-    svc.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+    svc.moscow_tz = ZoneInfo('Asia/Yekaterinburg')
     date = datetime(2026, 9, 11, 12, 0, tzinfo=svc.moscow_tz)
     exchanges = [{
         'class_name': '5А', 'lesson_num': 3, 'removed': True,
@@ -90,7 +89,7 @@ def test_mixed_notification_keeps_original_header():
 
     svc = NotificationService.__new__(NotificationService)
     svc.logger = logging.getLogger('test')
-    svc.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+    svc.moscow_tz = ZoneInfo('Asia/Yekaterinburg')
     date = datetime(2026, 9, 11, 12, 0, tzinfo=svc.moscow_tz)
     exchanges = [
         {
@@ -113,7 +112,7 @@ def _notification_svc():
 
     svc = NotificationService.__new__(NotificationService)
     svc.logger = logging.getLogger('test')
-    svc.moscow_tz = pytz.timezone('Asia/Yekaterinburg')
+    svc.moscow_tz = ZoneInfo('Asia/Yekaterinburg')
     return svc
 
 
