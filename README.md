@@ -50,6 +50,7 @@
 ```text
 telegrambot/
 ├── bot.py                      # Точка входа: приложение, сервисы, polling
+├── manage.sh                   # Установка/обновление/эксплуатация: install, update, doctor, backup…
 ├── requirements.txt            # Продакшен-зависимости
 ├── requirements-dev.txt         # Тесты/инструменты (pytest, ruff, mypy)
 ├── pytest.ini / ruff.toml / mypy.ini
@@ -83,7 +84,50 @@ telegrambot/
 
 ## 🚀 Быстрый старт
 
-### 1. Клонирование и окружение
+### Вариант 1: через `manage.sh` (рекомендуется)
+
+Одна команда устанавливает всё: Python-окружение, зависимости, `.env` (интерактивно), systemd-сервис.
+
+```bash
+git clone https://github.com/itdevlog/telegrambot.git
+cd telegrambot
+
+./manage.sh install
+```
+
+Скрипт спросит токен бота (у [@BotFather](https://t.me/BotFather)) и предложит поставить systemd-сервис (автозапуск). После установки проверьте конфигурацию и запустите:
+
+```bash
+./manage.sh doctor    # диагностика: venv, .env, токен, сервис, /healthz
+./manage.sh start     # запуск (или systemd уже запустил)
+./manage.sh logs      # логи в реальном времени
+```
+
+**Обновление с GitHub** — с бэкапом данных и авто-откатом, если бот не поднялся:
+
+```bash
+./manage.sh update
+```
+
+Что делает `update`: бэкап `data/` + `.env` → `git pull` → обновление зависимостей → перезапуск → health-check `/healthz` (30 с). Если бот не поднялся — **автоматический откат** к предыдущему коммиту и рестарт.
+
+Все команды:
+
+| Команда | Что делает |
+|---------|------------|
+| `./manage.sh install` | Установка: venv, зависимости, `.env` (интерактив), systemd (с выбором) |
+| `./manage.sh update` | Обновление с GitHub + бэкап + авто-откат при сбое |
+| `./manage.sh start` / `stop` / `restart` | Управление ботом |
+| `./manage.sh status` | Статус сервиса + health-check |
+| `./manage.sh logs` | Логи в реальном времени (Ctrl+C — выход) |
+| `./manage.sh backup` | Бэкап `data/` + `.env` в `backups/` (хранит последние 10) |
+| `./manage.sh restore` | Восстановление из последнего бэкапа |
+| `./manage.sh doctor` | Диагностика: venv, зависимости, `.env`, токен, сервис, `/healthz` |
+| `./manage.sh uninstall` | Остановка + удаление сервиса (с вопросами) |
+
+> 💡 Скрипт работает без systemd (тогда бот стартует в фоне через nohup, PID пишется в `bot.pid`). Флаг `--no-color` отключает цвета.
+
+### Вариант 2: вручную
 
 ```bash
 git clone https://github.com/itdevlog/telegrambot.git
@@ -95,8 +139,6 @@ source .venv/bin/activate        # Linux/macOS
 
 pip install -r requirements.txt
 ```
-
-### 2. Конфигурация `.env`
 
 Скопируйте [.env.example](.env.example) в `.env` и заполните:
 
@@ -136,7 +178,7 @@ WEBAPP_URL=
 > 💡 Если `TELEGRAM_TOKEN` не задан — бот не упадёт внутри PTB, а выведет понятную ошибку.
 > 💡 Невалидные числовые значения (`UPDATE_INTERVAL`, `MAX_RETRIES`, `ADMIN_IDS`) дают читаемое сообщение вместо краха на импорте.
 
-### 3. Запуск
+Запуск:
 
 ```bash
 python bot.py
@@ -146,7 +188,7 @@ python bot.py
 
 > 🌐 `python bot.py` запускает **и бота, и веб-сервер** Mini App в одном процессе (порт `WEBAPP_PORT`, по умолчанию `8080`). Проверка живости — `GET /healthz`. Если веб не нужен, задайте `WEBAPP_PORT=0`.
 
-### Запуск под systemd (сервер)
+### Запуск под systemd (если ставили вручную)
 
 `/etc/systemd/system/tg-schedule-bot.service`:
 
