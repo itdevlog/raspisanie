@@ -22,6 +22,15 @@ BACKUP_DIR="${SCRIPT_DIR:-.}/backups"
 PID_FILE="${SCRIPT_DIR:-.}/bot.pid"
 HEALTH_TIMEOUT=30
 
+# Источник интерактивного ввода. При curl | bash stdin занят телом скрипта,
+# поэтому вопросы читаем напрямую с терминала. Нет tty — пусто (ответы = дефолт).
+INPUT_FD=""
+if [[ -t 0 ]]; then
+    INPUT_FD="/dev/stdin"
+elif [[ -r /dev/tty ]]; then
+    INPUT_FD="/dev/tty"
+fi
+
 is_repo() {
     # True если текущий SCRIPT_DIR — клон этого репозитория
     [[ -n "$SCRIPT_DIR" ]] \
@@ -44,6 +53,14 @@ warn() { printf '%s[WARN]%s %s\n' "$C_WARN" "$C_OFF" "$*"; }
 info() { printf '%s[INFO]%s %s\n' "$C_INFO" "$C_OFF" "$*"; }
 dim()  { printf '%s%s%s\n' "$C_DIM" "$*" "$C_OFF"; }
 die()  { fail "$*"; exit 1; }
+
+token_configured() {
+    # True если в .env задан настоящий токен (не пусто и не заглушка)
+    [[ -f "$ENV_FILE" ]] || return 1
+    local token
+    token=$(grep -E '^TELEGRAM_TOKEN=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
+    [[ -n "$token" && "$token" != *"YOUR_TELEGRAM_BOT_TOKEN"* && "$token" != *"123456789:ABCdef"* ]]
+}
 
 # --- Вспомогательные функции -------------------------------------------------
 get_port() {
@@ -178,6 +195,9 @@ do_stop() {
 }
 
 do_start() {
+    if ! token_configured; then
+        die "Токен бота не задан в ${ENV_FILE}. Впишите TELEGRAM_TOKEN и повторите"
+    fi
     if service_exists; then
         systemctl start "${SERVICE_NAME}.service" && ok "Сервис запущен"
     else
@@ -195,17 +215,20 @@ do_start() {
 }
 
 ask() {
-    # ask <default> <prompt> -> ответ в $REPLY (EOF -> дефолт)
+    # ask <default> <prompt> -> ответ в $REPLY (EOF/нет tty -> дефолт)
     local default="$1"; shift
-    read -r -p "$* ${C_DIM}[${default:-пусто}]:${C_OFF} " REPLY || REPLY=""
-    REPLY="${REPLY:-$default}"
+    local reply=""
+    if [[ -n "$INPUT_FD" ]]; then
+        read -r -p "$* ${C_DIM}[${default:-пусто}]:${C_OFF} " reply < "$INPUT_FD" || reply=""
+    fi
+    REPLY="${reply:-$default}"
 }
 
 confirm() {
-    # confirm <prompt> <default y|n> -> rc=0 если «да» (EOF -> дефолт)
+    # confirm <prompt> <default y|n> -> rc=0 если «да» (EOF/нет tty -> дефолт)
     local prompt="$1" default="${2:-y}" reply=""
-    if ! read -r -p "${prompt} [${default^^}] " reply; then
-        reply="$default"   # EOF (нет терминала) — берём дефолт
+    if [[ -n "$INPUT_FD" ]]; then
+        read -r -p "${prompt} [${default^^}] " reply < "$INPUT_FD" || reply=""
     fi
     reply="${reply:-$default}"
     [[ "${reply,,}" == "y" || "${reply,,}" == "да" ]]
@@ -272,7 +295,7 @@ cmd_install() {
     # 4. Конфигурация .env
     if [[ -f "$ENV_FILE" ]]; then
         info "Файл .env уже существует — пропускаю настройку"
-    elif [[ ! -t 0 ]]; then
+    elif [[ -z "$INPUT_FD" ]]; then
         # Нет терминала (curl|bash без tty): не спрашиваем — только копия example
         cp "$ENV_EXAMPLE" "$ENV_FILE"
         warn "Скопирован .env.example -> .env (терминала нет — интерактив пропущен)"
@@ -344,9 +367,16 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
     systemctl daemon-reload || die "systemctl daemon-reload не сработал"
-    systemctl enable --now "${SERVICE_NAME}.service" \
-        || die "Не удалось запустить сервис. Проверьте: systemctl status ${SERVICE_NAME}"
-    ok "systemd-сервис установлен и запущен (автозапуск включён)"
+    if token_configured; then
+        systemctl enable --now "${SERVICE_NAME}.service" \
+            || die "Не удалось запустить сервис. Проверьте: systemctl status ${SERVICE_NAME}"
+        ok "systemd-сервис установлен и запущен (автозапуск включён)"
+    else
+        systemctl enable "${SERVICE_NAME}.service" >/dev/null \
+            || die "Не удалось включить автозапуск сервиса"
+        warn "Сервис установлен, но НЕ запущен: токен в .env не задан"
+        info "Впишите TELEGRAM_TOKEN в ${ENV_FILE}, затем: ./manage.sh start"
+    fi
     dim "Статус: systemctl status ${SERVICE_NAME}.service"
 }
 
@@ -662,15 +692,11 @@ cmd_bootstrap_install() {
     # При curl | bash stdin занят самим скриптом — переключаем ввод на терминал,
     # если его нет (cron и т.п.) — все вопросы возьмут дефолты (confirm/ask устойчивы к EOF).
     info "Скрипт запущен вне репозитория — устанавливаю с GitHub"
-    if [[ ! -t 0 ]] && [[ -r /dev/tty ]]; then
-        # bash печатает ошибку до || true — глушим перенаправлением
-        ( exec 0< /dev/tty ) 2>/dev/null || true
-    fi
 
     local install_dir="$INSTALL_DIR_DEFAULT"
     local reply=""
-    if ! read -r -p "Каталог установки [${INSTALL_DIR_DEFAULT}]: " reply; then
-        reply=""   # EOF — нет терминала, берём дефолт ниже
+    if [[ -n "$INPUT_FD" ]]; then
+        read -r -p "Каталог установки [${INSTALL_DIR_DEFAULT}]: " reply < "$INPUT_FD" || reply=""
     fi
     reply="${reply:-$INSTALL_DIR_DEFAULT}"
     install_dir="$reply"
