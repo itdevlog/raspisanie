@@ -2,10 +2,10 @@
 # manage.sh — установка, обновление и эксплуатация Telegram-бота школьного расписания
 # Использование: ./manage.sh <команда> [аргументы]
 # Быстрая установка с нуля (без ручного клонирования):
-#   curl -fsSL https://raw.githubusercontent.com/itdevlog/telegrambot/main/manage.sh | bash -s -- install
+#   curl -fsSL https://raw.githubusercontent.com/itdevlog/raspisanie/main/manage.sh | bash -s -- install
 set -Eeuo pipefail
 
-REPO_URL="https://github.com/itdevlog/telegrambot.git"
+REPO_URL="https://github.com/itdevlog/raspisanie.git"
 INSTALL_DIR_DEFAULT="/opt/raspisanie"
 
 if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
@@ -586,7 +586,7 @@ cmd_help() {
 Использование: ./manage.sh <команда>
 
 Быстрая установка с нуля (клонирует в ${INSTALL_DIR_DEFAULT}):
-  curl -fsSL https://raw.githubusercontent.com/itdevlog/telegrambot/main/manage.sh | bash -s -- install
+  curl -fsSL https://raw.githubusercontent.com/itdevlog/raspisanie/main/manage.sh | bash -s -- install
 
 Команды:
   install     Полная установка: venv, зависимости, .env, systemd (интерактивно).
@@ -653,7 +653,7 @@ main() {
             install) cmd_bootstrap_install ;;
             help|-h|--help|"") cmd_help ;;
             *) die "Эта команда работает только внутри установленного репозитория.
-Быстрая установка с нуля: curl -fsSL https://raw.githubusercontent.com/itdevlog/telegrambot/main/manage.sh | bash -s -- install" ;;
+Быстрая установка с нуля: curl -fsSL https://raw.githubusercontent.com/itdevlog/raspisanie/main/manage.sh | bash -s -- install" ;;
         esac
         return
     fi

@@ -48,7 +48,7 @@
 ## 📁 Структура проекта
 
 ```text
-telegrambot/
+raspisanie/
 ├── bot.py                      # Точка входа: приложение, сервисы, polling
 ├── manage.sh                   # Установка/обновление/эксплуатация: install, update, doctor, backup…
 ├── requirements.txt            # Продакшен-зависимости
@@ -87,7 +87,7 @@ telegrambot/
 ### Вариант 1: одна команда (рекомендуется)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itdevlog/telegrambot/main/manage.sh | bash -s -- install
+curl -fsSL https://raw.githubusercontent.com/itdevlog/raspisanie/main/manage.sh | bash -s -- install
 ```
 
 Скрипт спросит каталог установки (по умолчанию **`/opt/raspisanie`**), склонирует репозиторий, поставит Python-окружение, зависимости, интерактивно настроит `.env` (токен — у [@BotFather](https://t.me/BotFather)) и предложит systemd-сервис (автозапуск). Повторный запуск в тот же каталог обновляет код и доустанавливает недостающее.
@@ -116,7 +116,7 @@ cd /opt/raspisanie
 ### Вариант 2: через manage.sh из клона
 
 ```bash
-git clone https://github.com/itdevlog/telegrambot.git /opt/raspisanie
+git clone https://github.com/itdevlog/raspisanie.git /opt/raspisanie
 cd /opt/raspisanie
 
 ./manage.sh install
@@ -141,7 +141,7 @@ cd /opt/raspisanie
 ### Вариант 3: вручную
 
 ```bash
-git clone https://github.com/itdevlog/telegrambot.git /opt/raspisanie
+git clone https://github.com/itdevlog/raspisanie.git /opt/raspisanie
 cd /opt/raspisanie
 
 python -m venv .venv
@@ -300,4 +300,4 @@ pip install -r requirements-dev.txt
 
 ---
 
-Если у вас есть вопросы или предложения — создайте [Issue](https://github.com/itdevlog/telegrambot/issues).
+Если у вас есть вопросы или предложения — создайте [Issue](https://github.com/itdevlog/raspisanie/issues).
