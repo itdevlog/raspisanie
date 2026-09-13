@@ -34,6 +34,20 @@ def _parse_int(name: str, default: int) -> int:
         )
 
 
+def normalize_webapp_url(raw: str) -> str:
+    """Приводит WEBAPP_URL к виду, допустимому Telegram (http/https).
+
+    Telegram отклоняет WebAppInfo с URL без схемы ('only https links are
+    allowed'), что валит /start. Если схема не указана — подставляем https.
+    """
+    url = (raw or '').strip()
+    if not url:
+        return ''
+    if url.startswith('http://') or url.startswith('https://'):
+        return url
+    return f'https://{url}'
+
+
 def _parse_admin_ids() -> list:
     """Разбирает ADMIN_IDS как список id через запятую."""
     raw = os.getenv('ADMIN_IDS', '')
@@ -78,7 +92,7 @@ class Config:
     # Mini App / веб-сервер
     WEBAPP_HOST = os.getenv('WEBAPP_HOST', '0.0.0.0')
     WEBAPP_PORT = _parse_int('WEBAPP_PORT', 8080)
-    WEBAPP_URL = os.getenv('WEBAPP_URL', '')
+    WEBAPP_URL = normalize_webapp_url(os.getenv('WEBAPP_URL', ''))
 
     @staticmethod
     def is_admin(config, user_id: int) -> bool:
