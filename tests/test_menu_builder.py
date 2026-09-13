@@ -37,3 +37,17 @@ def test_build_main_menu_text_no_class():
     t = build_main_menu_text(None, None, None)
     assert "Главное меню" in t
     assert "Не выбрана" in t
+
+
+def test_build_main_menu_keyboard_webapp_button():
+    kb = build_main_menu_keyboard("5а", webapp_url="https://x.example").to_dict()
+    buttons = [b for row in kb['inline_keyboard'] for b in row]
+    wa = [b for b in buttons if b.get('web_app')]
+    assert len(wa) == 1
+    assert wa[0]['web_app']['url'] == "https://x.example"
+
+
+def test_build_main_menu_keyboard_no_webapp_without_url():
+    kb = build_main_menu_keyboard("5а").to_dict()
+    buttons = [b for row in kb['inline_keyboard'] for b in row]
+    assert all(not b.get('web_app') for b in buttons)

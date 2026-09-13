@@ -5,13 +5,14 @@ start.py и main_menu.py раньше дублировали построени�
 Здесь — единый построитель; оба используют одинаковую раскладку кнопок.
 """
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from config.schools import SCHOOLS_CONFIG
 from services.text_utils import escape_markdown
 
 
-def build_main_menu_keyboard(current_class: str | None) -> InlineKeyboardMarkup:
+def build_main_menu_keyboard(current_class: str | None,
+                             webapp_url: str | None = None) -> InlineKeyboardMarkup:
     """Клавиатура главного меню; меняется в зависимости от того, выбран ли класс."""
     if current_class:
         rows = [
@@ -51,6 +52,8 @@ def build_main_menu_keyboard(current_class: str | None) -> InlineKeyboardMarkup:
                 InlineKeyboardButton("🏫 О школе", callback_data="menu_school_info"),
             ],
         ]
+    if webapp_url:
+        rows.append([InlineKeyboardButton("🌐 Веб-расписание", web_app=WebAppInfo(url=webapp_url))])
     return InlineKeyboardMarkup(rows)
 
 

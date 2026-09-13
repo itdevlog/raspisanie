@@ -41,7 +41,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_service = StatusService(schools_data)
     school_status = status_service.get_school_status(current_school_id) if current_school_id else None
 
-    reply_markup = build_main_menu_keyboard(current_class)
+    reply_markup = build_main_menu_keyboard(current_class, context.bot_data.get('webapp_url'))
     text = build_main_menu_text(school_status, current_school_id, current_class, welcome=welcome_text)
 
     await require_message(update).reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')

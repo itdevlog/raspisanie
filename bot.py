@@ -170,6 +170,7 @@ class ScheduleBot:
         self.application.bot_data['schools_config'] = SCHOOLS_CONFIG
         self.application.bot_data['state_service'] = state_service  # ДОБАВЛЕНО
         self.application.bot_data['exchange_detector'] = exchange_detector
+        self.application.bot_data['webapp_url'] = self.config.WEBAPP_URL or None
 
     def load_schools_data(self):
         """Загружает данные для всех активных школ"""
@@ -268,6 +269,19 @@ class ScheduleBot:
                 await notification_service.notify_bot_started(self.application)
         except Exception as e:
             self.logger.error(f"Ошибка отправки уведомления о запуске: {e}")
+
+        webapp_url = self.config.WEBAPP_URL
+        if webapp_url:
+            try:
+                from telegram import MenuButtonWebApp, WebAppInfo
+                await application.bot.set_chat_menu_button(
+                    menu_button=MenuButtonWebApp(
+                        text="🌐 Веб-расписание",
+                        web_app=WebAppInfo(url=webapp_url),
+                    )
+                )
+            except Exception as e:
+                self.logger.error(f"Ошибка установки MenuButtonWebApp: {e}")
 
         self.background_updater.start_periodic_updates()
 
