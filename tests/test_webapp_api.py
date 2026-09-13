@@ -69,6 +69,27 @@ def test_schedule_week():
     assert len(r.json()['days']) == 5
 
 
+def test_schedule_week_out_of_period_returns_payloads():
+    school = _school()
+    school['PERIODS'] = {}
+    bot_data = {'schools_data': {'school_133': school}, 'user_service': _FakeUserService()}
+    client = TestClient(create_app({'bot_data': bot_data}))
+    r = client.get('/api/school_133/schedule/class/5а/week?offset=0')
+    assert r.status_code == 200
+    days = r.json()['days']
+    assert len(days) == 5
+    assert all(d['no_period'] is True for d in days)
+
+
+def test_schedule_day_out_of_period_422():
+    school = _school()
+    school['PERIODS'] = {}
+    bot_data = {'schools_data': {'school_133': school}, 'user_service': _FakeUserService()}
+    client = TestClient(create_app({'bot_data': bot_data}))
+    r = client.get('/api/school_133/schedule/class/5а?date=07.09.2026')
+    assert r.status_code == 422
+
+
 def test_schedule_unknown_entity_404():
     r = _client(None).get('/api/school_133/schedule/class/11ю?date=07.09.2026')
     assert r.status_code == 404

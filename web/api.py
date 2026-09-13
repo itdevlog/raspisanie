@@ -5,6 +5,7 @@ from datetime import datetime
 
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from config.config import Config, get_timezone
 from config.schools import SCHOOLS_CONFIG
@@ -64,21 +65,24 @@ def create_app(services: dict) -> FastAPI:
 
     @app.get('/api/{school_id}/classes')
     async def classes(school_id: str):
-        return {'classes': ScheduleService(_school_or_404(services, school_id)).get_available_classes()}
+        svc = ScheduleService(_school_or_404(services, school_id))
+        return {'classes': await run_in_threadpool(svc.get_available_classes)}
 
     @app.get('/api/{school_id}/teachers')
     async def teachers(school_id: str):
-        return {'teachers': TeacherService(_school_or_404(services, school_id)).get_available_teachers()}
+        svc = TeacherService(_school_or_404(services, school_id))
+        return {'teachers': await run_in_threadpool(svc.get_available_teachers)}
 
     @app.get('/api/{school_id}/rooms')
     async def rooms(school_id: str):
-        return {'rooms': RoomService(_school_or_404(services, school_id)).get_available_rooms()}
+        svc = RoomService(_school_or_404(services, school_id))
+        return {'rooms': await run_in_threadpool(svc.get_available_rooms)}
 
     @app.get('/api/{school_id}/schedule/{kind}/{name}')
     async def schedule_day(school_id: str, kind: str, name: str, date: str | None = None):
         svc = _service_for(kind, _school_or_404(services, school_id))
         try:
-            return svc.get_day(name, _parse_date_or_none(date))
+            return await run_in_threadpool(svc.get_day, name, _parse_date_or_none(date))
         except EntityNotFoundError as e:
             raise HTTPException(404, e.message) from e
         except PeriodNotFoundError as e:
@@ -88,25 +92,24 @@ def create_app(services: dict) -> FastAPI:
     async def schedule_week(school_id: str, kind: str, name: str, offset: int = Query(0, ge=-2, le=2)):
         svc = _service_for(kind, _school_or_404(services, school_id))
         try:
-            return {'days': svc.get_week(name, offset)}
+            return {'days': await run_in_threadpool(svc.get_week, name, offset)}
         except EntityNotFoundError as e:
             raise HTTPException(404, e.message) from e
-        except PeriodNotFoundError as e:
-            raise HTTPException(422, e.message) from e
 
     @app.get('/api/{school_id}/search')
     async def search(school_id: str, q: str = Query(..., min_length=1, max_length=80)):
         school_data = _school_or_404(services, school_id)
         return {
-            'teachers': TeacherService(school_data).search_teachers(q),
-            'rooms': RoomService(school_data).search_rooms(q),
+            'teachers': await run_in_threadpool(TeacherService(school_data).search_teachers, q),
+            'rooms': await run_in_threadpool(RoomService(school_data).search_rooms, q),
         }
 
     @app.get('/api/{school_id}/free-rooms')
     async def free_rooms(school_id: str, date: str | None = None,
                          lesson: int = Query(..., ge=1, le=12)):
         school_data = _school_or_404(services, school_id)
-        return {'free_rooms': RoomService(school_data).get_free_rooms(_parse_date_or_none(date), lesson)}
+        svc = RoomService(school_data)
+        return {'free_rooms': await run_in_threadpool(svc.get_free_rooms, _parse_date_or_none(date), lesson)}
 
     @app.get('/api/me')
     async def me(x_telegram_init_data: str | None = Header(None)):

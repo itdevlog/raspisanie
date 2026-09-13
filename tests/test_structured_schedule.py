@@ -44,6 +44,7 @@ def test_get_day_class_payload():
     assert day['kind'] == 'class'
     assert day['entity'] == '5а'
     assert day['vacation'] is False and day['weekend'] is False
+    assert day['no_period'] is False
     assert len(day['lessons']) == 2
     first = day['lessons'][0]
     assert first['num'] == 1 and first['start'] == '08:00' and first['end'] == '08:45'
@@ -126,7 +127,7 @@ def test_get_day_no_period_raises():
 
 def test_get_week_five_days():
     svc = ScheduleService(_school())
-    days = svc.get_week('5а', 0)
+    days = svc.get_week('5а', 0, today=_monday())
     assert len(days) == 5
     assert days[0]['date'] == '07.09.2026'
     assert days[4]['date'] == '11.09.2026'
@@ -134,5 +135,35 @@ def test_get_week_five_days():
 
 def test_get_week_offset_next_week():
     svc = ScheduleService(_school())
-    days = svc.get_week('5а', 1)
+    days = svc.get_week('5а', 1, today=_monday())
     assert days[0]['date'] == '14.09.2026'
+
+
+def test_week_dates_deterministic_from_today():
+    svc = ScheduleService(_school())
+    assert [d.date().isoformat() for d in svc._week_dates(0, today=_monday())] == [
+        '2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11']
+
+
+def test_get_week_out_of_period_is_tolerant():
+    school = _school()
+    school['PERIODS'] = {}
+    svc = ScheduleService(school)
+    days = svc.get_week('5а', 0, today=_monday())
+    assert len(days) == 5
+    assert all(d['no_period'] is True for d in days)
+    assert all(d['lessons'] == [] for d in days)
+    assert all(d['vacation'] is False and d['weekend'] is False for d in days)
+
+
+def test_get_week_partial_period_is_tolerant():
+    school = _school()
+    # Период заканчивается в среду 09.09.2026: пн/вт/ср обычные, чт/пт — вне периода.
+    school['PERIODS'] = {'p1': {'b': '01.09.2026', 'e': '09.09.2026'}}
+    svc = ScheduleService(school)
+    days = svc.get_week('5а', 0, today=_monday())
+    assert len(days) == 5
+    assert days[0]['no_period'] is False and days[2]['no_period'] is False
+    assert days[3]['no_period'] is True and days[4]['no_period'] is True
+    assert days[3]['lessons'] == []
+

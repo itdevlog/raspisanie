@@ -158,9 +158,22 @@ class ScheduleService(BaseScheduleService):
         payload['lessons'] = self._lessons_payload(schedule_data)
         return payload
 
-    def get_week(self, class_name: str, week_offset: int = 0) -> list[dict]:
-        """5 структурных payload'ов Пн-Пт."""
-        return [self.get_day(class_name, d) for d in self._week_dates(week_offset)]
+    def get_week(self, class_name: str, week_offset: int = 0,
+                 today: datetime | None = None) -> list[dict]:
+        """5 структурных payload'ов Пн-Пт; дни вне периода — с no_period."""
+        from services.schedule_exceptions import PeriodNotFoundError
+
+        class_id = self._find_class_id(class_name)
+        entity = self.school_data['CLASSES'][class_id] if class_id else class_name
+        days = []
+        for date in self._week_dates(week_offset, today=today):
+            try:
+                days.append(self.get_day(class_name, date))
+            except PeriodNotFoundError:
+                payload = self._day_payload('class', entity, date)
+                payload['no_period'] = True
+                days.append(payload)
+        return days
 
     def _get_schedule_data(self, period_id: str, class_id: str, day_num: int,
                            week_num: int = 0) -> list[dict]:

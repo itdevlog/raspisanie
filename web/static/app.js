@@ -3,6 +3,16 @@ const tg = window.Telegram.WebApp;
 tg.ready(); tg.expand();
 
 const $ = (id) => document.getElementById(id);
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const state = {
   schoolId: null, kind: 'class', entity: null,
   date: null,          // ISO-подобная dd.mm.yyyy или null = сегодня
@@ -41,7 +51,7 @@ async function init() {
     const [schools, me] = await Promise.all([api('/api/schools'), api('/api/me')]);
     state.schools = schools.schools;
     const sel = $('school-select');
-    sel.innerHTML = schools.schools.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    sel.innerHTML = schools.schools.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('');
     if (me.school_id && schools.schools.some(s => s.id === me.school_id)) sel.value = me.school_id;
     state.schoolId = sel.value;
     if (me.class_name) { state.entity = me.class_name; $('search-input').value = me.class_name; }
@@ -55,7 +65,7 @@ async function loadEntities() {
   const kindPath = { class: 'classes', teacher: 'teachers', room: 'rooms' }[state.kind];
   const body = await api(`/api/${state.schoolId}/${kindPath}`);
   state.entities = body[{ class: 'classes', teacher: 'teachers', room: 'rooms' }[state.kind]];
-  $('entity-list').innerHTML = state.entities.map(e => `<option value="${e}">`).join('');
+  $('entity-list').innerHTML = state.entities.map(e => `<option value="${escapeHtml(e)}">`).join('');
 }
 
 function setKind(kind) {
@@ -67,11 +77,11 @@ function setKind(kind) {
 
 function lessonHtml(l) {
   const items = l.items.map(i =>
-    `${i.subject}${i.class_name ? ` (${i.class_name})` : ''} — ${i.teacher || ''} · ${i.room || ''}`).join('; ');
+    `${escapeHtml(i.subject)}${i.class_name ? ` (${escapeHtml(i.class_name)})` : ''} — ${escapeHtml(i.teacher || '')} · ${escapeHtml(i.room || '')}`).join('; ');
   const badge = l.is_cancelled ? '<span class="badge">❌ отменено</span>'
     : l.has_exchange ? '<span class="badge">🔄 замена</span>' : '';
   return `<div class="lesson${l.is_cancelled ? ' cancelled' : ''}">
-    <span class="time">${l.num}. ${l.start}–${l.end}</span>${badge}<br>${items || '—'}</div>`;
+    <span class="time">${escapeHtml(l.num)}. ${escapeHtml(l.start)}–${escapeHtml(l.end)}</span>${badge}<br>${items || '—'}</div>`;
 }
 
 function dayHtml(day) {
@@ -95,14 +105,14 @@ async function render() {
     if (state.mode === 'day') {
       const q = state.date ? `?date=${state.date}` : '';
       const day = await api(`/api/${state.schoolId}/schedule/${state.kind}/${encodeURIComponent(state.entity)}${q}`);
-      container.innerHTML = `<div class="day-title">${day.day_name}, ${day.date}</div>` + dayHtml(day);
+      container.innerHTML = `<div class="day-title">${escapeHtml(day.day_name)}, ${escapeHtml(day.date)}</div>` + dayHtml(day);
     } else {
       const off = 0; // неделя — всегда текущая (лимит ±2)
       const body = await api(`/api/${state.schoolId}/schedule/${state.kind}/${encodeURIComponent(state.entity)}/week?offset=${off}`);
       container.innerHTML = body.days.map(d =>
-        `<div class="day-title">${d.day_name}, ${d.date}</div>` + dayHtml(d)).join('<hr>');
+        `<div class="day-title">${escapeHtml(d.day_name)}, ${escapeHtml(d.date)}</div>` + dayHtml(d)).join('<hr>');
     }
-  } catch (e) { container.innerHTML = `<div class="hint">⚠️ ${e.message}</div>`; }
+  } catch (e) { container.innerHTML = `<div class="hint">⚠️ ${escapeHtml(e.message)}</div>`; }
   finally { $('loading').hidden = true; }
 }
 
@@ -116,9 +126,9 @@ async function showFreeRooms() {
   try {
     const q = `lesson=${lesson}${state.date ? `&date=${state.date}` : ''}`;
     const body = await api(`/api/${state.schoolId}/free-rooms?${q}`);
-    el.innerHTML = `<div class="day-title">Свободные кабинеты, урок ${lesson}</div>` +
-      (body.free_rooms.length ? body.free_rooms.join(' · ') : 'Все заняты');
-  } catch (e) { el.innerHTML = `<div class="hint">⚠️ ${e.message}</div>`; }
+    el.innerHTML = `<div class="day-title">Свободные кабинеты, урок ${escapeHtml(lesson)}</div>` +
+      (body.free_rooms.length ? body.free_rooms.map(escapeHtml).join(' · ') : 'Все заняты');
+  } catch (e) { el.innerHTML = `<div class="hint">⚠️ ${escapeHtml(e.message)}</div>`; }
 }
 
 function promptLesson() {
@@ -126,7 +136,7 @@ function promptLesson() {
   return n && Number(n) >= 1 && Number(n) <= 12 ? Number(n) : null;
 }
 
-function showError(msg) { $('schedule-container').innerHTML = `<div class="hint">⚠️ ${msg}</div>`; }
+function showError(msg) { $('schedule-container').innerHTML = `<div class="hint">⚠️ ${escapeHtml(msg)}</div>`; }
 
 $('tab-class').onclick = () => setKind('class');
 $('tab-teacher').onclick = () => setKind('teacher');

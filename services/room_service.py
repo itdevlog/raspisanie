@@ -118,8 +118,21 @@ class RoomService(BaseScheduleService):
         payload['lessons'] = self._lessons_payload(schedule_data)
         return payload
 
-    def get_week(self, room_name: str, week_offset: int = 0) -> list[dict]:
-        return [self.get_day(room_name, d) for d in self._week_dates(week_offset)]
+    def get_week(self, room_name: str, week_offset: int = 0,
+                 today: datetime | None = None) -> list[dict]:
+        from services.schedule_exceptions import PeriodNotFoundError
+
+        room_id = self.find_room_id(room_name)
+        entity = self.school_data['ROOMS'][room_id] if room_id else room_name
+        days = []
+        for date in self._week_dates(week_offset, today=today):
+            try:
+                days.append(self.get_day(room_name, date))
+            except PeriodNotFoundError:
+                payload = self._day_payload('room', entity, date)
+                payload['no_period'] = True
+                days.append(payload)
+        return days
 
     def _get_room_schedule_data(self, period_id: str, room_id: str, day_num: int, date: datetime) -> list[dict]:
         """Получает данные расписания кабинета - СПЕЦИФИЧНАЯ ЛОГИКА"""

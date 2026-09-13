@@ -119,8 +119,21 @@ class TeacherService(BaseScheduleService):
         payload['lessons'] = self._lessons_payload(schedule_data)
         return payload
 
-    def get_week(self, teacher_name: str, week_offset: int = 0) -> list[dict]:
-        return [self.get_day(teacher_name, d) for d in self._week_dates(week_offset)]
+    def get_week(self, teacher_name: str, week_offset: int = 0,
+                 today: datetime | None = None) -> list[dict]:
+        from services.schedule_exceptions import PeriodNotFoundError
+
+        teacher_id = self.find_teacher_id(teacher_name)
+        entity = self.school_data['TEACHERS'][teacher_id] if teacher_id else teacher_name
+        days = []
+        for date in self._week_dates(week_offset, today=today):
+            try:
+                days.append(self.get_day(teacher_name, date))
+            except PeriodNotFoundError:
+                payload = self._day_payload('teacher', entity, date)
+                payload['no_period'] = True
+                days.append(payload)
+        return days
 
     def _get_teacher_schedule_data(self, period_id: str, teacher_id: str, day_num: int, date: datetime) -> list[dict]:
         """Получает данные расписания преподавателя - СПЕЦИФИЧНАЯ ЛОГИКА"""

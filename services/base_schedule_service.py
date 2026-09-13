@@ -138,6 +138,7 @@ class BaseScheduleService:
             'lessons': [],
             'vacation': False,
             'weekend': False,
+            'no_period': False,
         }
 
     def _lessons_payload(self, schedule_data: list[dict]) -> list[dict]:
@@ -173,9 +174,9 @@ class BaseScheduleService:
             })
         return lessons
 
-    def _week_dates(self, week_offset: int) -> list[datetime]:
+    def _week_dates(self, week_offset: int, today: datetime | None = None) -> list[datetime]:
         """Список дат Пн-Пт указанной недели."""
-        today = datetime.now(self.moscow_tz)
+        today = today or datetime.now(self.moscow_tz)
         monday = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
         return [monday + timedelta(days=d) for d in range(5)]
 
