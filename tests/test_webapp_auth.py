@@ -64,3 +64,8 @@ def test_get_user():
 def test_get_user_invalid():
     raw = 'auth_date=1&hash=zz'
     assert get_user_from_init_data(raw, BOT_TOKEN) is None
+
+
+def test_validate_non_ascii_hash_returns_none():
+    raw = f'auth_date={int(time.time())}&hash={quote("пароль")}'
+    assert validate_init_data(raw, BOT_TOKEN) is None

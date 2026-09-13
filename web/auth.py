@@ -35,7 +35,7 @@ def validate_init_data(init_data: str, bot_token: str, max_age: int = 86400) -> 
     data_check_string = '\n'.join(f'{k}={v}' for k, v in sorted(raw.items()))
     secret_key = hmac.new(b'WebAppData', bot_token.encode(), hashlib.sha256).digest()
     calculated = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(calculated, received_hash):
+    if not hmac.compare_digest(calculated.encode(), received_hash.encode()):
         return None
     return parse_init_data(init_data)
 
