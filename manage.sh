@@ -1,17 +1,34 @@
 #!/usr/bin/env bash
 # manage.sh — установка, обновление и эксплуатация Telegram-бота школьного расписания
 # Использование: ./manage.sh <команда> [аргументы]
+# Быстрая установка с нуля (без ручного клонирования):
+#   curl -fsSL https://raw.githubusercontent.com/itdevlog/telegrambot/main/manage.sh | bash -s -- install
 set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_URL="https://github.com/itdevlog/telegrambot.git"
+INSTALL_DIR_DEFAULT="/opt/raspisanie"
+
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    SCRIPT_DIR=""   # запущен из пайпа (curl | bash) — репозитория рядом нет
+fi
 SERVICE_NAME="tg-schedule-bot"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-VENV_DIR="${SCRIPT_DIR}/.venv"
-ENV_FILE="${SCRIPT_DIR}/.env"
-ENV_EXAMPLE="${SCRIPT_DIR}/.env.example"
-BACKUP_DIR="${SCRIPT_DIR}/backups"
-PID_FILE="${SCRIPT_DIR}/bot.pid"
+VENV_DIR="${SCRIPT_DIR:-.}/.venv"
+ENV_FILE="${SCRIPT_DIR:-.}/.env"
+ENV_EXAMPLE="${SCRIPT_DIR:-.}/.env.example"
+BACKUP_DIR="${SCRIPT_DIR:-.}/backups"
+PID_FILE="${SCRIPT_DIR:-.}/bot.pid"
 HEALTH_TIMEOUT=30
+
+is_repo() {
+    # True если текущий SCRIPT_DIR — клон этого репозитория
+    [[ -n "$SCRIPT_DIR" ]] \
+        && [[ -f "${SCRIPT_DIR}/requirements.txt" ]] \
+        && [[ -f "${SCRIPT_DIR}/.env.example" ]] \
+        && git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
 
 # --- Цветной вывод -----------------------------------------------------------
 if [[ "${1:-}" == "--no-color" || "${NO_COLOR:-}" == "1" ]]; then
@@ -143,6 +160,12 @@ ask() {
 
 # --- install -----------------------------------------------------------------
 cmd_install() {
+    # manage.sh мог быть скачан в пустую папку без репозитория
+    if ! is_repo; then
+        die "В ${SCRIPT_DIR:-текущем каталоге} нет репозитория бота (requirements.txt / .env.example).
+Клонируйте: git clone ${REPO_URL}
+Или используйте быструю установку: curl -fsSL <REPO>/manage.sh | bash -s -- install"
+    fi
     info "Установка бота в ${SCRIPT_DIR}"
 
     # 1. Системные проверки
@@ -562,8 +585,12 @@ cmd_help() {
 
 Использование: ./manage.sh <команда>
 
+Быстрая установка с нуля (клонирует в ${INSTALL_DIR_DEFAULT}):
+  curl -fsSL https://raw.githubusercontent.com/itdevlog/telegrambot/main/manage.sh | bash -s -- install
+
 Команды:
-  install     Полная установка: venv, зависимости, .env, systemd (интерактивно)
+  install     Полная установка: venv, зависимости, .env, systemd (интерактивно).
+              Без репозитория рядом (curl|bash) — клонирует в ${INSTALL_DIR_DEFAULT} и устанавливает
   update      Обновление с GitHub + бэкап + откат при сбое
   start       Запуск бота
   stop        Остановка
@@ -581,6 +608,37 @@ cmd_help() {
 EOF
 }
 
+# --- bootstrap (curl | bash) ----------------------------------------------------
+cmd_bootstrap_install() {
+    # Запущен из пайпа/скачан без репозитория: клонируем и передаём управление
+    info "Скрипт запущен вне репозитория — устанавливаю с GitHub"
+
+    local install_dir="$INSTALL_DIR_DEFAULT"
+    local reply=""
+    read -r -p "Каталог установки [${INSTALL_DIR_DEFAULT}]: " reply
+    reply="${reply:-$INSTALL_DIR_DEFAULT}"
+    install_dir="$reply"
+
+    if [[ -d "$install_dir/.git" ]]; then
+        info "Каталог ${install_dir} уже содержит репозиторий — обновляю код"
+        git -C "$install_dir" fetch origin 2>/dev/null || die "Не удалось обновить ${install_dir} из GitHub"
+        git -C "$install_dir" reset --hard "$(git -C "$install_dir" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo origin/main)" >/dev/null
+    elif [[ -e "$install_dir" ]]; then
+        die "Каталог ${install_dir} занят — выберите другой путь установки"
+    else
+        info "Клонирую ${REPO_URL} -> ${install_dir}"
+        mkdir -p "$(dirname "$install_dir")"
+        git clone "$REPO_URL" "$install_dir" || die "Не удалось клонировать репозиторий"
+    fi
+
+    # Доустанавливаем через manage.sh из клона (уже как обычный install)
+    if [[ "${NO_COLOR:-}" == "1" ]]; then
+        exec bash "$install_dir/manage.sh" --no-color install
+    else
+        exec bash "$install_dir/manage.sh" install
+    fi
+}
+
 # --- main ----------------------------------------------------------------------
 main() {
     if [[ "${1:-}" == "--no-color" ]]; then
@@ -588,6 +646,17 @@ main() {
     fi
     local cmd="${1:-help}"
     shift 2>/dev/null || true
+
+    # Пайп (curl | bash) или manage.sh скачан без репозитория: работает только install (клонирует сам)
+    if ! is_repo; then
+        case "$cmd" in
+            install) cmd_bootstrap_install ;;
+            help|-h|--help|"") cmd_help ;;
+            *) die "Эта команда работает только внутри установленного репозитория.
+Быстрая установка с нуля: curl -fsSL https://raw.githubusercontent.com/itdevlog/telegrambot/main/manage.sh | bash -s -- install" ;;
+        esac
+        return
+    fi
 
     case "$cmd" in
         install)   cmd_install ;;

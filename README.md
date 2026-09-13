@@ -84,20 +84,19 @@ telegrambot/
 
 ## 🚀 Быстрый старт
 
-### Вариант 1: через `manage.sh` (рекомендуется)
-
-Одна команда устанавливает всё: Python-окружение, зависимости, `.env` (интерактивно), systemd-сервис.
+### Вариант 1: одна команда (рекомендуется)
 
 ```bash
-git clone https://github.com/itdevlog/telegrambot.git
-cd telegrambot
-
-./manage.sh install
+curl -fsSL https://raw.githubusercontent.com/itdevlog/telegrambot/main/manage.sh | bash -s -- install
 ```
 
-Скрипт спросит токен бота (у [@BotFather](https://t.me/BotFather)) и предложит поставить systemd-сервис (автозапуск). После установки проверьте конфигурацию и запустите:
+Скрипт спросит каталог установки (по умолчанию **`/opt/raspisanie`**), склонирует репозиторий, поставит Python-окружение, зависимости, интерактивно настроит `.env` (токен — у [@BotFather](https://t.me/BotFather)) и предложит systemd-сервис (автозапуск). Повторный запуск в тот же каталог обновляет код и доустанавливает недостающее.
+
+Дальнейшее управление — из каталога установки:
 
 ```bash
+cd /opt/raspisanie
+
 ./manage.sh doctor    # диагностика: venv, .env, токен, сервис, /healthz
 ./manage.sh start     # запуск (или systemd уже запустил)
 ./manage.sh logs      # логи в реальном времени
@@ -111,11 +110,23 @@ cd telegrambot
 
 Что делает `update`: бэкап `data/` + `.env` → `git pull` → обновление зависимостей → перезапуск → health-check `/healthz` (30 с). Если бот не поднялся — **автоматический откат** к предыдущему коммиту и рестарт.
 
+> ⚠️ `curl | bash` исполняет код от root — стандартная плата за удобство. Код скрипта можно сначала просмотреть:
+> `curl -fsSL <url> | less`
+
+### Вариант 2: через manage.sh из клона
+
+```bash
+git clone https://github.com/itdevlog/telegrambot.git /opt/raspisanie
+cd /opt/raspisanie
+
+./manage.sh install
+```
+
 Все команды:
 
 | Команда | Что делает |
 |---------|------------|
-| `./manage.sh install` | Установка: venv, зависимости, `.env` (интерактив), systemd (с выбором) |
+| `./manage.sh install` | Установка: venv, зависимости, `.env` (интерактив), systemd (с выбором). Вне репозитория — клонирует в `/opt/raspisanie` |
 | `./manage.sh update` | Обновление с GitHub + бэкап + авто-откат при сбое |
 | `./manage.sh start` / `stop` / `restart` | Управление ботом |
 | `./manage.sh status` | Статус сервиса + health-check |
@@ -127,11 +138,11 @@ cd telegrambot
 
 > 💡 Скрипт работает без systemd (тогда бот стартует в фоне через nohup, PID пишется в `bot.pid`). Флаг `--no-color` отключает цвета.
 
-### Вариант 2: вручную
+### Вариант 3: вручную
 
 ```bash
-git clone https://github.com/itdevlog/telegrambot.git
-cd telegrambot
+git clone https://github.com/itdevlog/telegrambot.git /opt/raspisanie
+cd /opt/raspisanie
 
 python -m venv .venv
 source .venv/bin/activate        # Linux/macOS
@@ -200,8 +211,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/github/telegrambot
-ExecStart=/root/github/telegrambot/.venv/bin/python bot.py
+WorkingDirectory=/opt/raspisanie
+ExecStart=/opt/raspisanie/.venv/bin/python bot.py
 Restart=always
 RestartSec=10
 
