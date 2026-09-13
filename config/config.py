@@ -75,6 +75,11 @@ class Config:
     # 'Asia/Yekaterinburg' в 5 местах и ошибочно назывался moscow_tz.
     TIMEZONE = os.getenv('TIMEZONE', 'Asia/Yekaterinburg')
 
+    # Mini App / веб-сервер
+    WEBAPP_HOST = os.getenv('WEBAPP_HOST', '0.0.0.0')
+    WEBAPP_PORT = _parse_int('WEBAPP_PORT', 8080)
+    WEBAPP_URL = os.getenv('WEBAPP_URL', '')
+
     @staticmethod
     def is_admin(config, user_id: int) -> bool:
         """Единая проверка, является ли user_id администратором.
