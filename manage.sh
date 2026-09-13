@@ -27,7 +27,8 @@ HEALTH_TIMEOUT=30
 INPUT_FD=""
 if [[ -t 0 ]]; then
     INPUT_FD="/dev/stdin"
-elif [[ -r /dev/tty ]]; then
+elif { exec 9< /dev/tty; } 2>/dev/null; then
+    exec 9<&-           # /dev/tty реально открывается (есть управляющий терминал)
     INPUT_FD="/dev/tty"
 fi
 
@@ -185,7 +186,17 @@ do_stop() {
         pid=$(external_pid)
         warn "Найден процесс бота (PID ${pid}), запущенный вне скрипта"
         if confirm "Остановить его?" y; then
-            kill "$pid" && ok "Процесс остановлен"
+            kill "$pid" 2>/dev/null || true
+            local waited=0
+            while kill -0 "$pid" 2>/dev/null && (( waited < 10 )); do
+                sleep 1; waited=$((waited + 1))
+            done
+            if kill -0 "$pid" 2>/dev/null; then
+                warn "Процесс ${pid} не завершился за 10с — отправляю SIGKILL"
+                kill -9 "$pid" 2>/dev/null || true
+                sleep 1
+            fi
+            ok "Процесс остановлен"
         else
             info "Оставляю процесс как есть"
         fi
