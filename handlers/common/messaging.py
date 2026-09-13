@@ -7,10 +7,12 @@
 import logging
 
 import telegram.error
+from telegram import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup
 
 logger = logging.getLogger(__name__)
 
 MAX_MESSAGE_LENGTH = 4096
+MAX_COPY_TEXT_LENGTH = 256
 
 GENERIC_ERROR_MSG = "❌ Произошла непредвиденная ошибка. Попробуйте позже."
 
@@ -162,15 +164,28 @@ async def edit_long_message(
 
 async def reply_long_message(
     update, context, text: str, parse_mode: str | None = 'Markdown',
+    copy_text: str | None = None,
 ):
-    """Отправляет длинное сообщение reply-сообщениями, разбивая по лимиту."""
+    """Отправляет длинное сообщение reply-сообщениями, разбивая по лимиту.
+
+    copy_text: если задано и ≤256 символов — к первому сообщению добавляется
+    кнопка «📋 Скопировать» (CopyTextButton, Bot API 7.4+).
+    """
     chunks = split_long_message(text)
     if not chunks:
         return
 
+    reply_markup = None
+    if copy_text and len(copy_text) <= MAX_COPY_TEXT_LENGTH:
+        reply_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📋 Скопировать", copy_text=CopyTextButton(text=copy_text))
+        ]])
+
     for i, chunk in enumerate(chunks, start=1):
+        markup = reply_markup if i == 1 else None
         await update.message.reply_text(
             _mark_chunk(chunk, i, len(chunks)),
             parse_mode=parse_mode,
+            reply_markup=markup,
             disable_web_page_preview=True,
         )
