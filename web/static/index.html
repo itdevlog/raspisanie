@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Расписание</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <select id="school-select" aria-label="Школа"></select>
+  </header>
+  <nav id="tabs">
+    <button id="tab-class" class="tab active">Класс</button>
+    <button id="tab-teacher" class="tab">Учитель</button>
+    <button id="tab-room" class="tab">Кабинет</button>
+    <button id="free-rooms-btn" class="tab" title="Свободные кабинеты">🔍</button>
+  </nav>
+  <section id="entity-row">
+    <input id="search-input" list="entity-list" placeholder="Выберите или начните вводить…">
+    <datalist id="entity-list"></datalist>
+  </section>
+  <section id="controls">
+    <button id="date-prev">‹</button>
+    <span id="date-label"></span>
+    <button id="date-next">›</button>
+    <span class="spacer"></span>
+    <button id="mode-day" class="mode active">День</button>
+    <button id="mode-week" class="mode">Неделя</button>
+  </section>
+  <div id="loading" hidden>Загрузка…</div>
+  <main id="schedule-container"></main>
+  <section id="free-rooms-result" hidden></section>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

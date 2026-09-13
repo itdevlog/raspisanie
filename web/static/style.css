@@ -1,0 +1,32 @@
+:root {
+  --bg: var(--tg-theme-bg-color, #fff);
+  --text: var(--tg-theme-text-color, #000);
+  --hint: var(--tg-theme-hint-color, #888);
+  --link: var(--tg-theme-link-color, #2481cc);
+  --button: var(--tg-theme-button-color, #2481cc);
+  --button-text: var(--tg-theme-button-text-color, #fff);
+  --secondary-bg: var(--tg-theme-secondary-bg-color, #f0f0f0);
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+       background: var(--bg); color: var(--text); }
+#app { max-width: 640px; margin: 0 auto; padding: 12px; }
+header select, #search-input { width: 100%; padding: 10px; border-radius: 8px;
+  border: 1px solid var(--hint); background: var(--secondary-bg); color: var(--text); font-size: 16px; }
+#tabs { display: flex; gap: 8px; margin: 12px 0; }
+.tab { flex: 1; padding: 10px 0; border-radius: 8px; border: none;
+  background: var(--secondary-bg); color: var(--text); font-size: 14px; }
+.tab.active { background: var(--button); color: var(--button-text); }
+#controls { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+#controls button { border: none; border-radius: 8px; background: var(--secondary-bg);
+  color: var(--text); padding: 8px 12px; font-size: 16px; }
+#controls .spacer { flex: 1; }
+.mode.active { background: var(--button); color: var(--button-text); }
+#date-label { font-weight: 600; }
+.lesson { background: var(--secondary-bg); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+.lesson .time { font-weight: 700; color: var(--link); }
+.lesson .badge { margin-left: 6px; font-size: 12px; }
+.lesson.cancelled { opacity: .6; text-decoration: line-through; }
+.day-title { margin: 16px 0 4px; font-weight: 700; }
+.hint { color: var(--hint); }
+#loading { padding: 24px; text-align: center; color: var(--hint); }
