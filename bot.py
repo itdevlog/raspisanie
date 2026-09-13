@@ -271,6 +271,31 @@ class ScheduleBot:
 
         self.background_updater.start_periodic_updates()
 
+    async def _do_shutdown(self):
+        """Выполняет шаги очистки по порядку."""
+        if self.application.updater:
+            await self.application.updater.stop()
+        await self.application.stop()
+        await self.application.shutdown()
+        self.background_updater.stop()
+        self.logger.info("🛑 Бот остановлен")
+
+    async def _shutdown(self):
+        """Гарантирует завершение очистки даже при отмене задачи сигналом.
+
+        При Ctrl+C ``asyncio.run`` отменяет главную задачу, и первый же ``await``
+        в ``finally`` прерывается ``CancelledError`` — очистка не доживает до
+        конца. Запускаем её отдельной задачей и прикрываем ``shield``: отмена
+        приходит в ожидающий ``await``, но сама задача очистки продолжает жить,
+        и мы дожидаемся её перед повторным пробросом отмены.
+        """
+        shutdown = asyncio.create_task(self._do_shutdown())
+        try:
+            await asyncio.shield(shutdown)
+        except asyncio.CancelledError:
+            await shutdown
+            raise
+
     async def run_async(self):
         """Запуск бота и веб-сервера в одном event loop (PTB custom startup)."""
         self.setup_handlers()
@@ -304,12 +329,7 @@ class ScheduleBot:
             else:
                 await wait_forever()
         finally:
-            if self.application.updater:
-                await self.application.updater.stop()
-            await self.application.stop()
-            await self.application.shutdown()
-            self.background_updater.stop()
-            self.logger.info("🛑 Бот остановлен")
+            await self._shutdown()
 
     def run(self):
         """Запуск бота"""
