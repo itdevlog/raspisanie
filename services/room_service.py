@@ -88,6 +88,39 @@ class RoomService(BaseScheduleService):
 
         return self._format_schedule_response('room', room_name, date, schedule_data, include_header)
 
+    def get_day(self, room_name: str, date: datetime) -> dict:
+        """Структурный payload дня для API (см. спеку §2)."""
+        from services.schedule_exceptions import EntityNotFoundError, PeriodNotFoundError
+
+        room_id = self.find_room_id(room_name)
+        if not room_id:
+            raise EntityNotFoundError('room', room_name, f"❌ Кабинет '{room_name}' не найден")
+
+        period_id = self._get_period_for_date(date)
+        if not period_id:
+            raise PeriodNotFoundError()
+
+        payload = self._day_payload('room', self.school_data['ROOMS'][room_id], date)
+
+        effective = self._get_effective_day(date, period_id)
+        if effective is None:
+            payload['vacation'] = True
+            return payload
+        eff_period_id, day_num = effective
+        if not eff_period_id:
+            raise PeriodNotFoundError()
+
+        if date.isoweekday() > 5 and not self._get_holiday_info(date):
+            payload['weekend'] = True
+            return payload
+
+        schedule_data = self._get_room_schedule_data(eff_period_id, room_id, day_num, date)
+        payload['lessons'] = self._lessons_payload(schedule_data)
+        return payload
+
+    def get_week(self, room_name: str, week_offset: int = 0) -> list[dict]:
+        return [self.get_day(room_name, d) for d in self._week_dates(week_offset)]
+
     def _get_room_schedule_data(self, period_id: str, room_id: str, day_num: int, date: datetime) -> list[dict]:
         """Получает данные расписания кабинета - СПЕЦИФИЧНАЯ ЛОГИКА"""
         schedule = []

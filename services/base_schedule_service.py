@@ -17,6 +17,15 @@ def format_time_ago(time_diff: timedelta) -> str:
         return f"{time_diff.days} дн"
 
 
+def _nth(values, idx):
+    """Параллельные списки: значение idx, иначе первое (или None)."""
+    if isinstance(values, list):
+        if idx < len(values):
+            return values[idx]
+        return values[0] if values else None
+    return values
+
+
 def find_class_id(school_data: dict, class_name: str) -> str | None:
     """Находит ID класса по точному совпадению имени (без учета регистра)."""
     if not class_name:
@@ -118,6 +127,57 @@ class BaseScheduleService:
     def _get_lesson_times(self, lesson_num: int) -> list[str]:
         """Получает время урока по номеру - ОБЩАЯ ЛОГИКА"""
         return self.school_data.get('LESSON_TIMES', {}).get(str(lesson_num), ['?', '?'])
+
+    def _day_payload(self, kind: str, entity: str, date: datetime) -> dict:
+        """Общий каркас дневного payload: даты, каникулы, выходные."""
+        return {
+            'date': date.strftime('%d.%m.%Y'),
+            'day_name': self._get_day_name(date),
+            'kind': kind,
+            'entity': entity,
+            'lessons': [],
+            'vacation': False,
+            'weekend': False,
+        }
+
+    def _lessons_payload(self, schedule_data: list[dict]) -> list[dict]:
+        """Преобразует внутренние lesson-словари в JSON-payload.
+
+        data['s'/'t'/'r'] — параллельные списки: s[0] идёт с t[0] и r[0] (группы).
+        Дедупликация не нужна: группы валидны по отдельности. Имена неизвестных
+        id (замены TEACH_EXCHANGE кладут имена, не id) — показываем как есть.
+        """
+        lessons = []
+        for lesson in schedule_data:
+            times = self._get_lesson_times(lesson['lesson_num'])
+            data = lesson.get('data', {})
+            items = []
+            length = max(len(data.get('s', [])), len(data.get('t', [])), len(data.get('r', [])))
+            for i in range(length):
+                subject_id = _nth(data.get('s'), i)
+                teacher_id = _nth(data.get('t'), i)
+                room_id = _nth(data.get('r'), i)
+                items.append({
+                    'subject': self.school_data.get('SUBJECTS', {}).get(subject_id, str(subject_id) if subject_id is not None else None),
+                    'teacher': self.school_data.get('TEACHERS', {}).get(teacher_id, str(teacher_id) if teacher_id is not None else None),
+                    'room': self.school_data.get('ROOMS', {}).get(room_id, str(room_id) if room_id is not None else None),
+                    'class_name': lesson.get('class_name'),
+                })
+            lessons.append({
+                'num': lesson['lesson_num'],
+                'start': times[0],
+                'end': times[1],
+                'items': items,
+                'has_exchange': lesson.get('has_exchange', False),
+                'is_cancelled': lesson.get('is_cancelled', False),
+            })
+        return lessons
+
+    def _week_dates(self, week_offset: int) -> list[datetime]:
+        """Список дат Пн-Пт указанной недели."""
+        today = datetime.now(self.moscow_tz)
+        monday = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
+        return [monday + timedelta(days=d) for d in range(5)]
 
     def get_next_lesson(self, schedule_data: list[dict], date: datetime,
                         now: datetime | None = None) -> dict | None:

@@ -124,6 +124,44 @@ class ScheduleService(BaseScheduleService):
 
         return self._format_schedule_response('class', class_name, date, schedule_data, include_header)
 
+    def get_day(self, class_name: str, date: datetime) -> dict:
+        """Структурный payload дня для API (см. спеку §2)."""
+        from services.schedule_exceptions import EntityNotFoundError, PeriodNotFoundError
+
+        class_id = self._find_class_id(class_name)
+        if not class_id:
+            raise EntityNotFoundError('class', class_name, f"❌ Класс '{class_name}' не найден")
+
+        period_id = self._get_period_for_date(date)
+        if not period_id:
+            raise PeriodNotFoundError()
+
+        payload = self._day_payload('class', self.school_data['CLASSES'][class_id], date)
+
+        effective = self._get_effective_day(date, period_id)
+        if effective is None:
+            payload['vacation'] = True
+            return payload
+        eff_period_id, day_num = effective
+        if not eff_period_id:
+            raise PeriodNotFoundError()
+
+        if date.isoweekday() > 5 and not self._get_holiday_info(date):
+            payload['weekend'] = True
+            return payload
+
+        info = self._get_holiday_info(date) or {}
+        week_num = int(info.get('weeknum') or 0)
+        schedule_data = self._get_schedule_data(eff_period_id, class_id, day_num, week_num)
+        schedule_data = self.exchange_service.apply_exchanges_to_schedule(
+            self.school_data['CLASSES'][class_id], schedule_data, date)
+        payload['lessons'] = self._lessons_payload(schedule_data)
+        return payload
+
+    def get_week(self, class_name: str, week_offset: int = 0) -> list[dict]:
+        """5 структурных payload'ов Пн-Пт."""
+        return [self.get_day(class_name, d) for d in self._week_dates(week_offset)]
+
     def _get_schedule_data(self, period_id: str, class_id: str, day_num: int,
                            week_num: int = 0) -> list[dict]:
         """Получает данные расписания класса - СПЕЦИФИЧНАЯ ЛОГИКА.
