@@ -74,6 +74,24 @@ get_port() {
     fi
 }
 
+get_webapp_url() {
+    # Публичный URL Mini App из .env (без значения — пусто)
+    if [[ -f "$ENV_FILE" ]]; then
+        grep -E '^WEBAPP_URL=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true
+    fi
+}
+
+get_webapp_domain() {
+    # Домен из WEBAPP_URL для Caddy: убираем схему и путь.
+    # WEBAPP_URL=https://raspisanie.devlogit.ru -> raspisanie.devlogit.ru
+    local url
+    url=$(get_webapp_url)
+    url="${url#http://}"
+    url="${url#https://}"
+    url="${url%%/*}"
+    echo "$url"
+}
+
 systemd_available() { command -v systemctl >/dev/null 2>&1; }
 service_exists() { systemd_available && systemctl list-unit-files "${SERVICE_NAME}.service" --no-legend 2>/dev/null | grep -q .; }
 service_active() { service_exists && systemctl is-active --quiet "${SERVICE_NAME}.service"; }
@@ -634,6 +652,19 @@ cmd_doctor() {
         warn "Веб /healthz: нет ответа (порт ${port})"
     fi
 
+    # Mini App: HTTPS через Caddy (если задан публичный URL)
+    local domain
+    domain=$(get_webapp_domain)
+    if [[ -n "$domain" ]]; then
+        if curl -sf "https://${domain}/healthz" >/dev/null 2>&1; then
+            ok "Mini App HTTPS: https://${domain}/healthz отвечает"
+        elif command -v caddy >/dev/null 2>&1; then
+            warn "Mini App HTTPS: нет ответа — проверьте: ./manage.sh caddy"
+        else
+            warn "Mini App HTTPS: Caddy не установлен — запустите: ./manage.sh caddy"
+        fi
+    fi
+
     echo
     if (( errors > 0 )); then
         fail "Проблем: ${errors}. Исправьте и повторите: ./manage.sh doctor"
@@ -641,6 +672,106 @@ cmd_doctor() {
     else
         ok "Все проверки пройдены"
     fi
+}
+
+# --- caddy (TLS reverse proxy) -------------------------------------------------
+install_caddy() {
+    # Ставит Caddy: из репозитория дистрибутива, иначе из официального apt-репо.
+    command -v caddy >/dev/null 2>&1 && return 0
+    info "Устанавливаю Caddy..."
+    local pm
+    pm=$(system_pm) || die "Пакетный менеджер не найден — установите Caddy вручную: https://caddyserver.com/docs/install"
+    case "$pm" in
+        apt-get)
+            install_pkgs debian-keyring debian-archive-keyring apt-transport-https curl
+            curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+                | run_root gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+            curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+                | run_root tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
+            run_root apt-get update -qq
+            run_root apt-get install -y -qq caddy
+            ;;
+        dnf)
+            run_root dnf install -y -q 'dnf-command(copr)'
+            run_root dnf copr enable -y @caddy/caddy
+            run_root dnf install -y -q caddy
+            ;;
+        yum)
+            run_root yum install -y -q yum-plugin-copr
+            run_root yum copr enable -y @caddy/caddy
+            run_root yum install -y -q caddy
+            ;;
+        apk)
+            run_root apk add --quiet caddy
+            ;;
+    esac
+    command -v caddy >/dev/null 2>&1 || die "Caddy не установился — поставьте вручную: https://caddyserver.com/docs/install"
+    ok "Caddy установлен: $(caddy version 2>/dev/null | head -1)"
+}
+
+cmd_caddy() {
+    local domain template port
+    domain=$(get_webapp_domain)
+    port=$(get_port)
+    template="${SCRIPT_DIR}/deploy/Caddyfile"
+
+    if [[ -z "$domain" ]]; then
+        die "WEBAPP_URL не задан в ${ENV_FILE}. Укажите публичный HTTPS-URL, например:
+  WEBAPP_URL=https://raspisanie.devlogit.ru
+Затем повторите: ./manage.sh caddy"
+    fi
+    if [[ "$port" == "0" ]]; then
+        die "WEBAPP_PORT=0 — веб-сервер бота отключён, Caddy проксировать некуда"
+    fi
+    [[ -f "$template" ]] || die "Не найден ${template} (обновите код: ./manage.sh update)"
+
+    info "Настройка Caddy для домена: ${domain} -> 127.0.0.1:${port}"
+    info "Для выпуска сертификата Let's Encrypt нужны открытые порты 80 и 443 и DNS-запись на этот сервер."
+
+    install_caddy
+
+    # Конфиг с плейсхолдерами. Caddy берёт значения из systemd Environment.
+    local caddyfile="/etc/caddy/Caddyfile"
+    run_root mkdir -p /etc/caddy
+    run_root tee "$caddyfile" >/dev/null < "$template"
+    ok "Конфиг: ${caddyfile}"
+
+    # Environment для Caddy (WEBAPP_DOMAIN/WEBAPP_PORT) через systemd drop-in
+    local dropin_dir="/etc/systemd/system/caddy.service.d"
+    run_root mkdir -p "$dropin_dir"
+    printf '[Service]\nEnvironment=WEBAPP_DOMAIN=%s\nEnvironment=WEBAPP_PORT=%s\n' \
+        "$domain" "$port" | run_root tee "${dropin_dir}/webapp.conf" >/dev/null
+
+    run_root caddy validate --config "$caddyfile" --adapter caddyfile \
+        || die "Конфиг Caddy некорректен — проверьте ${caddyfile}"
+
+    if systemd_available; then
+        run_root systemctl daemon-reload
+        run_root systemctl enable --now caddy >/dev/null 2>&1 || true
+        run_root systemctl restart caddy
+        ok "Caddy запущен (systemd)"
+    else
+        warn "systemd не найден — запустите Caddy вручную: caddy run --config ${caddyfile}"
+    fi
+
+    info "Жду ответа https://${domain}/healthz (до ${HEALTH_TIMEOUT}с)..."
+    local waited=0
+    while (( waited < HEALTH_TIMEOUT )); do
+        if curl -sf "https://${domain}/healthz" >/dev/null 2>&1; then
+            echo
+            ok "HTTPS работает: https://${domain}/healthz"
+            dim "Проверьте WEBAPP_URL в .env: должен быть https://${domain}"
+            return 0
+        fi
+        sleep 2; waited=$((waited + 2))
+    done
+    echo
+    warn "HTTPS не ответил за ${HEALTH_TIMEOUT}с. Проверьте:"
+    dim "  • DNS ${domain} указывает на IP этого сервера"
+    dim "  • порты 80/443 открыты (firewall)"
+    dim "  • логи Caddy: journalctl -u caddy -n 50 --no-pager"
+    dim "  • сертификат: caddy list-modules >/dev/null && journalctl -u caddy | grep -i 'certificate'"
+    return 1
 }
 
 # --- uninstall -----------------------------------------------------------------
@@ -689,6 +820,8 @@ cmd_help() {
   backup      Бэкап data/ + .env в backups/ (хранит последние 10)
   restore     Восстановление из последнего бэкапа
   doctor      Диагностика: venv, зависимости, .env, сервис, /healthz
+  caddy       HTTPS для Mini App: ставит Caddy, берёт домен из WEBAPP_URL,
+              выпускает Let's Encrypt сертификат и проксирует на бота
   uninstall   Остановка + удаление сервиса (с вопросами)
   help        Эта справка
 
@@ -764,6 +897,7 @@ main() {
         backup)    cmd_backup ;;
         restore)   cmd_restore ;;
         doctor)    cmd_doctor ;;
+        caddy)     cmd_caddy ;;
         uninstall) cmd_uninstall ;;
         help|-h|--help|"") cmd_help ;;
         *) die "Неизвестная команда: '${cmd}'. Смотрите: ./manage.sh help" ;;

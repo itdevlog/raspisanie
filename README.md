@@ -238,13 +238,25 @@ journalctl -u tg-schedule-bot.service -f
 
 **Настройка:**
 
-1. Задайте `WEBAPP_URL` — **публичный HTTPS-URL** (Telegram требует HTTPS для кнопок Mini App). Локально удобно поднять туннель, на сервере — reverse proxy (nginx) с TLS:
+1. Задайте `WEBAPP_URL` — **публичный HTTPS-URL** (Telegram требует HTTPS для кнопок Mini App). Локально удобно поднять туннель, на сервере — reverse proxy с TLS:
    ```bash
    cloudflared tunnel --url http://localhost:8080   # выдаст https://…trycloudflare.com
    ```
 2. Пропишите полученный URL в `.env`: `WEBAPP_URL=https://schedule.example.com`.
 3. Перезапустите бота. При старте автоматически вызывается `set_chat_menu_button` (кнопка «🌐 Веб-расписание») — если `WEBAPP_URL` не задан, кнопка не добавляется и бот работает как раньше.
 4. Inline-режим (`@bot 9а` в любом чате) включается в **@BotFather → `/setinline`** (имя бота уже задано при создании).
+
+**HTTPS на сервере через Caddy (рекомендуется):**
+
+```bash
+# DNS домена уже указывает на сервер. Задайте WEBAPP_URL в .env:
+#   WEBAPP_URL=https://raspisanie.devlogit.ru
+./manage.sh caddy   # ставит Caddy, выпускает Let's Encrypt сертификат, проксирует на бота
+```
+
+`./manage.sh caddy` берёт домен из `WEBAPP_URL`, конфигурирует Caddy (`deploy/Caddyfile`), включает автопродление сертификата и проверяет `https://<домен>/healthz`. Нужны открытые порты 80 и 443. Альтернатива — nginx + certbot; пример приведён в истории репозитория.
+
+> 🌐 Telegram валидирует URL кнопок Mini App: нужен `https://` с валидным сертификатом на **точное** имя домена. `WEBAPP_URL` без схемы нормализуется ботом (добавляется `https://`).
 
 **Запуск и проверка:**
 
