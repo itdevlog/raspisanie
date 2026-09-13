@@ -1,4 +1,5 @@
 # File: c:\Users\set\Downloads\telegram-schedule-bot1001\telegram-schedule-bot\bot.py
+import asyncio
 import logging
 import logging.handlers
 import socket
@@ -28,6 +29,7 @@ from services.cache_service import CacheService
 from services.notification_service import NotificationService
 from services.state_service import UserStateService
 from services.user_service import UserService
+from web.server import run_webapp, wait_forever
 
 
 class ScheduleBot:
@@ -269,12 +271,10 @@ class ScheduleBot:
 
         self.background_updater.start_periodic_updates()
 
-    def run(self):
-        """Запуск бота"""
+    async def run_async(self):
+        """Запуск бота и веб-сервера в одном event loop (PTB custom startup)."""
         self.setup_handlers()
         self.logger.info("Бот запущен")
-
-        # Запускаем polling
         self.logger.info("✅ Бот запущен! Остановите сочетанием Ctrl+C")
         self.logger.info("📝 Доступные команды:")
         self.logger.info("   /start - Главное меню (основная команда)")
@@ -287,16 +287,33 @@ class ScheduleBot:
                 status = "✅" if school['id'] in self.application.bot_data.get('schools_data', {}) else "❌"
                 self.logger.info(f"   {status} {school['name']} ({school['city']})")
 
-        # ЗАПУСКАЕМ POLLING
+        await self.application.initialize()
+
+        # PTB сам не вызывает post_init без run_polling/run_webhook —
+        # вызываем вручную, иначе не запустятся фоновые обновления и уведомления.
+        if self.application.post_init:
+            await self.application.post_init(self.application)
+
+        if self.application.updater:
+            await self.application.updater.start_polling()
+        await self.application.start()
+
         try:
-            self.application.run_polling(
-                stop_signals=None  # обрабатываем KeyboardInterrupt ниже
-            )
-        except KeyboardInterrupt:
-            self.logger.info("🛑 Остановка бота...")
+            if getattr(self.config, 'WEBAPP_PORT', 0):
+                await run_webapp(self.application, self.config)
+            else:
+                await wait_forever()
         finally:
-            # Останавливаем фоновое обновление при выходе
+            if self.application.updater:
+                await self.application.updater.stop()
+            await self.application.stop()
+            await self.application.shutdown()
             self.background_updater.stop()
+            self.logger.info("🛑 Бот остановлен")
+
+    def run(self):
+        """Запуск бота"""
+        asyncio.run(self.run_async())
 
 if __name__ == "__main__":
     # Создаем необходимые директории
