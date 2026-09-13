@@ -3,7 +3,7 @@ import logging
 import re
 import time
 
-import requests
+import httpx
 
 from config.config import Config
 from config.schools import SCHOOLS_CONFIG  # Добавить импорт
@@ -12,8 +12,7 @@ from config.schools import SCHOOLS_CONFIG  # Добавить импорт
 class DataLoader:
     def __init__(self):
         self.config = Config()
-        self.session = requests.Session()
-        self.session.headers.update({
+        self.session = httpx.Client(headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
         self.logger = logging.getLogger(__name__)
@@ -130,8 +129,7 @@ class DataLoader:
         """Загружает данные всех активных школ; использует локальную сессию и закрывает её."""
         schools_data = {}
         failed_schools: list[str] = []
-        session = requests.Session()
-        session.headers.update(self.session.headers)
+        session = httpx.Client(headers=dict(self.session.headers))
         original = self.session
         try:
             self.session = session
