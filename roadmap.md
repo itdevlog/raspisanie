@@ -17,7 +17,7 @@
 > - тихие часы с почасовой точностью (сейчас целые часы, только вкл/выкл);
 > - решено НЕ трогать на живой системе (рискованно): `FileDB` deferred-write, `data_loader` ETag — оставлены внизу как отдельные задачи.
 >
-> Аудит от 03.09.2026, стек: python-telegram-bot 20.7, requests, pytz, JSON-БД.
+> Аудит от 03.09.2026 (исторический стек: python-telegram-bot 20.7, requests, pytz, JSON-БД). Стек модернизирован 13.09.2026: PTB 22.8 (`Defaults`, `AIORateLimiter`), httpx, stdlib `zoneinfo`, FastAPI + uvicorn (Mini App).
 > Приоритеты: 🔴 P0 — падения/потеря данных, 🟠 P1 — некорректное поведение, 🟡 P2 — качество и поддержка.
 
 ---

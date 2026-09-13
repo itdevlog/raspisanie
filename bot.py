@@ -4,12 +4,14 @@ import logging
 import logging.handlers
 import socket
 
-from telegram import Update
+from telegram import LinkPreviewOptions, Update
 from telegram.ext import (
+    AIORateLimiter,
     Application,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
+    Defaults,
     InlineQueryHandler,
     MessageHandler,
     filters,
@@ -73,7 +75,11 @@ class ScheduleBot:
         )
         self.application = Application.builder().token(
             self.config.TELEGRAM_TOKEN
-        ).post_init(self._post_init).request(request).get_updates_request(
+        ).post_init(self._post_init).defaults(
+            Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True))
+        ).rate_limiter(
+            AIORateLimiter(max_retries=3)
+        ).request(request).get_updates_request(
             HTTPXRequest(
                 connection_pool_size=2,
                 connect_timeout=30,

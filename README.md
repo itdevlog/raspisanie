@@ -1,8 +1,8 @@
 # 🏫 Telegram-бот школьного расписания (с авто-уведомлениями о заменах)
 
-Современный асинхронный Telegram-бот для просмотра расписания и автоматических уведомлений о заменах. Работает на **python-telegram-bot v20.7**, тянет данные из системы **Nikasoft (Ника-Люкс)**, отслеживает изменения в реальном времени и присылает push-уведомления подписанным пользователям.
+Современный асинхронный Telegram-бот для просмотра расписания и автоматических уведомлений о заменах. Работает на **python-telegram-bot v22.8**, тянет данные из системы **Nikasoft (Ника-Люкс)**, отслеживает изменения в реальном времени и присылает push-уведомления подписанным пользователям. Дополнительно поднимает **Mini App** — веб-версию расписания (FastAPI + Telegram WebApp).
 
-Поддерживает **несколько школ**, кэширование, локальную JSON-БД, фоновое обновление и полноценный админ-панель с интерактивными кнопками.
+Поддерживает **несколько школ**, кэширование, локальную JSON-БД, фоновое обновление, **веб-расписание** и полноценный админ-панель с интерактивными кнопками.
 
 ---
 
@@ -23,8 +23,11 @@
 - ⚙️ **Гибкие настройки** — смена школы/класса, вкл/выкл уведомлений, напоминаний и тихих часов.
 - 👑 **Админ-панель** — статус школ, принудительное обновление, статистика пользователей, `/check_exchanges`.
 - 📊 **Мониторинг статуса** — команда `/status` показывает актуальность данных по каждой школе (иконка ✅/⚠️/🔴 «Устарело»).
+- 🌐 **Mini App — веб-версия расписания (Telegram Web App)** — FastAPI-сервер в процессе бота: расписание классов/преподавателей/кабинетов, свободные кабинеты, поиск; вход по подписи `initData`.
 - 🔍 **Умный поиск** — учителя/кабинеты по имени с пагинацией, кнопками «Обновить»/«Отмена».
-- 🛠️ **Качество кода** — 227 юнит/интеграционных тестов, ruff и mypy (чистые), CI.
+- 📋 **CopyTextButton** — кнопка «Скопировать» к расписанию на день (до 256 символов).
+- 🔄 **Inline-режим** — `@bot 9а` в любом чате отдаёт расписание (включается через @BotFather `/setinline`).
+- 🛠️ **Качество кода** — 268 юнит/интеграционных тестов, ruff и mypy (чистые), CI.
 
 ---
 
@@ -33,10 +36,11 @@
 | Слой | Технология |
 |------|-----------|
 | Язык | **Python 3.11+** |
-| Фреймворк | [python-telegram-bot v20.7](https://github.com/python-telegram-bot/python-telegram-bot) (async API, `Application.builder()`) |
-| HTTP/парсинг | `requests` (загрузка JS-файлов Nikasoft), `re` |
+| Фреймворк | [python-telegram-bot v22.8](https://github.com/python-telegram-bot/python-telegram-bot) (async API, `Application.builder()`, `Defaults`, `AIORateLimiter`) |
+| HTTP/парсинг | `httpx` (загрузка JS-файлов Nikasoft, `data_loader`), `re` |
+| Веб / Mini App | `fastapi` + `uvicorn` (Telegram WebApp, REST API, `/healthz`) |
 | БД | Локальная JSON-БД `FileDB` (потокобезопасная, атомарная запись) |
-| Часовой пояс | `pytz` / `TIMEZONE` (`.env`, по умолчанию `Asia/Yekaterinburg` = UTC+5) |
+| Часовой пояс | `zoneinfo` (stdlib) / `TIMEZONE` (`.env`, по умолчанию `Asia/Yekaterinburg` = UTC+5) |
 | Конфигурация | `python-dotenv` |
 
 ---
@@ -65,9 +69,14 @@ telegrambot/
 │   ├── common/messaging.py      # Нарезка ≤4096, safe-edit, логи ошибок
 │   └── common/requires_school.py# Декоратор @requires_school
 ├── services/                    # Бизнес-логика (расписание, замены, уведомления)
+├── web/                         # Mini App: FastAPI API, HMAC-авторизация, статика
+│   ├── api.py                   # /api/* и /healthz
+│   ├── auth.py                  # валидация initData (Telegram WebApp)
+│   ├── server.py                # uvicorn в общем event loop бота
+│   └── static/                  # фронтенд (vanilla JS + Telegram WebApp SDK)
 ├── data/                        # database.json, exchange_cache.json, notifications_cache.json
 ├── logs/                        # bot.log (ротация 5МБ×3), admin.log
-└── tests/                       # 227 pytest (юнит + интеграционные моки)
+└── tests/                       # 268 pytest (юнит + интеграционные моки)
 ```
 
 ---
@@ -116,6 +125,12 @@ LOG_FILE=./logs/bot.log
 ADMIN_LOG_FILE=./logs/admin.log
 # Часовой пояс (Екатеринбург = UTC+5)
 TIMEZONE=Asia/Yekaterinburg
+
+# Web App / Mini App
+WEBAPP_HOST=0.0.0.0
+WEBAPP_PORT=8080
+# Публичный HTTPS-URL фронтенда (см. раздел «Mini App»)
+WEBAPP_URL=
 ```
 
 > 💡 Если `TELEGRAM_TOKEN` не задан — бот не упадёт внутри PTB, а выведет понятную ошибку.
@@ -128,6 +143,8 @@ python bot.py
 ```
 
 При старте бот создаст директории `data/`, `logs/`, `cache/`, загрузит свежие данные всех активных школ и запустит фоновое обновление через `post_init`.
+
+> 🌐 `python bot.py` запускает **и бота, и веб-сервер** Mini App в одном процессе (порт `WEBAPP_PORT`, по умолчанию `8080`). Проверка живости — `GET /healthz`. Если веб не нужен, задайте `WEBAPP_PORT=0`.
 
 ### Запуск под systemd (сервер)
 
@@ -157,6 +174,28 @@ journalctl -u tg-schedule-bot.service -f
 ```
 
 > ✅ Логирование пишется **и в файл** (`RotatingFileHandler`, ротация 5 МБ × 3 бэкапа), **и в консоль** (видно в `journalctl`). Токен бота не пишется в debug-лог httpx.
+
+---
+
+## 🌐 Mini App (веб-версия)
+
+Бот поднимает FastAPI-сервер (`web/`) в том же процессе и отдаёт веб-версию расписания как Telegram Web App.
+
+**Настройка:**
+
+1. Задайте `WEBAPP_URL` — **публичный HTTPS-URL** (Telegram требует HTTPS для кнопок Mini App). Локально удобно поднять туннель, на сервере — reverse proxy (nginx) с TLS:
+   ```bash
+   cloudflared tunnel --url http://localhost:8080   # выдаст https://…trycloudflare.com
+   ```
+2. Пропишите полученный URL в `.env`: `WEBAPP_URL=https://schedule.example.com`.
+3. Перезапустите бота. При старте автоматически вызывается `set_chat_menu_button` (кнопка «🌐 Веб-расписание») — если `WEBAPP_URL` не задан, кнопка не добавляется и бот работает как раньше.
+4. Inline-режим (`@bot 9а` в любом чате) включается в **@BotFather → `/setinline`** (имя бота уже задано при создании).
+
+**Запуск и проверка:**
+
+- `python bot.py` — бот **и** веб-сервер (порт `WEBAPP_PORT`/`8080`) в одном event loop.
+- `GET /healthz` — проверка живости; `GET /api/schools`, `/api/{school}/schedule/{class|teacher|room}/{name}` — REST API Mini App.
+- Пользовательские данные фронтенда подписаны: сервер валидирует Telegram `initData` (HMAC) и не доверяет неподписанным запросам.
 
 ---
 
@@ -191,7 +230,7 @@ journalctl -u tg-schedule-bot.service -f
 pip install -r requirements-dev.txt
 
 .venv/bin/ruff check .        # линтер (чисто)
-.venv/bin/python -m pytest    # 227 тестов
+.venv/bin/python -m pytest    # 268 тестов
 ```
 
 - Юнит: нарезка сообщений, `paginate`, `get_display_name`, матчинг класса (p.11), `FileDB` (битый файл/upsert/delete_one), кэш-уведомления, callback-роутинг, `@requires_school`, exchange round-trip, замены учителей (`TEACH_EXCHANGE`), переносы праздников (`HOLIDAY_TRANSFER`), свободные кабинеты.

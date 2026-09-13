@@ -10,9 +10,12 @@
 Telegram-бот для просмотра школьного расписания и автоматических уведомлений о заменах.
 
 - **Источник данных**: система расписания [Nikasoft (Ника-Люкс)](https://raspisanie.nikasoft.ru).
-- **Фреймворк**: `python-telegram-bot` v20.7 (асинхронный).
+- **Фреймворк**: `python-telegram-bot` v22.8 (асинхронный, `Defaults` + `AIORateLimiter`).
 - **База данных**: локальный JSON-файл (`data/database.json`) через обёртку `FileDB`.
-- **Язык**: Python 3.10+.
+- **Язык**: Python 3.11+.
+- **Веб / Mini App**: `fastapi` + `uvicorn` (`web/`) в процессе бота.
+- **HTTP**: `httpx` (загрузка данных Nikasoft).
+- **Часовой пояс**: `zoneinfo` (stdlib).
 - **Поддерживаемые школы**: МАОУ СОШ №133, МАОУ СОШ №181 (г. Екатеринбург).
 
 ---
@@ -182,12 +185,12 @@ Telegram-бот для просмотра школьного расписани�
 - Интервал: `Config.UPDATE_INTERVAL` (по умолчанию 3600 c = 1 ч).
 - Работает внутри основного event loop (`asyncio.create_task`), а не в отдельном `threading.Thread`.
 - Засыпает через `asyncio.sleep`, не блокируя polling.
-- Синхронные HTTP-запросы `requests` оффлоадятся в отдельный поток через `asyncio.to_thread(...)`.
+- Синхронные HTTP-запросы `httpx` оффлоадятся в отдельный поток через `asyncio.to_thread(...)`.
 - Мержит свежие данные поверх last-known-good (`_merge_schools_data`), чтобы школа, чья загрузка не удалась, не исчезала до следующего цикла; замена `bot_data['schools_data']` сериализована `asyncio.Lock` (повторный запуск сообщает о пропуске).
 - После замены данных единый хук `_on_data_replaced()` очищает кэш расписания и сбрасывает индекс уведомлений; тот же хук переиспользуется ручным refresh в админке.
 - Параллельно с часовым циклом обновления работает минутный цикл `_reminder_loop`: `_send_reminders` (напоминания об уроках) и `_send_digests` (утренний дайджест). Оба дедуплицируются и уважают тихие часы; кэши — `data/sent_reminders.json` и `data/sent_digests.json`.
 
-> ✅ **Исправлено 11.09.2026**: `self.moscow_tz` инициализирован в `BackgroundUpdater.__init__` (`core/background_updater.py`) — `log_update_activity()` работает, `updatelog.txt` заполняется. Дополнительно: дублирующийся `stop()` удалён; фейковый контекст `context = ContextTypes.DEFAULT_TYPE` (мутация класса PTB) заменён на `SimpleNamespace` в `_make_context()`; синхронные HTTP-запросы `requests` во всех async-путях (`_perform_update` + админ-callback'и) оффлоадятся через `asyncio.to_thread(...)`. В Фазе 2 добавлены merge частичной загрузки, `asyncio.Lock` на `_perform_update` и единый `_on_data_replaced()`.
+> ✅ **Исправлено 11.09.2026**: `self.moscow_tz` инициализирован в `BackgroundUpdater.__init__` (`core/background_updater.py`) — `log_update_activity()` работает, `updatelog.txt` заполняется. Дополнительно: дублирующийся `stop()` удалён; фейковый контекст `context = ContextTypes.DEFAULT_TYPE` (мутация класса PTB) заменён на `SimpleNamespace` в `_make_context()`; синхронные HTTP-запросы `httpx` во всех async-путях (`_perform_update` + админ-callback'и) оффлоадятся через `asyncio.to_thread(...)`. В Фазе 2 добавлены merge частичной загрузки, `asyncio.Lock` на `_perform_update` и единый `_on_data_replaced()`.
 
 ---
 
@@ -449,7 +452,7 @@ ADMIN_LOG_FILE=./logs/admin.log
 | Уведомления дублируются | JSON-ключи уроков стали строками | [services/exchange_detector.py](services/exchange_detector.py) |
 | Уведомления не приходят | 0 доставок помечали ключ отправленным | [services/notification_service.py](services/notification_service.py) (исправлено) |
 | Поиск учителя даёт не того | Индексы применяются к неправильному списку | [handlers/teachers/teacher_menu.py](handlers/teachers/teacher_menu.py), [handlers/callbacks/teacher_callbacks.py](handlers/callbacks/teacher_callbacks.py) |
-| Бот зависает на обновлении из админки | Синхронный `requests` в async-обработчике — **исправлено 11.09**: `asyncio.to_thread` в `admin_callbacks.py` и `admin_panel.py` | [handlers/callbacks/admin_callbacks.py](handlers/callbacks/admin_callbacks.py) |
+| Бот зависает на обновлении из админки | Синхронный `httpx` в async-обработчике — **исправлено 11.09**: `asyncio.to_thread` в `admin_callbacks.py` и `admin_panel.py` | [handlers/callbacks/admin_callbacks.py](handlers/callbacks/admin_callbacks.py) |
 | Сообщение не уходит | Markdown экранирование сломано или >4096 символов — **исправлено 11.09**: единый `_escape_markdown` + нарезка в `messaging` | [services/base_schedule_service.py](services/base_schedule_service.py), [handlers/common/messaging.py](handlers/common/messaging.py) |
 | Ввод несуществующего класса текстом падал с «непредвиденной ошибкой» | `show_class_selection` не умел работать без `callback_query` — **исправлено 11.09** | [handlers/common/callback_handler.py](handlers/common/callback_handler.py) |
 | Повторное нажатие кнопки даёт «непредвиденную ошибку» | `Message is not modified` — **исправлено 11.09** во всех рендер-путях через `safe_edit_message`/`edit_long_message` | [handlers/common/messaging.py](handlers/common/messaging.py), [handlers/common/entity_menu.py](handlers/common/entity_menu.py) |

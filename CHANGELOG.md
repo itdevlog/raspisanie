@@ -1,7 +1,21 @@
 # Changelog
 
-История исправлений Telegram-бота расписания. Хронологический порядок (новое — внизу, как в git-логе).
+История исправлений Telegram-бота расписания. Хронологический порядок (новое — вверху).
 «Что осталось сделать» — см. [roadmap.md](roadmap.md).
+
+## 13.09.2026
+
+### Модернизация: PTB 22.8, Mini App, новые фичи Telegram
+
+- **python-telegram-bot 20.7 → 22.8** (Bot API 10.0) — async API, `AIORateLimiter` и `Defaults`; в билдере `bot.py` добавлены `.defaults(Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True)))` (превью ссылок отключено глобально) и `.rate_limiter(AIORateLimiter(max_retries=3))` (требует extra `[rate-limiter]`). Ручной `RetryAfter`-цикл в `NotificationService._send_message` сохранён как вторая линия защиты.
+- **`requests` → `httpx`** — `DataLoader` переведён на `httpx.Client` (загрузка JS-файлов Nikasoft, переиспользование сессии, `close()`).
+- **`pytz` → `zoneinfo`** (stdlib) — `config.get_timezone()` возвращает `ZoneInfo`.
+- **Mini App** — FastAPI + uvicorn (`web/`) в процессе бота: API `/api/schools`, `/api/{school}/schedule/{class|teacher|room}/{name}`, free-rooms, search, `/api/me`; фронтенд на vanilla JS + Telegram WebApp SDK; кнопка «🌐 Веб-расписание» в главном меню и MenuButton (`set_chat_menu_button`, ставится автоматически при `WEBAPP_URL`); HMAC-валидация `initData`; `/healthz` для проверки живости.
+- **Структурный слой сервисов** — `get_day`/`get_week` в `schedule_service`/`teacher_service`/`room_service` возвращают JSON-payload (уроки, замены, отмены, каникулы/выходные) для API; Markdown-вывод бота не изменился.
+- **CopyTextButton** — кнопка «📋 Скопировать» к расписанию на день (≤256 симв.).
+- **Реакции** — 👀 при обработке текстового запроса, 👍 после ответа.
+- **Inline-режим** — `@bot 9а` в любом чате (включить через @BotFather `/setinline`).
+- Тесты: 268 (юнит + интеграционные), ruff чистый, mypy без новых ошибок.
 
 ## 12.09.2026 (вечер)
 
