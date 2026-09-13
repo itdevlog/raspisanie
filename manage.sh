@@ -123,8 +123,7 @@ do_stop() {
         local pid
         pid=$(external_pid)
         warn "Найден процесс бота (PID ${pid}), запущенный вне скрипта"
-        read -r -p "Остановить его? [Y/n] " yn
-        if [[ "${yn:-y}" == "y" ]]; then
+        if confirm "Остановить его?" y; then
             kill "$pid" && ok "Процесс остановлен"
         else
             info "Оставляю процесс как есть"
@@ -152,10 +151,20 @@ do_start() {
 }
 
 ask() {
-    # ask <default> <prompt> -> ответ в $REPLY
+    # ask <default> <prompt> -> ответ в $REPLY (EOF -> дефолт)
     local default="$1"; shift
     read -r -p "$* ${C_DIM}[${default:-пусто}]:${C_OFF} " REPLY || REPLY=""
     REPLY="${REPLY:-$default}"
+}
+
+confirm() {
+    # confirm <prompt> <default y|n> -> rc=0 если «да» (EOF -> дефолт)
+    local prompt="$1" default="${2:-y}" reply=""
+    if ! read -r -p "${prompt} [${default^^}] " reply; then
+        reply="$default"   # EOF (нет терминала) — берём дефолт
+    fi
+    reply="${reply:-$default}"
+    [[ "${reply,,}" == "y" || "${reply,,}" == "да" ]]
 }
 
 # --- install -----------------------------------------------------------------
@@ -181,8 +190,7 @@ cmd_install() {
     if [[ -z "$py_bin" ]]; then
         fail "Python 3.11+ не найден"
         if command -v apt >/dev/null 2>&1; then
-            read -r -p "Установить python3.11-venv и python3-pip через apt? [y/N] " yn
-            [[ "${yn,,}" == "y" ]] || exit 1
+            confirm "Установить python3.11-venv и python3-pip через apt?" n || exit 1
             if ! apt-get update -qq && apt-get install -y -qq python3.11 python3.11-venv python3-pip >/dev/null; then
                 die "Не удалось установить Python через apt"
             fi
@@ -221,42 +229,44 @@ cmd_install() {
     # 4. Конфигурация .env
     if [[ -f "$ENV_FILE" ]]; then
         info "Файл .env уже существует — пропускаю настройку"
-    else
-        local yn="y"
-        read -r -p "Настроить .env интерактивно? [Y/n] " yn
-        yn="${yn:-y}"
-        if [[ "${yn,,}" == "y" ]]; then
-            cp "$ENV_EXAMPLE" "$ENV_FILE"
+    elif [[ ! -t 0 ]]; then
+        # Нет терминала (curl|bash без tty): не спрашиваем — только копия example
+        cp "$ENV_EXAMPLE" "$ENV_FILE"
+        warn "Скопирован .env.example -> .env (терминала нет — интерактив пропущен)"
+        warn "Вставьте токен бота: nano ${ENV_FILE} и запустите ./manage.sh doctor"
+    elif confirm "Настроить .env интерактивно?" y; then
+        cp "$ENV_EXAMPLE" "$ENV_FILE"
 
+        local token=""
+        while [[ -z "$token" ]]; do
             ask "" "Введите токен бота (у @BotFather)"
-            sed -i "s|^TELEGRAM_TOKEN=.*|TELEGRAM_TOKEN=${REPLY}|" "$ENV_FILE"
+            token="$REPLY"
+            [[ -n "$token" ]] || warn "Токен не может быть пустым"
+        done
+        sed -i "s|^TELEGRAM_TOKEN=.*|TELEGRAM_TOKEN=${token}|" "$ENV_FILE"
 
-            ask "" "ID администраторов через запятую (можно пусто)"
-            sed -i "s|^ADMIN_IDS=.*|ADMIN_IDS=${REPLY}|" "$ENV_FILE"
+        ask "" "ID администраторов через запятую (можно пусто)"
+        sed -i "s|^ADMIN_IDS=.*|ADMIN_IDS=${REPLY}|" "$ENV_FILE"
 
-            ask "3600" "Интервал обновления (сек)"
-            sed -i "s|^UPDATE_INTERVAL=.*|UPDATE_INTERVAL=${REPLY}|" "$ENV_FILE"
+        ask "3600" "Интервал обновления (сек)"
+        sed -i "s|^UPDATE_INTERVAL=.*|UPDATE_INTERVAL=${REPLY}|" "$ENV_FILE"
 
-            ask "8080" "Порт веб-версии (0 = отключить)"
-            sed -i "s|^WEBAPP_PORT=.*|WEBAPP_PORT=${REPLY}|" "$ENV_FILE"
+        ask "8080" "Порт веб-версии (0 = отключить)"
+        sed -i "s|^WEBAPP_PORT=.*|WEBAPP_PORT=${REPLY}|" "$ENV_FILE"
 
-            ok ".env создан"
-            warn "Проверьте .env: TIMEZONE, WEBAPP_URL при необходимости"
-        else
-            cp "$ENV_EXAMPLE" "$ENV_FILE"
-            warn "Скопирован .env.example -> .env. Отредактируйте его: nano .env"
-            info "После настройки запустите: ./manage.sh doctor"
-        fi
+        ok ".env создан"
+        warn "Проверьте .env: TIMEZONE, WEBAPP_URL при необходимости"
+    else
+        cp "$ENV_EXAMPLE" "$ENV_FILE"
+        warn "Скопирован .env.example -> .env. Отредактируйте его: nano .env"
+        info "После настройки запустите: ./manage.sh doctor"
     fi
 
     # 5. systemd
     if service_exists; then
         info "systemd-сервис уже установлен"
     elif systemd_available; then
-        local yn="y"
-        read -r -p "Установить systemd-сервис (автозапуск)? [Y/n] " yn
-        yn="${yn:-y}"
-        if [[ "${yn,,}" == "y" ]]; then
+        if confirm "Установить systemd-сервис (автозапуск)?" y; then
             install_service
         else
             info "Хорошо. Запуск вручную: ./manage.sh start"
@@ -310,8 +320,7 @@ cmd_update() {
     if [[ -n "$untracked" ]]; then
         warn "Незакоммиченные файлы (обновятся только отслеживаемые):"
         dim "$untracked"
-        read -r -p "Продолжить? [y/N] " yn
-        [[ "${yn,,}" == "y" ]] || exit 1
+        confirm "Продолжить?" n || exit 1
     fi
 
     # 2. Свежесть
@@ -460,8 +469,7 @@ cmd_restore() {
     latest=$(find "$BACKUP_DIR" -name 'bot-backup-*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2- || true)
     [[ -n "$latest" ]] || die "Бэкапов нет в ${BACKUP_DIR}"
 
-    read -r -p "Восстановить ${latest}? Бот будет остановлен. [y/N] " yn
-    [[ "${yn,,}" == "y" ]] || exit 0
+    confirm "Восстановить ${latest}? Бот будет остановлен." n || exit 0
     do_stop || true
     tar -xzf "$latest" -C "$SCRIPT_DIR" || die "Не удалось распаковать бэкап"
     ok "Восстановлено из $(basename "$latest")"
@@ -554,8 +562,7 @@ cmd_doctor() {
 # --- uninstall -----------------------------------------------------------------
 cmd_uninstall() {
     echo "${C_WARN}Внимание: это остановит бота${C_OFF}"
-    read -r -p "Продолжить удаление? [y/N] " yn
-    [[ "${yn,,}" == "y" ]] || exit 0
+    confirm "Продолжить удаление?" n || exit 0
 
     do_stop || true
     if service_exists; then
@@ -564,13 +571,11 @@ cmd_uninstall() {
         ok "systemd-сервис удалён"
     fi
 
-    read -r -p "Удалить виртуальное окружение (.venv)? [y/N] " yn
-    if [[ "${yn,,}" == "y" ]]; then
+    if confirm "Удалить виртуальное окружение (.venv)?" n; then
         rm -rf "$VENV_DIR" && ok ".venv удалён"
     fi
 
-    read -r -p "Удалить данные и бэкапы (data/, backups/, .env)? [y/N] " yn
-    if [[ "${yn,,}" == "y" ]]; then
+    if confirm "Удалить данные и бэкапы (data/, backups/, .env)?" n; then
         rm -rf "${SCRIPT_DIR}/data" "${SCRIPT_DIR}/backups" "$ENV_FILE" && ok "Данные удалены"
     else
         info "Данные сохранены: data/, backups/, .env"
@@ -610,12 +615,20 @@ EOF
 
 # --- bootstrap (curl | bash) ----------------------------------------------------
 cmd_bootstrap_install() {
-    # Запущен из пайпа/скачан без репозитория: клонируем и передаём управление
+    # Запущен из пайпа/скачан без репозитория: клонируем и передаём управление.
+    # При curl | bash stdin занят самим скриптом — переключаем ввод на терминал,
+    # если его нет (cron и т.п.) — все вопросы возьмут дефолты (confirm/ask устойчивы к EOF).
     info "Скрипт запущен вне репозитория — устанавливаю с GitHub"
+    if [[ ! -t 0 ]] && [[ -r /dev/tty ]]; then
+        # bash печатает ошибку до || true — глушим перенаправлением
+        ( exec 0< /dev/tty ) 2>/dev/null || true
+    fi
 
     local install_dir="$INSTALL_DIR_DEFAULT"
     local reply=""
-    read -r -p "Каталог установки [${INSTALL_DIR_DEFAULT}]: " reply
+    if ! read -r -p "Каталог установки [${INSTALL_DIR_DEFAULT}]: " reply; then
+        reply=""   # EOF — нет терминала, берём дефолт ниже
+    fi
     reply="${reply:-$INSTALL_DIR_DEFAULT}"
     install_dir="$reply"
 
