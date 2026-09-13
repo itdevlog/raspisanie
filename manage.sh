@@ -60,6 +60,50 @@ systemd_available() { command -v systemctl >/dev/null 2>&1; }
 service_exists() { systemd_available && systemctl list-unit-files "${SERVICE_NAME}.service" --no-legend 2>/dev/null | grep -q .; }
 service_active() { service_exists && systemctl is-active --quiet "${SERVICE_NAME}.service"; }
 
+run_root() {
+    # Запускает команду от root: напрямую или через sudo
+    if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        die "Нужны права root (запустите под root или установите sudo)"
+    fi
+}
+
+system_pm() {
+    # Определяет пакетный менеджер: apt-get / dnf / yum / apk, или пусто
+    local pm
+    for pm in apt-get dnf yum apk; do
+        command -v "$pm" >/dev/null 2>&1 && { echo "$pm"; return 0; }
+    done
+    return 1
+}
+
+install_pkgs() {
+    # install_pkgs <пакет...> — ставит системные пакеты через найденный PM
+    [[ $# -gt 0 ]] || return 0
+    local pm
+    pm=$(system_pm) || die "Пакетный менеджер не найден — установите вручную: $*"
+    case "$pm" in
+        apt-get) run_root apt-get update -qq && run_root apt-get install -y -qq "$@" >/dev/null ;;
+        dnf)     run_root dnf install -y -q "$@" ;;
+        yum)     run_root yum install -y -q "$@" ;;
+        apk)     run_root apk add --quiet "$@" ;;
+    esac
+}
+
+ensure_cmd() {
+    # ensure_cmd <команда> <пакеты...> — ставит пакеты, если команды нет
+    local cmd="$1"; shift
+    command -v "$cmd" >/dev/null 2>&1 && return 0
+    warn "'${cmd}' не найден — потребуется установить: $*"
+    confirm "Установить ($*)?" y || die "'${cmd}' обязателен. Установите вручную: $*"
+    install_pkgs "$@" || die "Не удалось установить: $*"
+    command -v "$cmd" >/dev/null 2>&1 || die "Команда '${cmd}' всё ещё недоступна после установки"
+    ok "Установлено: $*"
+}
+
 service_running() {
     # True если бот запущен через systemd, вручную (bot.pid) или внешним процессом
     service_active && return 0
@@ -178,8 +222,8 @@ cmd_install() {
     info "Установка бота в ${SCRIPT_DIR}"
 
     # 1. Системные проверки
-    command -v git >/dev/null 2>&1 || die "git не найден. Установите: apt install git"
-    command -v curl >/dev/null 2>&1 || die "curl не найден. Установите: apt install curl"
+    ensure_cmd git git
+    ensure_cmd curl curl
 
     local py_bin=""
     for p in python3.13 python3.12 python3.11 python3; do
@@ -189,25 +233,24 @@ cmd_install() {
     done
     if [[ -z "$py_bin" ]]; then
         fail "Python 3.11+ не найден"
-        if command -v apt >/dev/null 2>&1; then
-            confirm "Установить python3.11-venv и python3-pip через apt?" n || exit 1
-            if ! apt-get update -qq && apt-get install -y -qq python3.11 python3.11-venv python3-pip >/dev/null; then
-                die "Не удалось установить Python через apt"
-            fi
-            py_bin="python3.11"
-        else
-            die "Установите Python 3.11+ вручную: https://python.org"
-        fi
-    else
-        ok "Python: $("$py_bin" --version)"
+        local pm
+        pm=$(system_pm) || die "Установите Python 3.11+ вручную: https://python.org"
+        case "$pm" in
+            apt-get) install_pkgs python3 python3-venv python3-pip ;;
+            dnf|yum) install_pkgs python3 python3-pip ;;
+            apk)     install_pkgs python3 py3-pip ;;
+        esac || die "Не удалось установить Python"
+        for p in python3.13 python3.12 python3.11 python3; do
+            command -v "$p" >/dev/null 2>&1 && { py_bin="$p"; break; }
+        done
+        [[ -n "$py_bin" ]] || die "Python 3.11+ не найден после установки — обновите дистрибутив"
     fi
+    ok "Python: $("$py_bin" --version)"
 
     if ! "$py_bin" -c 'import venv' 2>/dev/null; then
-        warn "Модууль venv недоступен — устанавливаю python3-venv"
-        command -v apt >/dev/null 2>&1 || die "venv недоступен, а apt не найден. Установите python3-venv вручную"
-        if ! apt-get update -qq || ! apt-get install -y -qq "python3-venv" >/dev/null; then
-            die "Не удалось установить python3-venv"
-        fi
+        warn "Модуль venv недоступен — устанавливаю"
+        install_pkgs python3-venv || install_pkgs python3 || die "Установите python3-venv вручную"
+        "$py_bin" -c 'import venv' 2>/dev/null || die "Модуль venv всё ещё недоступен"
     fi
 
     # 2. Виртуальное окружение
@@ -634,12 +677,14 @@ cmd_bootstrap_install() {
 
     if [[ -d "$install_dir/.git" ]]; then
         info "Каталог ${install_dir} уже содержит репозиторий — обновляю код"
+        ensure_cmd git git
         git -C "$install_dir" fetch origin 2>/dev/null || die "Не удалось обновить ${install_dir} из GitHub"
         git -C "$install_dir" reset --hard "$(git -C "$install_dir" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo origin/main)" >/dev/null
     elif [[ -e "$install_dir" ]]; then
         die "Каталог ${install_dir} занят — выберите другой путь установки"
     else
         info "Клонирую ${REPO_URL} -> ${install_dir}"
+        ensure_cmd git git
         mkdir -p "$(dirname "$install_dir")"
         git clone "$REPO_URL" "$install_dir" || die "Не удалось клонировать репозиторий"
     fi
