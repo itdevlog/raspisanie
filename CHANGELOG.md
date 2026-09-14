@@ -5,6 +5,14 @@
 
 ## 13.09.2026
 
+### Мульти-инстанс: несколько ботов на одном сервере
+
+- **Имена на инстанс** — `manage.sh` больше не хардкодит `tg-schedule-bot`: имя сервиса, PID-файла и Caddy-фрагмента выводится из имени каталога (или `--instance`/`RASPISANIE_INSTANCE`), чтобы боты в разных каталогах не перезаписывали друг друга (`tg-schedule-bot-<instance>.service`, `bot.<instance>.pid`, `/etc/caddy/conf.d/<instance>.caddy`).
+- **Общий Caddy** — базовый `/etc/caddy/Caddyfile` с `import conf.d/*.caddy` создаётся один раз; каждый бот пишет только свой фрагмент. Убран общий systemd drop-in `webapp.conf`, который затирал домен/порт при втором боте. `caddy reload` вместо `restart`.
+- **Порты** — `WEBAPP_PORT=80`/`443` отклоняются (эти порты слушает Caddy), занятый порт предупреждается; `WEBAPP_HOST` по умолчанию `127.0.0.1` — боты доступны только через reverse proxy.
+- **Миграция** — старый единый `tg-schedule-bot.service` для того же каталога автоматически переносится в инстансный; `uninstall` удаляет свой Caddy-фрагмент.
+- **Шаблон** — `deploy/Caddyfile` → `deploy/Caddyfile.site` (справка; конфиг генерируется `manage.sh caddy`).
+
 ### Модернизация: PTB 22.8, Mini App, новые фичи Telegram
 
 - **python-telegram-bot 20.7 → 22.8** (Bot API 10.0) — async API, `AIORateLimiter` и `Defaults`; в билдере `bot.py` добавлены `.defaults(Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True)))` (превью ссылок отключено глобально) и `.rate_limiter(AIORateLimiter(max_retries=3))` (требует extra `[rate-limiter]`). Ручной `RetryAfter`-цикл в `NotificationService._send_message` сохранён как вторая линия защиты.

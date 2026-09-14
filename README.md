@@ -182,7 +182,8 @@ ADMIN_LOG_FILE=./logs/admin.log
 TIMEZONE=Asia/Yekaterinburg
 
 # Web App / Mini App
-WEBAPP_HOST=0.0.0.0
+# 127.0.0.1 — порт бота доступен только через reverse proxy (Caddy)
+WEBAPP_HOST=127.0.0.1
 WEBAPP_PORT=8080
 # Публичный HTTPS-URL фронтенда (см. раздел «Mini App»)
 WEBAPP_URL=
@@ -254,9 +255,25 @@ journalctl -u tg-schedule-bot.service -f
 ./manage.sh caddy   # ставит Caddy, выпускает Let's Encrypt сертификат, проксирует на бота
 ```
 
-`./manage.sh caddy` берёт домен из `WEBAPP_URL`, конфигурирует Caddy (`deploy/Caddyfile`), включает автопродление сертификата и проверяет `https://<домен>/healthz`. Нужны открытые порты 80 и 443. Альтернатива — nginx + certbot; пример приведён в истории репозитория.
+`./manage.sh caddy` берёт домен из `WEBAPP_URL`, создаёт фрагмент `/etc/caddy/conf.d/<instance>.caddy`, включает автопродление сертификата и проверяет `https://<домен>/healthz`. Нужны открытые порты 80 и 443. Альтернатива — nginx + certbot; пример приведён в истории репозитория.
 
 > 🌐 Telegram валидирует URL кнопок Mini App: нужен `https://` с валидным сертификатом на **точное** имя домена. `WEBAPP_URL` без схемы нормализуется ботом (добавляется `https://`).
+
+**Несколько ботов на одном сервере:**
+
+Каждый бот живёт в своём каталоге со своим `.env` и своим портом. Caddy один и слушает 80/443; боты — только на `127.0.0.1`.
+
+```bash
+# бот №1 (/opt/raspisanie): WEBAPP_URL=https://raspisanie.example.com, WEBAPP_PORT=8080
+cd /opt/raspisanie && ./manage.sh caddy
+
+# бот №2 (/opt/peakflow): WEBAPP_URL=https://peakflow.example.com, WEBAPP_PORT=8081
+cd /opt/peakflow && ./manage.sh caddy
+```
+
+Имя инстанса берётся из имени каталога и разводит systemd-юнит `tg-schedule-bot-<instance>`, PID-файл и Caddy-фрагмент. Переопределить можно флагом `./manage.sh --instance peakflow <команда>` или `RASPISANIE_INSTANCE=peakflow`. Базовый `/etc/caddy/Caddyfile` (с `import conf.d/*.caddy`) создаётся один раз и не затирается. `WEBAPP_PORT=80`/`443` запрещён — эти порты нужны Caddy.
+
+> 🔒 `WEBAPP_HOST=127.0.0.1` по умолчанию: порт бота не торчит в интернет, наружу смотрит только Caddy с валидным сертификатом.
 
 **Запуск и проверка:**
 

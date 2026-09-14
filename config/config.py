@@ -90,7 +90,9 @@ class Config:
     TIMEZONE = os.getenv('TIMEZONE', 'Asia/Yekaterinburg')
 
     # Mini App / веб-сервер
-    WEBAPP_HOST = os.getenv('WEBAPP_HOST', '0.0.0.0')
+    # 127.0.0.1 по умолчанию: доступ к боту только через reverse proxy (Caddy),
+    # чтобы порт не был открыт в интернет. Для нескольких ботов — свой порт каждому.
+    WEBAPP_HOST = os.getenv('WEBAPP_HOST', '127.0.0.1')
     WEBAPP_PORT = _parse_int('WEBAPP_PORT', 8080)
     WEBAPP_URL = normalize_webapp_url(os.getenv('WEBAPP_URL', ''))
 
