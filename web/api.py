@@ -120,6 +120,84 @@ def create_app(services: dict) -> FastAPI:
         class_name = user_service.get_user_class(user['id'], school_id) if user and user_service else None
         return {'user': user, 'school_id': school_id, 'class_name': class_name}
 
+    @app.get('/api/widget/{user_id}')
+    async def widget_data(user_id: int, date: str | None = None):
+        """Данные для виджета PWA: расписание на сегодня + следующий урок.
+
+        Формат для iOS Shortcuts / Android виджетов / PWA widget.
+        """
+        user_service = services['bot_data'].get('user_service')
+        if not user_service:
+            raise HTTPException(503, 'Сервис пользователей недоступен')
+
+        school_id = user_service.get_user_school(user_id)
+        class_name = user_service.get_user_class(user_id, school_id)
+
+        if not school_id or not class_name:
+            raise HTTPException(404, 'Пользователь не найден или не привязан к классу')
+
+        school_data = _school_or_404(services, school_id)
+        svc = ScheduleService(school_data)
+        current_date = _parse_date_or_none(date)
+
+        try:
+            day_data = await run_in_threadpool(svc.get_day, class_name, current_date)
+        except (EntityNotFoundError, PeriodNotFoundError) as e:
+            raise HTTPException(404, str(e)) from e
+
+        # Определяем следующий урок
+        now = _now()
+        next_lesson = None
+        lessons = day_data.get('lessons', [])
+
+        for lesson in lessons:
+            lesson_time = lesson.get('time', '')
+            if lesson_time:
+                try:
+                    lesson_start = datetime.strptime(
+                        f"{current_date.strftime('%Y-%m-%d')} {lesson_time.split('-')[0]}",
+                        '%Y-%m-%d %H:%M'
+                    ).replace(tzinfo=get_timezone())
+                    if lesson_start > now and not lesson.get('is_cancelled'):
+                        minutes_until = int((lesson_start - now).total_seconds() / 60)
+                        next_lesson = {
+                            'num': lesson.get('num'),
+                            'time': lesson_time,
+                            'subject': lesson.get('subject', ''),
+                            'room': lesson.get('room', ''),
+                            'in_minutes': minutes_until
+                        }
+                        break
+                except (ValueError, IndexError):
+                    continue
+
+        # Считаем замены
+        exchanges_count = sum(1 for lesson in lessons if lesson.get('has_exchange'))
+
+        return {
+            'class': class_name,
+            'school_id': school_id,
+            'date': current_date.strftime('%Y-%m-%d'),
+            'date_display': current_date.strftime('%d.%m.%Y'),
+            'day_name': current_date.strftime('%A'),
+            'lessons': [
+                {
+                    'num': lesson.get('num'),
+                    'time': lesson.get('time', ''),
+                    'subject': lesson.get('subject', ''),
+                    'room': lesson.get('room', ''),
+                    'exchange': lesson.get('has_exchange', False),
+                    'was_subject': lesson.get('was_subject', ''),
+                    'cancelled': lesson.get('is_cancelled', False)
+                }
+                for lesson in lessons
+            ],
+            'next_lesson': next_lesson,
+            'exchanges_count': exchanges_count,
+            'is_vacation': day_data.get('vacation', False),
+            'is_weekend': day_data.get('weekend', False)
+        }
+
     static_dir = os.path.join(os.path.dirname(__file__), 'static')
     if os.path.isdir(static_dir):
         app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')

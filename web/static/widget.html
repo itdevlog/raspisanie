@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#3390ec">
+<title>Виджет расписания</title>
+<link rel="manifest" href="manifest.json">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  min-height: 100vh;
+  padding: 16px;
+  overflow: hidden;
+}
+.widget-container {
+  max-width: 320px;
+  margin: 0 auto;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.class-name {
+  font-size: 20px;
+  font-weight: 700;
+}
+.date {
+  font-size: 12px;
+  opacity: 0.9;
+}
+.lessons {
+  background: rgba(255,255,255,0.15);
+  border-radius: 12px;
+  padding: 12px;
+  backdrop-filter: blur(10px);
+}
+.lesson {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.lesson:last-child { border-bottom: none; }
+.lesson-num {
+  width: 24px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+.lesson-time {
+  width: 70px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+.lesson-subject {
+  flex: 1;
+  font-weight: 500;
+}
+.lesson-room {
+  font-size: 12px;
+  opacity: 0.8;
+  padding: 2px 8px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
+}
+.lesson.exchange .lesson-subject {
+  color: #ffeb3b;
+}
+.lesson.exchange::before {
+  content: '🔄';
+  margin-right: 6px;
+}
+.lesson.cancelled {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.next-lesson-badge {
+  background: #4caf50;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-align: center;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+.exchanges-info {
+  background: rgba(255,235,59,0.2);
+  padding: 8px;
+  border-radius: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+  text-align: center;
+}
+.loading, .error {
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 14px;
+}
+.error { color: #ffcdd2; }
+.refresh-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fff;
+  color: #667eea;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: transform 0.2s;
+}
+.refresh-btn:active { transform: scale(0.9); }
+</style>
+</head>
+<body>
+<div class="widget-container">
+  <div class="header">
+    <div class="class-name" id="class-name">Загрузка...</div>
+    <div class="date" id="date-display"></div>
+  </div>
+  
+  <div id="next-lesson-badge" hidden></div>
+  
+  <div class="lessons" id="lessons-container">
+    <div class="loading">Загрузка расписания...</div>
+  </div>
+  
+  <div id="exchanges-info" hidden class="exchanges-info"></div>
+  
+  <button class="refresh-btn" onclick="loadWidget()" title="Обновить">🔄</button>
+</div>
+
+<script>
+const API_URL = '/api/widget/';
+
+function getQueryParam(name) {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(name);
+}
+
+async function loadWidget() {
+  const userId = getQueryParam('user_id');
+  if (!userId) {
+    document.getElementById('lessons-container').innerHTML = 
+      '<div class="error">Ошибка: не указан user_id</div>';
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}${userId}`);
+    if (!response.ok) throw new Error('Ошибка загрузки');
+    
+    const data = await response.json();
+    renderWidget(data);
+  } catch (error) {
+    document.getElementById('lessons-container').innerHTML = 
+      '<div class="error">Ошибка загрузки расписания<br><small>Проверьте соединение</small></div>';
+    console.error('Widget load error:', error);
+  }
+}
+
+function renderWidget(data) {
+  document.getElementById('class-name').textContent = 
+    `${data.class}${data.school_id ? ` • Школа ${data.school_id}` : ''}`;
+  document.getElementById('date-display').textContent = 
+    `${data.date_display}`;
+  
+  // Следующий урок
+  const nextBadge = document.getElementById('next-lesson-badge');
+  if (data.next_lesson) {
+    nextBadge.textContent = `⏰ Через ${data.next_lesson.in_minutes} мин: ${data.next_lesson.subject}`;
+    nextBadge.hidden = false;
+  } else {
+    nextBadge.hidden = true;
+  }
+  
+  // Уроки
+  const container = document.getElementById('lessons-container');
+  if (data.is_vacation || data.is_weekend) {
+    container.innerHTML = '<div class="loading">🏖️ Каникулы / Выходной</div>';
+    return;
+  }
+  
+  if (!data.lessons || data.lessons.length === 0) {
+    container.innerHTML = '<div class="loading">Нет уроков на сегодня</div>';
+    return;
+  }
+  
+  container.innerHTML = data.lessons.map(lesson => `
+    <div class="lesson ${lesson.exchange ? 'exchange' : ''} ${lesson.cancelled ? 'cancelled' : ''}">
+      <div class="lesson-num">${lesson.num}</div>
+      <div class="lesson-time">${lesson.time || '—'}</div>
+      <div class="lesson-subject">${lesson.subject || '—'}</div>
+      ${lesson.room ? `<div class="lesson-room">${lesson.room}</div>` : ''}
+    </div>
+  `).join('');
+  
+  // Замены
+  const exchangesInfo = document.getElementById('exchanges-info');
+  if (data.exchanges_count > 0) {
+    exchangesInfo.textContent = `🔄 ${data.exchanges_count} замен(ы) сегодня`;
+    exchangesInfo.hidden = false;
+  } else {
+    exchangesInfo.hidden = true;
+  }
+}
+
+// Авто-обновление каждые 5 минут
+loadWidget();
+setInterval(loadWidget, 5 * 60 * 1000);
+
+// Слушаем сообщения от service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'WIDGET_UPDATE') {
+      loadWidget();
+    }
+  });
+}
+</script>
+</body>
+</html>

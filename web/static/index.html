@@ -3,7 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Расписание</title>
+<meta name="theme-color" content="#3390ec">
+<meta name="description" content="Школьное расписание занятий с авто-уведомлениями о заменах">
+<title>Школьное Расписание</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="icon-192.png">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -33,7 +38,71 @@
   <div id="loading" hidden>Загрузка…</div>
   <main id="schedule-container"></main>
   <section id="free-rooms-result" hidden></section>
+  
+  <!-- PWA: кнопка установки (показывается если доступно) -->
+  <div id="pwa-install-prompt" hidden style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#3390ec;color:#fff;padding:12px 24px;border-radius:8px;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+    📲 Установить приложение
+    <button id="pwa-install-btn" style="margin-left:12px;background:#fff;color:#3390ec;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-weight:600;">Установить</button>
+    <button id="pwa-install-dismiss" style="margin-left:8px;background:transparent;color:#fff;border:1px solid #fff;padding:6px 10px;border-radius:4px;cursor:pointer;">✕</button>
+  </div>
 </div>
 <script src="app.js"></script>
+<script>
+// Регистрация Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then((registration) => {
+        console.log('SW зарегистрирован:', registration.scope);
+        
+        // Проверка обновлений
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('Доступно обновление');
+              // Можно показать уведомление пользователю
+            }
+          });
+        });
+      })
+      .catch((error) => {
+        console.error('SW регистрация не удалась:', error);
+      });
+  });
+}
+
+// PWA Install Prompt
+let deferredPrompt;
+const installPrompt = document.getElementById('pwa-install-prompt');
+const installBtn = document.getElementById('pwa-install-btn');
+const dismissBtn = document.getElementById('pwa-install-dismiss');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installPrompt.hidden = false;
+});
+
+installBtn.addEventListener('click', async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log('User choice:', outcome);
+    deferredPrompt = null;
+    installPrompt.hidden = true;
+  }
+});
+
+dismissBtn.addEventListener('click', () => {
+  installPrompt.hidden = true;
+});
+
+// Сообщаем Telegram WebApp что мы PWA
+if (window.Telegram && Telegram.WebApp) {
+  Telegram.WebApp.ready();
+  Telegram.WebApp.expand();
+}
+</script>
 </body>
 </html>
