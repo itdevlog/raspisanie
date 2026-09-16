@@ -46,6 +46,8 @@ def _teacher_lessons(svc: TeacherService, name: str, date: datetime):
     """Собирает данные расписания учителя на дату (внутренний формат)."""
     teacher_id = svc.find_teacher_id(name)
     period_id = svc._get_period_for_date(date)
+    assert teacher_id is not None
+    assert period_id is not None
     return svc._get_teacher_schedule_data(period_id, teacher_id, date.isoweekday(), date)
 
 
@@ -144,6 +146,8 @@ def test_teacher_schedule_day_view_marks_exchange():
     date = _thursday()
     teacher_id = svc.find_teacher_id('Иванов')
     period_id = svc._get_period_for_date(date)
+    assert teacher_id is not None
+    assert period_id is not None
     schedule_data = svc._get_teacher_schedule_data(period_id, teacher_id, date.isoweekday(), date)
 
     text = svc._format_schedule_response('teacher', 'Иванов', date, schedule_data, include_header=True)
@@ -157,6 +161,8 @@ def test_teacher_schedule_day_view_shows_class():
     date = _thursday()
     teacher_id = svc.find_teacher_id('Иванов')
     period_id = svc._get_period_for_date(date)
+    assert teacher_id is not None
+    assert period_id is not None
     schedule_data = svc._get_teacher_schedule_data(period_id, teacher_id, date.isoweekday(), date)
 
     text = svc._format_schedule_response('teacher', 'Иванов', date, schedule_data, include_header=True)

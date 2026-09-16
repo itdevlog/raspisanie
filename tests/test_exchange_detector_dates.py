@@ -17,6 +17,8 @@ def _detector(tmp_path):
     d.moscow_tz = TZ
     d.previous_schedules = {}
     d.cache_file = str(tmp_path / 'exchange_cache.json')
+    # Фиксируем «сейчас», иначе prune отсекает даты теста относительно реального дня
+    d._now = lambda: datetime(2026, 9, 11, 12, 0, tzinfo=TZ)  # type: ignore[method-assign]
     return d
 
 

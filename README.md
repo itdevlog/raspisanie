@@ -39,7 +39,7 @@
 | Фреймворк | [python-telegram-bot v22.8](https://github.com/python-telegram-bot/python-telegram-bot) (async API, `Application.builder()`, `Defaults`, `AIORateLimiter`) |
 | HTTP/парсинг | `httpx` (загрузка JS-файлов Nikasoft, `data_loader`), `re` |
 | Веб / Mini App | `fastapi` + `uvicorn` (Telegram WebApp, REST API, `/healthz`) |
-| БД | Локальная JSON-БД `FileDB` (потокобезопасная, атомарная запись) |
+| БД | Локальная JSON-БД `FileDB` (потокобезопасная, атомарная и долговечная запись: `fsync` + `.bak`) |
 | Часовой пояс | `zoneinfo` (stdlib) / `TIMEZONE` (`.env`, по умолчанию `Asia/Yekaterinburg` = UTC+5) |
 | Конфигурация | `python-dotenv` |
 
@@ -138,6 +138,8 @@ cd /opt/raspisanie
 | `./manage.sh doctor` | Диагностика: venv, зависимости, `.env`, токен, сервис, `/healthz` |
 | `./manage.sh uninstall` | Остановка + удаление сервиса (с вопросами) |
 
+> ⚙️ Параллельная загрузка школ управляется `MAX_PARALLEL_SCHOOLS` (по умолчанию 4; `1` — последовательно). Загрузка использует `ETag`/`If-Modified-Since`: если файл расписания не изменился, сервер отвечает `304` и данные берутся из кэша.
+
 > 💡 Скрипт работает без systemd (тогда бот стартует в фоне через nohup, PID пишется в `bot.pid`). Флаг `--no-color` отключает цвета.
 
 ### Вариант 3: вручную
@@ -171,6 +173,9 @@ UPDATE_INTERVAL=3600
 
 # Попыток запросов к Nikasoft при сбоях
 MAX_RETRIES=3
+
+# Сколько школ грузить параллельно (1 — последовательно)
+MAX_PARALLEL_SCHOOLS=4
 
 # Пути к данным и логам
 DB_PATH=./data/database.json

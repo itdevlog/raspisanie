@@ -73,6 +73,8 @@ class Config:
     # Настройки обновления
     UPDATE_INTERVAL = _parse_int('UPDATE_INTERVAL', 3600)
     MAX_RETRIES = _parse_int('MAX_RETRIES', 3)
+    # Параллельная загрузка школ (потоков). 1 — последовательно.
+    MAX_PARALLEL_SCHOOLS = max(1, _parse_int('MAX_PARALLEL_SCHOOLS', 4))
 
     # Администраторы
     ADMIN_IDS = _parse_admin_ids()

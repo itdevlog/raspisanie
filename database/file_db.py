@@ -47,24 +47,64 @@ class FileDB:
             logger.error(f"Failed to back up corrupt database {self.db_path}: {e}")
 
     def _save_data(self) -> bool:
-        """Атомарно сохраняет данные. Возвращает False при ошибке (не глотает её молча)."""
+        """Атомарно и долговечно сохраняет данные.
+
+        Пишем во временный файл в той же директории, сбрасываем его на диск
+        (fsync), сохраняем предыдущую версию как '<db_path>.bak' и только затем
+        делаем os.replace — так на диске всегда либо целая старая, либо целая
+        новая версия, даже при отключении питания. Возвращает False при ошибке
+        (не глотает её молча).
+        """
+        fd = -1
+        temp_path = ''
         try:
             dir_name = os.path.dirname(self.db_path) or '.'
             os.makedirs(dir_name, exist_ok=True)
-            # Пишем во временный файл в той же директории, чтобы rename был атомарным
+            # Пишем во временный файл в той же директории, чтобы replace был атомарным
             fd, temp_path = tempfile.mkstemp(dir=dir_name, prefix='.file_db_tmp_', suffix='.json')
-            try:
-                with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                    json.dump(self.data, f, ensure_ascii=False, indent=2, default=self._json_serializer)
-                shutil.move(temp_path, self.db_path)
-            except Exception:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-                raise
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                fd = -1  # fdopen закрывает дескриптор
+                json.dump(self.data, f, ensure_ascii=False, indent=2, default=self._json_serializer)
+                f.flush()
+                os.fsync(f.fileno())
+            # Сохраняем последнюю целую версию перед заменой (best-effort, не ломает запись)
+            if os.path.exists(self.db_path):
+                try:
+                    shutil.copy2(self.db_path, self.db_path + '.bak')
+                except OSError as e:
+                    logger.warning(f"Failed to back up database before save: {e}")
+            os.replace(temp_path, self.db_path)
+            temp_path = ''
+            self._fsync_dir(dir_name)
             return True
         except Exception as e:
             logger.error(f"Error saving database: {e}", exc_info=True)
             return False
+        finally:
+            if fd != -1:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+
+    @staticmethod
+    def _fsync_dir(dir_name: str) -> None:
+        """Сбрасывает запись директории на диск, чтобы rename пережил сбой питания."""
+        try:
+            dir_fd = os.open(dir_name, os.O_RDONLY)
+        except OSError:
+            return
+        try:
+            os.fsync(dir_fd)
+        except OSError:
+            pass
+        finally:
+            os.close(dir_fd)
 
     @staticmethod
     def _json_serializer(obj):

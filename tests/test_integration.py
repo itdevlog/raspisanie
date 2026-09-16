@@ -133,12 +133,12 @@ async def test_free_rooms_callback_renders():
     import handlers.rooms.room_schedule as rs
     real_now = datetime.now
     fake_now = datetime(2026, 9, 11, 8, 30, tzinfo=ZoneInfo('Asia/Yekaterinburg'))
-    rs.datetime = SimpleNamespace(now=lambda tz=None: fake_now)
+    setattr(rs, 'datetime', SimpleNamespace(now=lambda tz=None: fake_now))
 
     try:
         await free_rooms_handler(up, ctx)
     finally:
-        rs.datetime = real_now
+        setattr(rs, 'datetime', real_now)
 
     assert q.edits
     assert 'Свободные кабинеты' in q.edits[-1]

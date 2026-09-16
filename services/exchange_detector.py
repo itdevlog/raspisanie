@@ -73,9 +73,13 @@ class ExchangeDetector:
         except Exception as e:
             self.logger.error(f"Ошибка сохранения кэша замен: {e}")
 
+    def _now(self) -> datetime:
+        """Текущее время в таймзоне приложения (точка подмены в тестах)."""
+        return datetime.now(self.moscow_tz)
+
     def _prune_old_dates(self):
         """Удаляет даты старше 3 суток, чтобы кэш не рос бесконечно."""
-        cutoff = datetime.now(self.moscow_tz).date() - timedelta(days=3)
+        cutoff = self._now().date() - timedelta(days=3)
         for school_id in list(self.previous_schedules.keys()):
             by_date = self.previous_schedules[school_id]
             for date_str in list(by_date.keys()):
