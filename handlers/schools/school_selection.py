@@ -70,6 +70,8 @@ async def school_selection_handler(update: Update, context: ContextTypes.DEFAULT
         await require_message(update).reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
     elif update.callback_query:
         query = require_query(update)
+        # Снимаем спиннер с кнопки на успешном пути (иначе висит ~15 с).
+        await query.answer()
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
 
 

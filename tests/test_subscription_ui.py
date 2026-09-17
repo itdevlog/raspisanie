@@ -83,7 +83,7 @@ async def test_toggle_callback_subscribes_entity(monkeypatch):
     handler = _handler()
     redraws = []
 
-    async def _fake_select(update, context, entity_name, schedule_type):
+    async def _fake_select(update, context, entity_name, schedule_type, **kwargs):
         redraws.append((entity_name, schedule_type))
 
     monkeypatch.setattr(handler, 'select', _fake_select)

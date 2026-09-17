@@ -5,6 +5,7 @@
 (пары `*...*`, `` `...` `` и т.п. не рвутся посередине).
 """
 import logging
+import time
 
 import telegram.error
 from telegram import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup
@@ -13,6 +14,12 @@ logger = logging.getLogger(__name__)
 
 MAX_MESSAGE_LENGTH = 4096
 MAX_COPY_TEXT_LENGTH = 256
+
+# Сколько секунд «ждём текст поиска» после нажатия «Поиск». Если пользователь
+# открыл ввод и ушёл, старый флаг не должен через неделю трактовать любой текст
+# как поиск.
+SEARCH_FLAG_TTL = 1800
+_SEARCH_KINDS = ('teacher', 'room')
 
 GENERIC_ERROR_MSG = "❌ Произошла непредвиденная ошибка. Попробуйте позже."
 
@@ -91,13 +98,14 @@ def reset_user_flow(context) -> None:
     """Полностью сбрасывает временное состояние пользователя (флаги поиска, цифра класса, запросы)."""
     for key in (
         'waiting_for_teacher_search', 'waiting_for_room_search',
+        'waiting_for_teacher_search_at', 'waiting_for_room_search_at',
         'class_digit', 'teacher_search_query', 'room_search_query',
     ):
         context.user_data.pop(key, None)
 
 
 def clear_search_flags(context) -> None:
-    """Сбрасывает все «залипающие» флаги ожидания поиска.
+    """Сбрасывает все «залипающие» флаги ожидания поиска (и их timestamp'ы).
 
     Флаги `waiting_for_*` в user_data ставятся при открытии ввода поиска
     преподавателя/кабинета и сбрасываются в class_schedule только когда
@@ -105,8 +113,43 @@ def clear_search_flags(context) -> None:
     остаётся, и любой следующий текст интерпретируется как поиск. Вызов
     этого хелпера в точках входа в меню устраняет залипание.
     """
-    for flag in ('waiting_for_teacher_search', 'waiting_for_room_search'):
-        context.user_data.pop(flag, None)
+    for kind in _SEARCH_KINDS:
+        context.user_data.pop(f'waiting_for_{kind}_search', None)
+        context.user_data.pop(f'waiting_for_{kind}_search_at', None)
+
+
+def set_search_flag(user_data: dict, kind: str) -> None:
+    """Ставит флаг ожидания поиска `kind`, сбрасывая все sibling-флаги.
+
+    Переключение teacher↔room не должно оставлять активным второй флаг:
+    иначе следующее текстовое сообщение уйдёт не в тот поиск. Рядом с флагом
+    кладём timestamp для проверки TTL.
+    """
+    for other in _SEARCH_KINDS:
+        user_data.pop(f'waiting_for_{other}_search', None)
+        user_data.pop(f'waiting_for_{other}_search_at', None)
+    user_data[f'waiting_for_{kind}_search'] = True
+    user_data[f'waiting_for_{kind}_search_at'] = time.time()
+
+
+def search_flag_active(user_data: dict, kind: str, ttl: int = SEARCH_FLAG_TTL) -> bool:
+    """True, если флаг поиска `kind` стоит и не устарел.
+
+    Обратная совместимость: если timestamp отсутствует (старые сессии или
+    тесты, выставляющие только флаг), считаем флаг активным. Устаревший флаг
+    снимается здесь же — текст пойдёт по обычной ветке класса.
+    """
+    flag = f'waiting_for_{kind}_search'
+    if not user_data.get(flag):
+        return False
+
+    ts_key = f'waiting_for_{kind}_search_at'
+    ts = user_data.get(ts_key)
+    if ts is not None and time.time() - ts > ttl:
+        user_data.pop(flag, None)
+        user_data.pop(ts_key, None)
+        return False
+    return True
 
 
 def paginate(items: list[str], page: int, per_page: int = 30) -> tuple:

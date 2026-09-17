@@ -4,7 +4,7 @@ from telegram import ReactionTypeEmoji, Update
 from telegram.constants import ReactionEmoji
 from telegram.ext import ContextTypes
 
-from handlers.common.messaging import reply_long_message
+from handlers.common.messaging import clear_search_flags, reply_long_message, search_flag_active
 from handlers.common.typing import require_message, require_text, require_user, require_user_data
 from services.schedule_exceptions import EntityNotFoundError, PeriodNotFoundError
 from services.schedule_service import ScheduleService
@@ -38,21 +38,23 @@ async def class_schedule_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     message_text = require_text(message).strip()
 
+    # Флаги ожидания поиска устаревают: старый клик «Поиск» не должен через
+    # неделю трактовать любой текст как поиск. Снимаем просроченные флаги.
+    in_room_search = search_flag_active(user_data, 'room')
+    in_teacher_search = search_flag_active(user_data, 'teacher')
+
     # Ограничиваем длину запроса поиска (учитель/кабинет), чтобы не грузить огромные строки
-    if (user_data.get('waiting_for_room_search')
-            or user_data.get('waiting_for_teacher_search')) \
-            and len(message_text) > 80:
-        user_data.pop('waiting_for_room_search', None)
-        user_data.pop('waiting_for_teacher_search', None)
+    if (in_room_search or in_teacher_search) and len(message_text) > 80:
+        clear_search_flags(context)
         await message.reply_text(
             "❌ Слишком длинный запрос (максимум 80 символов). Вернитесь в поиск и попробуйте ещё раз."
         )
         return
 
     # Если пользователь ввел номер кабинета для поиска
-    if user_data.get('waiting_for_room_search'):
+    if in_room_search:
         # Очищаем флаг
-        del user_data['waiting_for_room_search']
+        clear_search_flags(context)
 
         # Получаем данные школы пользователя
         if not user_service or not schools_data:
@@ -72,9 +74,9 @@ async def class_schedule_handler(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     # Если пользователь ввел фамилию учителя (поиск преподавателя)
-    if user_data.get('waiting_for_teacher_search'):
+    if in_teacher_search:
         # Очищаем флаг
-        del user_data['waiting_for_teacher_search']
+        clear_search_flags(context)
 
         # Получаем данные школы пользователя
         if not user_service or not schools_data:

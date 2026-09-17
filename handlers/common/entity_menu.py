@@ -16,7 +16,12 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from config.schools import SCHOOLS_CONFIG
-from handlers.common.messaging import clear_search_flags, edit_long_message, log_user_error
+from handlers.common.messaging import (
+    clear_search_flags,
+    edit_long_message,
+    log_user_error,
+    set_search_flag,
+)
 from handlers.common.typing import require_message, require_query, require_user, require_user_data
 from services.state_service import UserStateService
 from services.text_utils import escape_markdown
@@ -72,10 +77,13 @@ class EntityMenuHandler:
         cfg_school = SCHOOLS_CONFIG.get(current_school_id, {})
         return cfg_school.get('name') or 'Неизвестно'
 
-    def _edit_or_reply(self, update, context, text, reply_markup=None, parse_mode='Markdown'):
+    async def _edit_or_reply(self, update, context, text, reply_markup=None, parse_mode='Markdown'):
         if update.callback_query:
-            return require_query(update).edit_message_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
-        return require_message(update).reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+            query = require_query(update)
+            # Снимаем спиннер с кнопки на успешном пути (иначе висит ~15 с).
+            await query.answer()
+            return await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+        return await require_message(update).reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
 
     # ---------- меню ----------
 
@@ -134,6 +142,8 @@ class EntityMenuHandler:
     async def show_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 0):
         clear_search_flags(context)
         query = require_query(update)
+        # Снимаем спиннер с кнопки на успешном пути (иначе висит ~15 с).
+        await query.answer()
         user_id = require_user(update).id
         user_service = context.bot_data.get('user_service')
         schools_data = context.bot_data.get('schools_data', {})
@@ -219,13 +229,17 @@ class EntityMenuHandler:
     # ---------- выбор сущности (расписание) ----------
 
     async def select(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
-                     entity_name: str, schedule_type: str = "today"):
+                     entity_name: str, schedule_type: str = "today", answer_query: bool = True):
         query = require_query(update)
         user_id = require_user(update).id
         user_service = context.bot_data.get('user_service')
         schools_data = context.bot_data.get('schools_data', {})
         state_service = cast(UserStateService, context.bot_data.get('state_service'))
 
+        # Снимаем спиннер с кнопки на успешном пути. Если вызывающий (например,
+        # toggle_subscription) уже ответил с текстом — не дублируем.
+        if answer_query:
+            await query.answer()
         if not user_service or not schools_data:
             return await query.edit_message_text("❌ Сервис не доступен")
         current_school_id = user_service.get_user_school(user_id)
@@ -274,12 +288,14 @@ class EntityMenuHandler:
                     sub_label,
                     callback_data=f"{self.p}_subscribe_{schedule_type}_{suffix}_{idx}")])
 
-            keyboard.append([
-                InlineKeyboardButton("🔄 Обновить", callback_data=f"{self.p}_{schedule_type}_{suffix}_{idx}"
-                                     if idx is not None else f"{self.p}_{schedule_type}_{entity_name}"),
-                InlineKeyboardButton("🔍 Найти другого", callback_data=f"menu_{self.p}"),
-                InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
-            ])
+            refresh_buttons = []
+            refresh_data = self._refresh_callback(
+                user_id, entity_name, schedule_type, suffix, idx, state_service)
+            if refresh_data is not None:
+                refresh_buttons.append(InlineKeyboardButton("🔄 Обновить", callback_data=refresh_data))
+            refresh_buttons.append(InlineKeyboardButton("🔍 Найти другого", callback_data=f"menu_{self.p}"))
+            refresh_buttons.append(InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu"))
+            keyboard.append(refresh_buttons)
 
             return await edit_long_message(
                 update, context, query, schedule, reply_markup=InlineKeyboardMarkup(keyboard))
@@ -316,7 +332,7 @@ class EntityMenuHandler:
             )
             await query.answer(f"🔔 Вы подписались на {self.n} {entity_name}")
 
-        await self.select(update, context, entity_name, schedule_type)
+        await self.select(update, context, entity_name, schedule_type, answer_query=False)
 
     async def handle_subscription_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                                            callback_data: str):
@@ -367,11 +383,41 @@ class EntityMenuHandler:
             return ('full', full_list.index(entity_name))
         return ('full', None)
 
+    MAX_CALLBACK_BYTES = 64
+
+    def _refresh_callback(self, user_id: int, entity_name: str, schedule_type: str,
+                          suffix: str, idx: int | None, state_service: UserStateService | None) -> str | None:
+        """callback_data «Обновить», гарантированно ≤64 байт.
+
+        Полное ФИО в callback_data не влезает в лимит Telegram (кириллица ×2
+        байта). Поэтому передаём короткий индекс в state-кэше: если сущность не
+        разрешилась по индексу (кэш списка истёк), кладём её в список полного
+        набора и используем полученный индекс. Без state_service индекс взять
+        неоткуда — для коротких имён оставляем прежний формат (если он влезает
+        в лимит), иначе кнопку не показываем (None).
+        """
+        if idx is not None:
+            return f"{self.p}_{schedule_type}_{suffix}_{idx}"
+
+        if state_service is not None:
+            full_list = list(state_service.get_user_list(user_id, self.cfg.state_full_key) or [])
+            if entity_name not in full_list:
+                full_list.append(entity_name)
+                state_service.set_user_list(user_id, self.cfg.state_full_key, full_list)
+            return f"{self.p}_{schedule_type}_idx_{full_list.index(entity_name)}"
+
+        fallback = f"{self.p}_{schedule_type}_{entity_name}"
+        if len(fallback.encode('utf-8')) <= self.MAX_CALLBACK_BYTES:
+            return fallback
+        return None
+
     # ---------- поиск ----------
 
     async def search_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = require_query(update)
-        require_user_data(context)[f'waiting_for_{self.p}_search'] = True
+        # Снимаем спиннер с кнопки на успешном пути (иначе висит ~15 с).
+        await query.answer()
+        set_search_flag(require_user_data(context), self.p)
 
         keyboard = [
             [InlineKeyboardButton("❌ Отмена", callback_data=f"{self.p}_search_cancel")],

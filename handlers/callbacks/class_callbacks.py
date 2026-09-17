@@ -72,6 +72,9 @@ class ClassCallbackHandler:
         # Сохраняем класс для текущей школы пользователя
         await asyncio.to_thread(user_service.set_user_class, user_id, class_name, current_school_id)
 
+        # Снимаем спиннер с кнопки на успешном пути (иначе висит ~15 с)
+        await query.answer()
+
         # Показываем сообщение о загрузке
         await query.edit_message_text("🔄 Загружаем расписание...")
 

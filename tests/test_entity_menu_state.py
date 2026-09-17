@@ -8,6 +8,10 @@ from handlers.common.entity_menu import EntityConfig, EntityMenuHandler
 class _FakeQuery:
     def __init__(self):
         self.edits = []
+        self.answers = []
+
+    async def answer(self, text=None, **kwargs):
+        self.answers.append(text)
 
     async def edit_message_text(self, text, **kwargs):
         self.edits.append(text)
