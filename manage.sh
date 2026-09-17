@@ -187,6 +187,16 @@ external_pid() {
     return 1
 }
 
+pid_is_bot() {
+    # pid_is_bot <pid> — True если это процесс bot.py из нашего каталога (защита от reuse PID)
+    local pid="$1" cmdline cwd
+    [[ -n "$pid" && -d "/proc/${pid}" ]] || return 1
+    cmdline=$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null || true)
+    [[ "$cmdline" == *"bot.py"* ]] || return 1
+    cwd=$(readlink "/proc/${pid}/cwd" 2>/dev/null || true)
+    [[ "$cwd" == "$SCRIPT_DIR" ]]
+}
+
 health_check() {
     # Успех если бот отвечает /healthz. При WEBAPP_PORT=0 — только проверка процесса.
     local port="$1" waited=0
@@ -207,22 +217,28 @@ health_check() {
 do_stop() {
     if service_active; then
         systemctl stop "${SERVICE_NAME}.service" && ok "Сервис остановлен"
-    elif [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+    elif [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE" 2>/dev/null || true)" 2>/dev/null; then
         local pid
         pid=$(cat "$PID_FILE")
-        kill "$pid" 2>/dev/null || true
-        # Ждём до 10с корректного завершения (graceful shutdown бота)
-        local waited=0
-        while kill -0 "$pid" 2>/dev/null && (( waited < 10 )); do
-            sleep 1; waited=$((waited + 1))
-        done
-        if kill -0 "$pid" 2>/dev/null; then
-            warn "Процесс ${pid} не завершился за 10с — отправляю SIGKILL"
-            kill -9 "$pid" 2>/dev/null || true
-            sleep 1
+        # Защита от переиспользования PID: сигналим только настоящему bot.py
+        if ! pid_is_bot "$pid"; then
+            warn "PID ${pid} из ${PID_FILE} не принадлежит боту — удаляю устаревший PID-файл"
+            rm -f "$PID_FILE"
+        else
+            kill "$pid" 2>/dev/null || true
+            # Ждём до 10с корректного завершения (graceful shutdown бота)
+            local waited=0
+            while kill -0 "$pid" 2>/dev/null && (( waited < 10 )); do
+                sleep 1; waited=$((waited + 1))
+            done
+            if kill -0 "$pid" 2>/dev/null; then
+                warn "Процесс ${pid} не завершился за 10с — отправляю SIGKILL"
+                kill -9 "$pid" 2>/dev/null || true
+                sleep 1
+            fi
+            rm -f "$PID_FILE"
+            ok "Процесс остановлен"
         fi
-        rm -f "$PID_FILE"
-        ok "Процесс остановлен"
     elif external_pid >/dev/null; then
         local pid
         pid=$(external_pid)
@@ -260,10 +276,19 @@ do_start() {
         fi
         # Ручной запуск в фоне. exec внутри подкосой — чтобы bot.pid содержал
         # PID самого python, а не обёртки (иначе kill не достанет бота)
+        mkdir -p "${SCRIPT_DIR}/logs"
         ( cd "$SCRIPT_DIR" && exec nohup "$VENV_DIR/bin/python" bot.py >> "$SCRIPT_DIR/logs/bot.log" 2>&1 ) &
         local bgpid=$!
         echo "$bgpid" > "$PID_FILE"
-        ok "Бот запущен вручную (PID ${bgpid})"
+        # Проверяем, что процесс действительно жив (redirect/venv могут упасть сразу)
+        sleep 1
+        if kill -0 "$bgpid" 2>/dev/null; then
+            ok "Бот запущен вручную (PID ${bgpid})"
+        else
+            rm -f "$PID_FILE"
+            fail "Бот не запустился (PID ${bgpid} завершился) — смотрите: ./manage.sh logs"
+            return 1
+        fi
     fi
 }
 
@@ -425,6 +450,11 @@ migrate_legacy_service() {
 
 install_service() {
     migrate_legacy_service
+    local svc_user="${USER:-$(id -un)}"
+    info "systemd-сервис будет работать от пользователя ${svc_user}"
+    if [[ "$svc_user" == "root" && "${EUID:-$(id -u)}" -eq 0 ]]; then
+        warn "Сервис ставится от root — при запуске через sudo это ожидаемо. Если нужен другой пользователь, запустите install не под root"
+    fi
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Telegram School Schedule Bot (${INSTANCE})
@@ -432,7 +462,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=${USER}
+User=${svc_user}
 WorkingDirectory=${SCRIPT_DIR}
 ExecStart=${VENV_DIR}/bin/python bot.py
 Restart=always
@@ -488,6 +518,18 @@ cmd_update() {
     # 3. Бэкап перед обновлением
     cmd_backup
 
+    # 3b. Снимок текущих зависимостей (для отката, если health-check упадёт)
+    local deps_snapshot="${SCRIPT_DIR}/.requirements.before"
+    local have_snapshot=false
+    if [[ -x "$VENV_DIR/bin/pip" ]]; then
+        if "$VENV_DIR/bin/pip" freeze > "$deps_snapshot" 2>/dev/null; then
+            have_snapshot=true
+            dim "Снимок зависимостей: ${deps_snapshot}"
+        else
+            warn "Не удалось сохранить снимок зависимостей — откат затронет только код"
+        fi
+    fi
+
     # 4. pull + зависимости
     info "Загружаю новую версию..."
     git -C "$SCRIPT_DIR" pull --ff-only origin || die "git pull не удался. Бэкап в ${BACKUP_DIR}"
@@ -503,17 +545,19 @@ cmd_update() {
     if [[ "$was_running" != "true" ]]; then
         info "Бот не был запущен — только обновляю код, без запуска"
         git -C "$SCRIPT_DIR" log --oneline "${current}..HEAD" | head -20
+        rm -f "$deps_snapshot"
         ok "Обновление завершено"
         return 0
     fi
     do_stop || true
-    do_start
+    do_start || true
 
     info "Жду ответа /healthz (до ${HEALTH_TIMEOUT}с)..."
     if health_check "$(get_port)"; then
         echo
         ok "Обновление успешно! Новые коммиты:"
         git -C "$SCRIPT_DIR" log --oneline "${current}..HEAD" | head -20
+        rm -f "$deps_snapshot"
         return 0
     fi
 
@@ -523,6 +567,16 @@ cmd_update() {
     do_stop || true
     git -C "$SCRIPT_DIR" reset --hard "$current" || die "Не удалось откатить git!"
     warn "Откат к коммиту $(git -C "$SCRIPT_DIR" rev-parse --short "$current")"
+    # Возвращаем зависимости к состоянию до обновления (best-effort, не прерываем откат)
+    if [[ "$have_snapshot" == "true" && -f "$deps_snapshot" ]]; then
+        if "$VENV_DIR/bin/pip" install --quiet -r "$deps_snapshot" 2>/dev/null; then
+            warn "Зависимости восстановлены из снимка"
+            rm -f "$deps_snapshot"
+        else
+            warn "Не удалось восстановить зависимости из снимка — проверьте вручную: pip install -r ${deps_snapshot}"
+        fi
+    fi
+    info "Данные можно восстановить из бэкапа: ./manage.sh restore (автоматически не трогаю)"
     do_start || true
     if health_check "$(get_port)"; then
         warn "Откат успешен, бот работает на старой версии"
@@ -534,7 +588,7 @@ cmd_update() {
 
 # --- start / stop / restart / status -----------------------------------------
 cmd_start() {
-    do_start
+    do_start || return 1
     info "Жду ответа /healthz (до ${HEALTH_TIMEOUT}с)..."
     if health_check "$(get_port)"; then ok "Бот работает"; else warn "Health-check не прошёл — смотрите логи: ./manage.sh logs"; fi
     return 0
@@ -544,7 +598,7 @@ cmd_stop() { do_stop; }
 
 cmd_restart() {
     do_stop || true
-    do_start
+    do_start || return 1
     info "Жду ответа /healthz (до ${HEALTH_TIMEOUT}с)..."
     if health_check "$(get_port)"; then ok "Бот работает"; else warn "Health-check не прошёл — смотрите логи: ./manage.sh logs"; fi
     return 0
@@ -620,9 +674,12 @@ cmd_restore() {
 
     confirm "Восстановить ${latest}? Бот будет остановлен." n || exit 0
     do_stop || true
+    # Перед распаковкой сохраняем текущее состояние, чтобы было куда вернуться
+    info "Сохраняю текущее состояние перед восстановлением..."
+    cmd_backup || warn "Не удалось создать страховочный бэкап — продолжаю восстановление"
     tar -xzf "$latest" -C "$SCRIPT_DIR" || die "Не удалось распаковать бэкап"
     ok "Восстановлено из $(basename "$latest")"
-    do_start
+    do_start || return 1
     if health_check "$(get_port)"; then ok "Бот работает"; else warn "Проверьте логи: ./manage.sh logs"; fi
     return 0
 }
@@ -973,6 +1030,16 @@ cmd_bootstrap_install() {
     if [[ -d "$install_dir/.git" ]]; then
         info "Каталог ${install_dir} уже содержит репозиторий — обновляю код"
         ensure_cmd git git
+        if ! git -C "$install_dir" diff --quiet 2>/dev/null || ! git -C "$install_dir" diff --cached --quiet 2>/dev/null; then
+            die "В ${install_dir} есть локальные изменения — закоммитьте или сделайте git stash перед установкой"
+        fi
+        local untracked
+        untracked=$(git -C "$install_dir" ls-files --others --exclude-standard | grep -vE '^(data|logs|cache|backups)/' || true)
+        if [[ -n "$untracked" ]]; then
+            warn "Незакоммиченные файлы в ${install_dir}:"
+            dim "$untracked"
+            confirm "Продолжить (локальные файлы будут сохранены, код обновится)?" n || exit 1
+        fi
         git -C "$install_dir" fetch origin 2>/dev/null || die "Не удалось обновить ${install_dir} из GitHub"
         git -C "$install_dir" reset --hard "$(git -C "$install_dir" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo origin/main)" >/dev/null
     elif [[ -e "$install_dir" ]]; then
