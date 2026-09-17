@@ -1,5 +1,8 @@
 # 🏫 Telegram-бот школьного расписания (с авто-уведомлениями о заменах)
 
+[![CI](https://github.com/itdevlog/raspisanie/actions/workflows/ci.yml/badge.svg)](https://github.com/itdevlog/raspisanie/actions/workflows/ci.yml)
+![coverage](https://img.shields.io/badge/coverage-61%25-yellowgreen)
+
 Современный асинхронный Telegram-бот для просмотра расписания и автоматических уведомлений о заменах. Работает на **python-telegram-bot v22.8**, тянет данные из системы **Nikasoft (Ника-Люкс)**, отслеживает изменения в реальном времени и присылает push-уведомления подписанным пользователям. Дополнительно поднимает **Mini App** — веб-версию расписания (FastAPI + Telegram WebApp).
 
 Поддерживает **несколько школ**, кэширование, локальную JSON-БД, фоновое обновление, **веб-расписание** и полноценный админ-панель с интерактивными кнопками.
@@ -27,7 +30,7 @@
 - 🔍 **Умный поиск** — учителя/кабинеты по имени с пагинацией, кнопками «Обновить»/«Отмена».
 - 📋 **CopyTextButton** — кнопка «Скопировать» к расписанию на день (до 256 символов).
 - 🔄 **Inline-режим** — `@bot 9а` в любом чате отдаёт расписание (включается через @BotFather `/setinline`).
-- 🛠️ **Качество кода** — 268 юнит/интеграционных тестов, ruff и mypy (чистые), CI.
+- 🛠️ **Качество кода** — 346 юнит/интеграционных тестов, ruff и mypy (чистые), CI.
 
 ---
 
@@ -54,7 +57,7 @@ raspisanie/
 ├── requirements.txt            # Продакшен-зависимости
 ├── requirements-dev.txt         # Тесты/инструменты (pytest, ruff, mypy)
 ├── pytest.ini / ruff.toml / mypy.ini
-├── .github/workflows/ci.yml     # CI: ruff + pytest
+├── .github/workflows/ci.yml     # CI: ruff + mypy + pytest (3.11–3.13) + coverage
 ├── config/
 │   ├── config.py                # .env, TIMEZONE, is_admin(), get_timezone()
 │   └── schools.py               # Школы + get_display_name()/get_school_by_id()
@@ -77,7 +80,7 @@ raspisanie/
 │   └── static/                  # фронтенд (vanilla JS + Telegram WebApp SDK)
 ├── data/                        # database.json, exchange_cache.json, notifications_cache.json
 ├── logs/                        # bot.log (ротация 5МБ×3), admin.log
-└── tests/                       # 268 pytest (юнит + интеграционные моки)
+└── tests/                       # 346 pytest (юнит + интеграционные моки)
 ```
 
 ---
@@ -319,12 +322,12 @@ cd /opt/peakflow && ./manage.sh caddy
 pip install -r requirements-dev.txt
 
 .venv/bin/ruff check .        # линтер (чисто)
-.venv/bin/python -m pytest    # 268 тестов
+.venv/bin/python -m pytest    # 346 тестов
 ```
 
 - Юнит: нарезка сообщений, `paginate`, `get_display_name`, матчинг класса (p.11), `FileDB` (битый файл/upsert/delete_one), кэш-уведомления, callback-роутинг, `@requires_school`, exchange round-trip, замены учителей (`TEACH_EXCHANGE`), переносы праздников (`HOLIDAY_TRANSFER`), свободные кабинеты.
 - Интеграционные (pytest-asyncio + моки): навигация, рендер меню сущности, меню свободных кабинетов.
-- CI: `.github/workflows/ci.yml` — ruff + pytest на каждый push/PR.
+- CI: `.github/workflows/ci.yml` — ruff + mypy + shellcheck + pytest на матрице Python 3.11/3.12/3.13; на 3.11 дополнительно coverage с порогом 60%.
 
 ---
 
