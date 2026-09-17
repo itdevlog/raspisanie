@@ -30,3 +30,5 @@ header select, #search-input { width: 100%; padding: 10px; border-radius: 8px;
 .day-title { margin: 16px 0 4px; font-weight: 700; }
 .hint { color: var(--hint); }
 #loading { padding: 24px; text-align: center; color: var(--hint); }
+#offline-indicator { background: var(--secondary-bg); color: var(--hint); text-align: center;
+  padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; }

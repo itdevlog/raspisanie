@@ -1,5 +1,15 @@
 // Service Worker для PWA
-const CACHE_NAME = 'raspisanie-v2';
+const CACHE_NAME = 'raspisanie-v3-static';
+// Публичные данные расписания кэшируются отдельно, чтобы их можно было чистить по TTL
+const API_CACHE_NAME = 'raspisanie-v3-api';
+// Свежесть кэша публичного API: 12 часов
+const API_TTL_MS = 12 * 60 * 60 * 1000;
+// Ограничение размера TTL-кэша, чтобы индекс не рос бесконечно
+const API_CACHE_LIMIT = 100;
+// Флаг ответа «из кэша» — приложение по нему показывает офлайн-индикатор
+const FROM_CACHE_HEADER = 'X-SW-From-Cache';
+const CACHED_AT_HEADER = 'X-SW-Cached-At';
+
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -7,6 +17,81 @@ const STATIC_ASSETS = [
   '/app.js',
   '/manifest.json'
 ];
+
+// Персональные данные — никогда не кэшируем
+function isPrivateApi(pathname) {
+  return pathname === '/api/me' || pathname.startsWith('/api/widget/');
+}
+
+// Добавляет/переопределяет заголовки, сохраняя тело и метаданные ответа
+async function taggedResponse(response, headers) {
+  const body = await response.blob();
+  const merged = new Headers(response.headers);
+  Object.entries(headers).forEach(([key, value]) => merged.set(key, value));
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: merged
+  });
+}
+
+// Удаляет просроченные записи API-кэша и подрезает его до API_CACHE_LIMIT
+let lastPruneAt = 0;
+async function pruneApiCache(cache, force) {
+  const now = Date.now();
+  if (!force && now - lastPruneAt < 30 * 60 * 1000) return;
+  lastPruneAt = now;
+  const requests = await cache.keys();
+  const fresh = [];
+  for (const request of requests) {
+    const cached = await cache.match(request);
+    const cachedAt = cached ? Number(cached.headers.get(CACHED_AT_HEADER) || 0) : 0;
+    if (!cachedAt || now - cachedAt > API_TTL_MS) {
+      await cache.delete(request);
+    } else {
+      fresh.push({ request, cachedAt });
+    }
+  }
+  fresh.sort((a, b) => a.cachedAt - b.cachedAt);
+  const excess = fresh.length - API_CACHE_LIMIT;
+  for (let i = 0; i < excess; i += 1) {
+    await cache.delete(fresh[i].request);
+  }
+}
+
+// Network-first с TTL-fallback: свежий кэш отдаём с пометкой, старый — нет
+async function handleApiRequest(request) {
+  const cache = await caches.open(API_CACHE_NAME);
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const stamped = await taggedResponse(response.clone(), {
+        [CACHED_AT_HEADER]: String(Date.now())
+      });
+      await cache.put(request, stamped);
+      await pruneApiCache(cache, false);
+    }
+    return response;
+  } catch (err) {
+    const cached = await cache.match(request);
+    if (cached) {
+      const cachedAt = Number(cached.headers.get(CACHED_AT_HEADER) || 0);
+      if (cachedAt && Date.now() - cachedAt <= API_TTL_MS) {
+        return taggedResponse(cached, { [FROM_CACHE_HEADER]: '1' });
+      }
+      await cache.delete(request);
+    }
+    // Свежих данных нет — лучше ошибка, чем устаревшее расписание
+    return new Response(
+      JSON.stringify({ detail: 'Офлайн: нет свежих данных расписания' }),
+      {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+}
 
 // Установка — кэшируем статику
 self.addEventListener('install', (event) => {
@@ -17,17 +102,18 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Активация — чистим старые кэши
+// Активация — чистим старые кэши и просроченные записи API
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      );
-    })
-  );
+  event.waitUntil((async () => {
+    const cacheNames = await caches.keys();
+    await Promise.all(
+      cacheNames
+        .filter((name) => name !== CACHE_NAME && name !== API_CACHE_NAME)
+        .map((name) => caches.delete(name))
+    );
+    const cache = await caches.open(API_CACHE_NAME);
+    await pruneApiCache(cache, true);
+  })());
   self.clients.claim();
 });
 
@@ -43,25 +129,14 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Персональные API — только сеть, без кэширования
-  if (url.pathname === '/api/me' || url.pathname.startsWith('/api/widget/')) {
+  if (isPrivateApi(url.pathname)) {
     event.respondWith(fetch(request));
     return;
   }
 
-  // Прочие API — сеть с fallback на кэш (для офлайна)
+  // Прочие API — network-first с fallback на свежий TTL-кэш
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      caches.open(CACHE_NAME).then((cache) => {
-        return fetch(request)
-          .then((response) => {
-            if (response.ok) {
-              cache.put(request, response.clone());
-            }
-            return response;
-          })
-          .catch(() => cache.match(request));
-      })
-    );
+    event.respondWith(handleApiRequest(request));
     return;
   }
 

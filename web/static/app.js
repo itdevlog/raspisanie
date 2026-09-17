@@ -20,14 +20,44 @@ const state = {
   weekOffset: 0,       // смещение недели, клампится -2..2
   mode: 'day',         // 'day' | 'week'
   schools: [], entities: [],
+  offline: false,      // true, если данные показаны из TTL-кэша
 };
 
+// Должно совпадать с API_TTL_MS в service-worker.js
+const API_TTL_MS = 12 * 60 * 60 * 1000;
+
+function setOffline(offline) {
+  state.offline = offline;
+  const el = $('offline-indicator');
+  if (el) el.hidden = !offline;
+}
+
+// Прямой fallback на кэш, если SW ещё не контролирует страницу
+async function cachedApi(path) {
+  if (!('caches' in window)) return null;
+  try {
+    const cached = await caches.match(path);
+    if (!cached) return null;
+    const cachedAt = Number(cached.headers.get('X-SW-Cached-At') || 0);
+    if (cachedAt && Date.now() - cachedAt > API_TTL_MS) return null;
+    return cached;
+  } catch (_) { return null; }
+}
+
 async function api(path) {
-  const r = await fetch(path, { headers: { 'X-Telegram-Init-Data': tg.initData || '' } });
+  let r;
+  try {
+    r = await fetch(path, { headers: { 'X-Telegram-Init-Data': tg.initData || '' } });
+  } catch (e) {
+    const cached = await cachedApi(path);
+    if (cached) { setOffline(true); return cached.json(); }
+    throw e;
+  }
   if (!r.ok) {
     const body = await r.json().catch(() => ({ detail: 'Ошибка сети' }));
     throw new Error(body.detail || `HTTP ${r.status}`);
   }
+  setOffline(r.headers.get('X-SW-From-Cache') === '1');
   return r.json();
 }
 
@@ -56,7 +86,8 @@ function parseDate(s) {
 
 async function init() {
   try {
-    const [schools, me] = await Promise.all([api('/api/schools'), api('/api/me')]);
+    // /api/me не кэшируется, поэтому офлайн-инициализация не должна падать из-за него
+    const [schools, me] = await Promise.all([api('/api/schools'), api('/api/me').catch(() => ({}))]);
     state.schools = schools.schools;
     state.today = schools.today || null;
     state.date = state.today;
@@ -152,5 +183,10 @@ $('date-next').onclick = () => state.mode === 'week' ? shiftWeek(1) : shiftDate(
 $('mode-day').onclick = () => { state.mode = 'day'; $('mode-day').classList.add('active'); $('mode-week').classList.remove('active'); render(); };
 $('mode-week').onclick = () => { state.mode = 'week'; $('mode-week').classList.add('active'); $('mode-day').classList.remove('active'); render(); };
 $('search-input').oninput = (e) => { state.entity = e.target.value || null; clearTimeout(state._t); state._t = setTimeout(render, 400); };
+
+// Индикатор офлайна: показываем при потере сети, скрываем при восстановлении
+window.addEventListener('offline', () => setOffline(true));
+window.addEventListener('online', () => setOffline(false));
+if (navigator.onLine === false) setOffline(true);
 
 init();
