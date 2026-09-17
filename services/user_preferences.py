@@ -140,19 +140,31 @@ class UserPreferencesService:
         """Приводит минуту к диапазону 0-59."""
         return max(0, min(59, int(value)))
 
-    def enable_quiet_hours(self, user_id: int, start: int = 22, end: int = 7,
-                           start_minute: int = 0, end_minute: int = 0) -> bool:
+    def enable_quiet_hours(self, user_id: int, start: int | None = None,
+                           end: int | None = None, start_minute: int | None = None,
+                           end_minute: int | None = None) -> bool:
         """Включает тихие часы (интервал может пересекать полночь).
 
-        Минуты опциональны: при нулевых значениях ключи не пишутся, чтобы
-        старые записи оставались в прежнем формате.
+        Без явных границ (вызов из тумблера) сохраняются уже выставленные
+        пользователем `start`/`end`/минуты — включение не сбрасывает кастомные
+        границы, заданные в выключенном состоянии. Явно переданные границы
+        перезаписывают интервал; нулевые минуты не пишутся, чтобы старые записи
+        оставались в прежнем формате.
         """
         settings = self.get_notification_settings(user_id)
-        quiet = {'enabled': True, 'start': start, 'end': end}
-        if start_minute:
-            quiet['start_minute'] = self._clamp_minute(start_minute)
-        if end_minute:
-            quiet['end_minute'] = self._clamp_minute(end_minute)
+        if start is None and end is None and start_minute is None and end_minute is None:
+            quiet = dict(settings.get('quiet_hours') or {})
+            quiet.setdefault('start', 22)
+            quiet.setdefault('end', 7)
+            quiet['enabled'] = True
+        else:
+            quiet = {'enabled': True,
+                     'start': 22 if start is None else start,
+                     'end': 7 if end is None else end}
+            if start_minute:
+                quiet['start_minute'] = self._clamp_minute(start_minute)
+            if end_minute:
+                quiet['end_minute'] = self._clamp_minute(end_minute)
         settings['quiet_hours'] = quiet
         return self.set_notification_settings(user_id, settings)
 

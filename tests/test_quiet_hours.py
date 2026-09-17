@@ -146,6 +146,55 @@ async def test_toggle_quiet_hours_handler_roundtrip(make_db):
     assert any('Тихие часы' in (a or '') for a in query.answers)
 
 
+async def test_toggle_on_preserves_custom_boundaries(make_db):
+    """Включение тумблером не сбрасывает границы, выставленные в выключенном состоянии."""
+    from handlers.common.settings import toggle_quiet_hours
+
+    db = make_db()
+    us = UserService(db)
+    prefs = UserPreferencesService(db)
+    prefs.set_quiet_hours(1, start=21, end=6, start_minute=30, end_minute=15)
+    assert prefs.get_notification_settings(1)['quiet_hours']['enabled'] is False
+
+    class _Query:
+        async def answer(self, text=None, **kwargs):
+            return None
+
+    update: Any = SimpleNamespace(effective_user=SimpleNamespace(id=1), callback_query=_Query())
+    context: Any = SimpleNamespace(bot_data={'user_service': us})
+
+    import handlers.common.settings as settings_module
+    orig = settings_module.settings_handler
+
+    async def _fake_settings(update, context):
+        return None
+
+    settings_module.settings_handler = _fake_settings
+    try:
+        await toggle_quiet_hours(update, context, 'on')
+    finally:
+        settings_module.settings_handler = orig
+
+    quiet = UserPreferencesService(db).get_notification_settings(1)['quiet_hours']
+    assert quiet['enabled'] is True
+    assert quiet['start'] == 21 and quiet['start_minute'] == 30
+    assert quiet['end'] == 6 and quiet['end_minute'] == 15
+
+
+def test_toggle_quiet_hours_service_preserves_boundaries(make_db):
+    """`UserPreferencesService.toggle_quiet_hours` сохраняет минуты при включении."""
+    db = make_db()
+    prefs = UserPreferencesService(db)
+    prefs.set_quiet_hours(1, start=21, end=6, start_minute=30, end_minute=15)
+
+    prefs.toggle_quiet_hours(1)
+    quiet = prefs.get_notification_settings(1)['quiet_hours']
+    assert quiet == {
+        'enabled': True, 'start': 21, 'end': 6,
+        'start_minute': 30, 'end_minute': 15,
+    }
+
+
 def _make_exchange_svc(db, bot, tz, monkeypatch=None, now=None):
     us = UserService(db)
     svc = NotificationService.__new__(NotificationService)
