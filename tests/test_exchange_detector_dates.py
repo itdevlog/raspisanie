@@ -59,6 +59,35 @@ def test_persist_flag_controls_disk_write(tmp_path):
         assert '11.09.2026' in json.load(f)['s']
 
 
+def test_deferred_detect_defers_state_until_commit(tmp_path):
+    """deferred-детекция не пишет baseline, пока доставка не подтверждена."""
+    d = _detector(tmp_path)
+    today = datetime(2026, 9, 11, 12, 0, tzinfo=TZ)
+    sd = _school_data('11.09.2026')
+
+    new_exchanges, current = d.detect_exchanges_deferred('s', sd, today)
+    assert len(new_exchanges) == 1
+    assert current
+    # baseline ещё не записан: повторная deferred-проверка снова видит замену
+    assert d.previous_schedules == {}
+    again, _ = d.detect_exchanges_deferred('s', sd, today)
+    assert len(again) == 1
+
+    d.commit_exchanges('s', today, current)
+    assert d.previous_schedules['s']['11.09.2026'] == current
+    after, _ = d.detect_exchanges_deferred('s', sd, today)
+    assert after == []
+
+
+def test_commit_exchanges_does_not_write_disk(tmp_path):
+    """commit меняет только память — flush делает вызывающий."""
+    d = _detector(tmp_path)
+    today = datetime(2026, 9, 11, 12, 0, tzinfo=TZ)
+    _, current = d.detect_exchanges_deferred('s', _school_data('11.09.2026'), today)
+    d.commit_exchanges('s', today, current)
+    assert not os.path.exists(d.cache_file)
+
+
 def test_legacy_cache_is_discarded(tmp_path):
     d = _detector(tmp_path)
     with open(d.cache_file, 'w', encoding='utf-8') as f:

@@ -257,7 +257,14 @@ class NotificationService:
 
     async def notify_exchange_updates(self, context: ContextTypes.DEFAULT_TYPE, school_id: str,
                                     class_name: str, exchanges: list[dict]) -> bool:
-        """Уведомляет пользователей о новых заменах в формате полного расписания"""
+        """Уведомляет пользователей о новых заменах в формате полного расписания.
+
+        Доставка отслеживается по каждому получателю: ключ группы помечается
+        отправленным только когда всем доставлено. Пользователи на тихих часах
+        и с transient-сбоем остаются pending — следующий цикл дошлёт им без
+        дублей уже доставленным. Возвращает True, если ничего не осталось
+        (можно коммитить baseline), иначе False (нужен ретрай).
+        """
         try:
             # Проверяем, доступен ли bot_data
             if not hasattr(context, 'bot_data') or context.bot_data is None:
@@ -275,7 +282,7 @@ class NotificationService:
             self.logger.info(f"Найдено {len(users)} пользователей, следящих за классом {class_name} в школе {school_id}")
             if not users:
                 self.logger.info(f"No users found for class {class_name} in school {school_id}")
-                return False
+                return True
 
             # Получаем дату из первой замены (предполагаем, что все замены на одну дату)
             raw_date = exchanges[0].get('timestamp') if exchanges else None
@@ -285,7 +292,7 @@ class NotificationService:
             notification_text = self._format_exchange_notification(class_name, exchanges, date)
             if not notification_text:
                 self.logger.info(f"No new exchanges to notify for class {class_name}")
-                return False
+                return True
 
             # Проверяем, не отправляли ли мы уже эти конкретные замены
             # Создаем уникальный ключ для каждой комбинации замен
@@ -298,7 +305,15 @@ class NotificationService:
 
             if self._is_notification_sent(notification_key):
                 self.logger.info(f"Notification already sent for {notification_key}")
-                return False
+                return True
+
+            # Кто ещё не получил именно эту замену
+            pending = [uid for uid in users if not self._is_user_notified(notification_key, uid)]
+            if not pending:
+                self.logger.info(f"All users already notified for {notification_key}")
+                self._mark_notification_sent(notification_key)
+                self.save_notifications_cache()
+                return True
 
             # Настройки тихих часов читаем из UserPreferencesService
             from services.user_preferences import UserPreferencesService
@@ -308,34 +323,44 @@ class NotificationService:
 
             # Получатели уже отфильтрованы по настройкам уведомлений в get_users_for_exchange
             sent_count = 0
-            skipped_quiet = 0
-            for user_id in users:
+            remaining = 0
+            failed = 0
+            for user_id in pending:
                 try:
                     user_settings = preferences_service.get_notification_settings(user_id)
                     if self._is_quiet_hours(user_settings, now):
-                        # Не шлём, но считаем обработанным — dedup не даст задублировать позже
-                        skipped_quiet += 1
-                        self.logger.info(f"Тихие часы: пропуск уведомления для {user_id}")
+                        # Не шлём и НЕ помечаем: дошлём после окончания тихих часов
+                        remaining += 1
+                        self.logger.info(f"Тихие часы: отложено уведомление для {user_id}")
                         continue
                     if await self._send_message(context.bot, user_id, notification_text, parse_mode='Markdown'):
+                        self._mark_user_notified(notification_key, user_id)
                         sent_count += 1
                         self.logger.info(f"Exchange notification sent to user {user_id}")
+                    else:
+                        remaining += 1
+                        failed += 1
+                        self.logger.warning(f"Exchange notification failed for user {user_id}, will retry")
                     # Небольшая пауза между отправками — защита от flood-лимитов Telegram
                     await asyncio.sleep(0.05)
                 except Exception as e:
+                    remaining += 1
+                    failed += 1
                     self.logger.error(f"Failed to send message to user {user_id}: {e}")
 
-            # Помечаем отправленным, если что-то реально ушло ИЛИ все получатели
-            # были на тихих часах — иначе после них пришлём то же самое повторно.
-            if sent_count > 0 or skipped_quiet:
+            # Пер-пользовательские метки нужно сохранять даже при неполной доставке
+            self.save_notifications_cache()
+
+            # Группа считается отправленной, только если pending не осталось
+            if remaining == 0 and failed == 0:
                 self._mark_notification_sent(notification_key)
                 self.save_notifications_cache()
 
             self.logger.info(
                 f"Exchange notifications sent to {sent_count}/{len(users)} users "
-                f"for class {class_name} (quiet skipped: {skipped_quiet})"
+                f"for class {class_name} (remaining: {remaining}, failed: {failed})"
             )
-            return sent_count > 0
+            return remaining == 0 and failed == 0
 
         except Exception as e:
             self.logger.error(f"Error in notify_exchange_updates: {e}", exc_info=True)
@@ -450,6 +475,17 @@ class NotificationService:
         if 'exchanges' not in self.sent_notifications:
             self.sent_notifications['exchanges'] = {}
         self.sent_notifications['exchanges'][notification_key] = time.time()
+
+    def _is_user_notified(self, notification_key: str, user_id: int) -> bool:
+        """Была ли конкретному пользователю доставлена эта замена."""
+        return self._is_notification_sent(f"{notification_key}:u{user_id}")
+
+    def _mark_user_notified(self, notification_key: str, user_id: int):
+        """Помечает доставку замены конкретному пользователю (та же категория,
+        что и `_mark_notification_sent`, поэтому чистится общим TTL)."""
+        if 'exchanges' not in self.sent_notifications:
+            self.sent_notifications['exchanges'] = {}
+        self.sent_notifications['exchanges'][f"{notification_key}:u{user_id}"] = time.time()
 
     def _cleanup_old_notifications(self):
         """Удаляет уведомления старше 24 часов (порядок не важен)."""

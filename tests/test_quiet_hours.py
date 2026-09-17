@@ -159,7 +159,26 @@ async def test_toggle_quiet_hours_handler_roundtrip():
     assert any('Тихие часы' in (a or '') for a in query.answers)
 
 
-def test_exchange_notification_skipped_and_marked_during_quiet(monkeypatch):
+def _make_exchange_svc(db, bot, monkeypatch=None, now=None):
+    us = UserService(db)
+    svc = NotificationService.__new__(NotificationService)
+    svc.logger = __import__('logging').getLogger('test')
+    svc.moscow_tz = TZ
+    svc.sent_notifications = {}
+    svc._user_class_index = {}
+    svc._index_loaded_for_school = None
+    svc._settings_for_school = {}
+    svc._last_sent_at = {}
+    svc._min_send_interval = 0
+    svc.save_notifications_cache = lambda: None  # type: ignore[method-assign]
+    if monkeypatch is not None and now is not None:
+        monkeypatch.setattr(svc, '_now', lambda: now, raising=False)
+    context: Any = SimpleNamespace(bot=bot, bot_data={'user_service': us})
+    return svc, context
+
+
+def test_exchange_notification_quiet_deferred_until_quiet_ends(monkeypatch):
+    """Тихие часы: пользователь НЕ помечается навсегда — после окна получает замену."""
     db = _make_db()
     us = UserService(db)
     us.set_user_class(1, '5а', 'school_133')
@@ -171,23 +190,9 @@ def test_exchange_notification_skipped_and_marked_during_quiet(monkeypatch):
         'quiet_hours': {'enabled': True, 'start': 22, 'end': 7},
     })
 
-    svc = NotificationService.__new__(NotificationService)
-    svc.logger = __import__('logging').getLogger('test')
-    svc.moscow_tz = TZ
-    svc.sent_notifications = {}
-    svc._user_class_index = {}
-    svc._index_loaded_for_school = None
-    svc._settings_for_school = {}
-    svc._last_sent_at = {}
-    svc.save_notifications_cache = lambda: None  # type: ignore[method-assign]
-
     bot = _fake_bot()
-    context: Any = SimpleNamespace(bot=bot, bot_data={'user_service': us})
-
     quiet_now = datetime(2026, 9, 11, 23, 0)  # naive; hour matters only
-
-    # фиксируем "тихое" время через now, который использует notify_exchange_updates
-    monkeypatch.setattr(svc, '_now', lambda: quiet_now, raising=False)
+    svc, context = _make_exchange_svc(db, bot, monkeypatch, quiet_now)
 
     exchanges = [{'lesson_num': 1, 'new_subject': 'Физика', 'new_teacher': '',
                   'new_room': '', 'is_cancelled': False, 'timestamp': quiet_now}]
@@ -195,8 +200,55 @@ def test_exchange_notification_skipped_and_marked_during_quiet(monkeypatch):
     import asyncio
     result = asyncio.run(svc.notify_exchange_updates(context, 'school_133', '5а', exchanges))
 
-    # не отправлено, но помечено как отправленное (dedup)
-    assert bot.sent == []
+    # transient False -> не помечено, доставка отложена до конца тихих часов
     assert result is False
-    assert any(svc._is_notification_sent(k) for k in
-               [k for entries in svc.sent_notifications.values() for k in entries])
+    assert bot.sent == []
+    assert not any(svc._is_notification_sent(k) for entries in svc.sent_notifications.values() for k in entries)
+
+    # окно тихих часов закончилось — повторная попытка доставляет пользователю
+    monkeypatch.setattr(svc, '_now', lambda: datetime(2026, 9, 12, 12, 0), raising=False)
+    result2 = asyncio.run(svc.notify_exchange_updates(context, 'school_133', '5а', exchanges))
+
+    assert result2 is True
+    assert len(bot.sent) == 1
+    assert bot.sent[0][0] == 1
+
+
+def test_exchange_transient_failure_retries_without_duplicate(monkeypatch):
+    """Сбой отправки оставляет pending; повторная попытка шлёт ровно один раз."""
+    db = _make_db()
+    us = UserService(db)
+    us.set_user_class(1, '5а', 'school_133')
+    us.set_user_class(2, '5а', 'school_133')
+    us.set_user_notification_settings(1, True, 'school_133')
+    us.set_user_notification_settings(2, True, 'school_133')
+
+    now = datetime(2026, 9, 11, 12, 0)
+    bot = _fake_bot()
+    svc, context = _make_exchange_svc(db, bot, monkeypatch, now)
+
+    exchanges = [{'lesson_num': 1, 'new_subject': 'Физика', 'new_teacher': '',
+                  'new_room': '', 'is_cancelled': False, 'timestamp': now}]
+
+    import asyncio
+    # первый проход: доставка пользователю 2 падает
+    original_send = svc._send_message
+
+    async def flaky_send(bot_, chat_id, text, parse_mode='Markdown', max_attempts=3):
+        if chat_id == 2:
+            return False
+        return await original_send(bot_, chat_id, text, parse_mode=parse_mode, max_attempts=max_attempts)
+
+    monkeypatch.setattr(svc, '_send_message', flaky_send, raising=False)
+    result = asyncio.run(svc.notify_exchange_updates(context, 'school_133', '5а', exchanges))
+    assert result is False
+    assert [m[0] for m in bot.sent] == [1]  # доставлено только пользователю 1
+
+    # второй проход: пользователь 1 уже доставлен, шлём только пользователю 2
+    async def working_send(bot_, chat_id, text, parse_mode='Markdown', max_attempts=3):
+        return await original_send(bot_, chat_id, text, parse_mode=parse_mode, max_attempts=max_attempts)
+
+    monkeypatch.setattr(svc, '_send_message', working_send, raising=False)
+    result2 = asyncio.run(svc.notify_exchange_updates(context, 'school_133', '5а', exchanges))
+    assert result2 is True
+    assert [m[0] for m in bot.sent] == [1, 2]  # без дубля пользователю 1

@@ -539,8 +539,8 @@ class BackgroundUpdater:
                 for school_id, school_data in new_schools_data.items():
                     try:
                         self.logger.info(f"Проверка замен для школы {school_id} на {date_str}")
-                        new_exchanges = await asyncio.to_thread(
-                            exchange_detector.detect_exchanges, school_id, school_data, today, False
+                        new_exchanges, current_exchanges = await asyncio.to_thread(
+                            exchange_detector.detect_exchanges_deferred, school_id, school_data, today
                         )
 
                         if new_exchanges:
@@ -560,6 +560,7 @@ class BackgroundUpdater:
                             context = self._make_context()
 
                             # Отправляем уведомления для каждого класса
+                            all_handled = True
                             for class_name, class_exchanges in exchanges_by_class.items():
                                 self.logger.info(f"Обработка уведомлений для класса {class_name} в школе {school_id}, количество замен: {len(class_exchanges)}")
 
@@ -567,6 +568,8 @@ class BackgroundUpdater:
                                     context, school_id, class_name, class_exchanges
                                 )
                                 self.logger.info(f"Notification result for class {class_name}: {result}")
+                                if not result:
+                                    all_handled = False
 
                                 # Best-effort: уведомляем подписчиков преподавателей/кабинетов
                                 await self._notify_entity_subscribers(
@@ -579,6 +582,26 @@ class BackgroundUpdater:
                                     self.log_update_activity,
                                     f"Отправлено {len(class_exchanges)} уведомлений для класса {class_name} в школе {school_id} на {date_str}, результат: {result}",
                                 )
+
+                            # Baseline коммитим только после подтверждённой доставки:
+                            # иначе следующий цикл повторит находку, а per-user dedup
+                            # не даст задвоить уже доставленное.
+                            if all_handled:
+                                await asyncio.to_thread(
+                                    exchange_detector.commit_exchanges,
+                                    school_id, today, current_exchanges,
+                                )
+                            else:
+                                self.logger.info(
+                                    f"Не все уведомления доставлены для школы {school_id} на {date_str} — "
+                                    f"baseline не зафиксирован, будет повтор"
+                                )
+                        else:
+                            # Новых замен нет — просто фиксируем текущий baseline даты
+                            await asyncio.to_thread(
+                                exchange_detector.commit_exchanges,
+                                school_id, today, current_exchanges,
+                            )
 
                     except Exception as e:
                         self.logger.error(f"Ошибка проверки замен для школы {school_id}: {e}")

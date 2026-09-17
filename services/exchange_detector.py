@@ -104,6 +104,64 @@ class ExchangeDetector:
             self.logger.info("Полный кэш замен очищен")
         self.save_cache()
 
+    def _detect(self, school_id: str, school_data: dict,
+                date: datetime) -> tuple[list[dict], dict]:
+        """Считает новые замены, НЕ трогая baseline и диск.
+
+        Возвращает `(new_exchanges, current_exchanges)`, чтобы вызывающий мог
+        отложить коммит baseline до подтверждённой доставки уведомлений.
+        """
+        date_str = date.strftime('%d.%m.%Y')
+        self.logger.info(f"Начало обнаружения замен для школы {school_id} на дату {date_str}")
+        current_exchanges = self._get_current_exchanges(school_data, date)
+        by_date = self.previous_schedules.get(school_id, {})
+        previous_exchanges = by_date.get(date_str, {})
+
+        self.logger.info(f"Найдено {len(current_exchanges)} классов с текущими заменами")
+
+        new_exchanges = []
+        for class_name, current_class_exchanges in current_exchanges.items():
+            previous_class_exchanges = previous_exchanges.get(class_name, {})
+            class_new_exchanges = self._compare_class_exchanges(
+                class_name, previous_class_exchanges, current_class_exchanges,
+                school_data, date
+            )
+            new_exchanges.extend(class_new_exchanges)
+
+        # Классы, у которых замены были, а теперь их нет вовсе:
+        # без этого удаление единственной замены класса не детектировалось бы
+        for class_name, previous_class_exchanges in previous_exchanges.items():
+            if class_name in current_exchanges:
+                continue
+            removals = self._compare_class_exchanges(
+                class_name, previous_class_exchanges, {}, school_data, date
+            )
+            new_exchanges.extend(removals)
+
+        self.logger.info(f"Обнаружено {len(new_exchanges)} новых замен всего для школы {school_id}")
+        return new_exchanges, current_exchanges
+
+    def detect_exchanges_deferred(self, school_id: str, school_data: dict,
+                                  date: datetime) -> tuple[list[dict], dict]:
+        """То же, что detect_exchanges, но без записи baseline и без save_cache.
+
+        Вызывающий обязан позже вызвать `commit_exchanges` (после подтверждённой
+        доставки) и один `save_cache` за цикл. Ошибки не глотаются — иначе
+        вызывающий закоммитил бы пустой baseline.
+        """
+        return self._detect(school_id, school_data, date)
+
+    def commit_exchanges(self, school_id: str, date: datetime, current_exchanges: dict):
+        """Фиксирует baseline текущей даты. Без записи на диск — flush у вызывающего."""
+        try:
+            date_str = date.strftime('%d.%m.%Y')
+            by_date = self.previous_schedules.get(school_id, {})
+            by_date[date_str] = current_exchanges
+            self.previous_schedules[school_id] = by_date
+            self.logger.info(f"Baseline замен обновлён для школы {school_id} на {date_str}")
+        except Exception as e:
+            self.logger.error(f"Error committing exchanges for school {school_id}: {e}")
+
     def detect_exchanges(self, school_id: str, school_data: dict, date: datetime,
                          persist: bool = True) -> list[dict]:
         """
@@ -113,41 +171,13 @@ class ExchangeDetector:
         (вызывающий делает один общий save_cache за цикл).
         """
         try:
-            date_str = date.strftime('%d.%m.%Y')
-            self.logger.info(f"Начало обнаружения замен для школы {school_id} на дату {date_str}")
-            current_exchanges = self._get_current_exchanges(school_data, date)
-            by_date = self.previous_schedules.get(school_id, {})
-            previous_exchanges = by_date.get(date_str, {})
-
-            self.logger.info(f"Найдено {len(current_exchanges)} классов с текущими заменами")
-
-            new_exchanges = []
-            for class_name, current_class_exchanges in current_exchanges.items():
-                previous_class_exchanges = previous_exchanges.get(class_name, {})
-                class_new_exchanges = self._compare_class_exchanges(
-                    class_name, previous_class_exchanges, current_class_exchanges,
-                    school_data, date
-                )
-                new_exchanges.extend(class_new_exchanges)
-
-            # Классы, у которых замены были, а теперь их нет вовсе:
-            # без этого удаление единственной замены класса не детектировалось бы
-            for class_name, previous_class_exchanges in previous_exchanges.items():
-                if class_name in current_exchanges:
-                    continue
-                removals = self._compare_class_exchanges(
-                    class_name, previous_class_exchanges, {}, school_data, date
-                )
-                new_exchanges.extend(removals)
-
+            new_exchanges, current_exchanges = self._detect(school_id, school_data, date)
             # Сохраняем текущее состояние только для этой даты
-            by_date[date_str] = current_exchanges
-            self.previous_schedules[school_id] = by_date
+            self.commit_exchanges(school_id, date, current_exchanges)
 
             if persist:
                 self.save_cache()
 
-            self.logger.info(f"Обнаружено {len(new_exchanges)} новых замен всего для школы {school_id}")
             return new_exchanges
 
         except Exception as e:
