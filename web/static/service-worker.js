@@ -43,7 +43,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Персональные API — только сеть, без кэширования
-  if (url.pathname === '/api/me') {
+  if (url.pathname === '/api/me' || url.pathname.startsWith('/api/widget/')) {
     event.respondWith(fetch(request));
     return;
   }
@@ -70,12 +70,15 @@ self.addEventListener('fetch', (event) => {
     caches.open(CACHE_NAME).then((cache) => {
       return cache.match(request).then((cached) => {
         const network = fetch(request).then((response) => {
-          if (response.ok) {
-            cache.put(request, response.clone());
-          }
-          return response;
-        }).catch(() => cached);
-        return cached || network;
+          if (!response.ok) return response;
+          return cache.put(request, response.clone()).then(() => response);
+        });
+        if (cached) {
+          // Ревалидация привязана к waitUntil, чтобы не потеряться при остановке SW
+          event.waitUntil(network.catch(() => {}));
+          return cached;
+        }
+        return network;
       });
     })
   );
