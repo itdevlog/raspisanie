@@ -135,6 +135,7 @@ class BackgroundUpdater:
             self._cleanup_sent_reminders()
             notification_service = self._notification_service()
             bot = bot_data.get('bot') or self.application.bot
+            reminders_changed = False
             for user_id, text, key in due:
                 if key in self.sent_reminders:
                     continue
@@ -142,7 +143,7 @@ class BackgroundUpdater:
                 settings = preferences_service.get_notification_settings(user_id)
                 if NotificationService._is_quiet_hours(settings, now):
                     self.sent_reminders[key] = time.time()
-                    self._save_sent_reminders()
+                    reminders_changed = True
                     self.logger.info(f"Тихие часы: пропуск напоминания для {user_id}")
                     continue
                 try:
@@ -151,13 +152,16 @@ class BackgroundUpdater:
                     )
                     if delivered:
                         self.sent_reminders[key] = time.time()
-                        self._save_sent_reminders()
+                        reminders_changed = True
                     else:
                         # Реальная ошибка отправки — не помечаем, чтобы повторить позже
                         self.logger.warning(f"Напоминание {user_id} не доставлено, будет повтор")
                 except Exception as e:
                     self.logger.error(f"Ошибка отправки напоминания {user_id}: {e}")
                 await asyncio.sleep(0.05)
+            if reminders_changed:
+                # Одна запись на проход вместо записи на каждого получателя
+                await asyncio.to_thread(self._save_sent_reminders)
         except Exception as e:
             self.logger.error(f"Ошибка в _send_reminders: {e}", exc_info=True)
 
@@ -245,6 +249,7 @@ class BackgroundUpdater:
             self._cleanup_sent_digests()
             notification_service = self._notification_service()
             bot = bot_data.get('bot') or self.application.bot
+            digests_changed = False
             for user_id, text, key in due:
                 if key in self.sent_digests:
                     continue
@@ -252,7 +257,7 @@ class BackgroundUpdater:
                 settings = preferences_service.get_notification_settings(user_id)
                 if NotificationService._is_quiet_hours(settings, now):
                     self.sent_digests[key] = time.time()
-                    self._save_sent_digests()
+                    digests_changed = True
                     self.logger.info(f"Тихие часы: пропуск дайджеста для {user_id}")
                     continue
                 try:
@@ -261,12 +266,15 @@ class BackgroundUpdater:
                     )
                     if delivered:
                         self.sent_digests[key] = time.time()
-                        self._save_sent_digests()
+                        digests_changed = True
                     else:
                         self.logger.warning(f"Дайджест {user_id} не доставлен, будет повтор")
                 except Exception as e:
                     self.logger.error(f"Ошибка отправки дайджеста {user_id}: {e}")
                 await asyncio.sleep(0.05)
+            if digests_changed:
+                # Одна запись на проход вместо записи на каждого получателя
+                await asyncio.to_thread(self._save_sent_digests)
         except Exception as e:
             self.logger.error(f"Ошибка в _send_digests: {e}", exc_info=True)
 

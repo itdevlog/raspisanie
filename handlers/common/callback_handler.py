@@ -1,5 +1,7 @@
 # handlers/common/callback_handler.py
 
+import asyncio
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -107,7 +109,7 @@ async def handle_change_class(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     # Очищаем выбранный класс
-    user_service.clear_user_class(user_id)
+    await asyncio.to_thread(user_service.clear_user_class, user_id)
 
     # Сбрасываем залипшие флаги поиска/цифру класса перед новым выбором
     reset_user_flow(context)

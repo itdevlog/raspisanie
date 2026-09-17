@@ -283,6 +283,44 @@ def test_reminder_loop_two_enabled_users_same_class_both_notified(monkeypatch):
     assert len(sent) == 2
 
 
+def test_reminders_saved_once_per_pass(monkeypatch):
+    db = _make_db()
+    us = UserService(db)
+    us.set_user_class(1, '5а', 'school_133')
+    UserPreferencesService(db).set_notification_settings(1, {'lesson_reminders': True})
+    us.set_user_class(2, '5а', 'school_133')
+    UserPreferencesService(db).set_notification_settings(2, {'lesson_reminders': True})
+
+    updater = object.__new__(BackgroundUpdater)
+    updater.logger = __import__('logging').getLogger('test')
+    updater.application = SimpleNamespace(
+        bot_data={
+            'user_service': us,
+            'schools_data': {'school_133': _school_data()},
+        },
+        bot=None,
+    )
+    updater.reminder_service = ReminderService()
+    updater.sent_reminders = {}
+
+    async def _fake_send(bot, chat_id, text, parse_mode='Markdown'):
+        return True
+
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)  # type: ignore[assignment]
+
+    save_calls = []
+    monkeypatch.setattr(updater, '_save_sent_reminders',
+                        lambda: save_calls.append(1), raising=False)
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
+    monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
+
+    import asyncio
+    asyncio.run(updater._send_reminders())
+
+    assert len(updater.sent_reminders) == 2
+    assert len(save_calls) == 1
+
+
 def test_reminder_loop_skips_quiet_hours_but_dedups(monkeypatch):
     db = _make_db()
     us = UserService(db)

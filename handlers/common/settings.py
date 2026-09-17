@@ -1,3 +1,5 @@
+import asyncio
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
@@ -147,7 +149,7 @@ async def unsubscribe_by_callback(update: Update, context: ContextTypes.DEFAULT_
         await query.answer("❌ Подписка не найдена")
         return
 
-    subscription_service.unsubscribe(user_id, school_id, kind, name)
+    await asyncio.to_thread(subscription_service.unsubscribe, user_id, school_id, kind, name)
     await query.answer(f"🔕 Отписка от {name} оформлена")
     await settings_handler(update, context)
 
@@ -164,7 +166,9 @@ async def toggle_notifications(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # Устанавливаем новые настройки
     notifications_enabled = state == 'on'
-    user_service.set_user_notification_settings(user_id, notifications_enabled)
+    await asyncio.to_thread(
+        user_service.set_user_notification_settings, user_id, notifications_enabled
+    )
 
     # Подтверждение пользователю
     status_text = "включены" if notifications_enabled else "отключены"
@@ -186,10 +190,10 @@ async def toggle_lesson_reminders(update: Update, context: ContextTypes.DEFAULT_
 
     preferences_service = UserPreferencesService(user_service.db)
     if state == 'on':
-        preferences_service.enable_lesson_reminders(user_id)
+        await asyncio.to_thread(preferences_service.enable_lesson_reminders, user_id)
         status_text = "включены"
     else:
-        preferences_service.disable_lesson_reminders(user_id)
+        await asyncio.to_thread(preferences_service.disable_lesson_reminders, user_id)
         status_text = "отключены"
 
     await query.answer(f"⏰ Напоминания об уроках {status_text}")
@@ -208,10 +212,10 @@ async def toggle_quiet_hours(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
     preferences_service = UserPreferencesService(user_service.db)
     if state == 'on':
-        preferences_service.enable_quiet_hours(user_id)
+        await asyncio.to_thread(preferences_service.enable_quiet_hours, user_id)
         status_text = "включены"
     else:
-        preferences_service.disable_quiet_hours(user_id)
+        await asyncio.to_thread(preferences_service.disable_quiet_hours, user_id)
         status_text = "отключены"
 
     await query.answer(f"🌙 Тихие часы {status_text}")
@@ -230,10 +234,10 @@ async def toggle_daily_digest(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     preferences_service = UserPreferencesService(user_service.db)
     if state == 'on':
-        preferences_service.enable_daily_digest(user_id)
+        await asyncio.to_thread(preferences_service.enable_daily_digest, user_id)
         status_text = "включён"
     else:
-        preferences_service.disable_daily_digest(user_id)
+        await asyncio.to_thread(preferences_service.disable_daily_digest, user_id)
         status_text = "отключён"
 
     await query.answer(f"📋 Дайджест дня {status_text}")
@@ -264,10 +268,10 @@ async def toggle_update_notifications(update: Update, context: ContextTypes.DEFA
 
     # Устанавливаем новые настройки
     if state == 'on':
-        preferences_service.enable_update_notifications(user_id)
+        await asyncio.to_thread(preferences_service.enable_update_notifications, user_id)
         status_text = "включены"
     else:
-        preferences_service.disable_update_notifications(user_id)
+        await asyncio.to_thread(preferences_service.disable_update_notifications, user_id)
         status_text = "отключены"
 
     # Подтверждение пользователю

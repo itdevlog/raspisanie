@@ -312,7 +312,7 @@ class NotificationService:
             if not pending:
                 self.logger.info(f"All users already notified for {notification_key}")
                 self._mark_notification_sent(notification_key)
-                self.save_notifications_cache()
+                await asyncio.to_thread(self.save_notifications_cache)
                 return True
 
             # Настройки тихих часов читаем из UserPreferencesService
@@ -349,12 +349,12 @@ class NotificationService:
                     self.logger.error(f"Failed to send message to user {user_id}: {e}")
 
             # Пер-пользовательские метки нужно сохранять даже при неполной доставке
-            self.save_notifications_cache()
+            await asyncio.to_thread(self.save_notifications_cache)
 
             # Группа считается отправленной, только если pending не осталось
             if remaining == 0 and failed == 0:
                 self._mark_notification_sent(notification_key)
-                self.save_notifications_cache()
+                await asyncio.to_thread(self.save_notifications_cache)
 
             self.logger.info(
                 f"Exchange notifications sent to {sent_count}/{len(users)} users "

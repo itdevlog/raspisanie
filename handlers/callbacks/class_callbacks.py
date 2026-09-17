@@ -1,4 +1,5 @@
 # handlers/callbacks/class_callbacks.py
+import asyncio
 import re
 
 from telegram import Update
@@ -69,7 +70,7 @@ class ClassCallbackHandler:
             return
 
         # Сохраняем класс для текущей школы пользователя
-        user_service.set_user_class(user_id, class_name, current_school_id)
+        await asyncio.to_thread(user_service.set_user_class, user_id, class_name, current_school_id)
 
         # Показываем сообщение о загрузке
         await query.edit_message_text("🔄 Загружаем расписание...")

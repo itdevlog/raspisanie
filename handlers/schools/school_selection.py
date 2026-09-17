@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -85,7 +86,7 @@ async def handle_school_selection(update: Update, context: ContextTypes.DEFAULT_
         return
 
     # Сохраняем выбранную школу для пользователя
-    if not user_service.set_user_school(user_id, school_id):
+    if not await asyncio.to_thread(user_service.set_user_school, user_id, school_id):
         await query.edit_message_text("❌ Эта школа недоступна. Выберите другую.")
         return
 

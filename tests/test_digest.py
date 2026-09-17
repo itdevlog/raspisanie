@@ -252,6 +252,33 @@ def test_send_digests_respects_quiet_hours(monkeypatch):
     assert updater.sent_digests != {}
 
 
+def test_send_digests_saved_once_per_pass(monkeypatch):
+    db = _make_db()
+    us = UserService(db)
+    us.set_user_class(1, '5а', 'school_133')
+    UserPreferencesService(db).set_notification_settings(1, {'daily_digest': True})
+    us.set_user_class(2, '5а', 'school_133')
+    UserPreferencesService(db).set_notification_settings(2, {'daily_digest': True})
+
+    updater = _make_updater(db, _school_data())
+
+    async def _fake_send(bot, chat_id, text, parse_mode='Markdown'):
+        return True
+
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)
+
+    save_calls = []
+    monkeypatch.setattr(updater, '_save_sent_digests',
+                        lambda: save_calls.append(1), raising=False)
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=TZ)
+    monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
+
+    asyncio.run(updater._send_digests())
+
+    assert len(updater.sent_digests) == 2
+    assert len(save_calls) == 1
+
+
 def test_sent_digests_persist_across_restart(tmp_path, monkeypatch):
     from config.config import Config
 

@@ -8,6 +8,7 @@ teacher_menu.py и room_schedule.py раньше дублировали ~90% к�
 и держит прежние имена публичных функций, чтобы callbacks-обработчики не менялись.
 """
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -305,10 +306,14 @@ class EntityMenuHandler:
 
         school_id = user_service.get_user_school(user_id)
         if subscription_service.is_subscribed(user_id, school_id, self.p, entity_name):
-            subscription_service.unsubscribe(user_id, school_id, self.p, entity_name)
+            await asyncio.to_thread(
+                subscription_service.unsubscribe, user_id, school_id, self.p, entity_name
+            )
             await query.answer(f"🔕 Подписка на {self.n} {entity_name} отключена")
         else:
-            subscription_service.subscribe(user_id, school_id, self.p, entity_name)
+            await asyncio.to_thread(
+                subscription_service.subscribe, user_id, school_id, self.p, entity_name
+            )
             await query.answer(f"🔔 Вы подписались на {self.n} {entity_name}")
 
         await self.select(update, context, entity_name, schedule_type)
