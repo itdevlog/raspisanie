@@ -113,11 +113,14 @@ class BackgroundUpdater:
             user_classes = self.reminder_service.to_user_classes(users)
 
             preferences_service = UserPreferencesService(user_service.db)
+            # Пакетно одним проходом: снимает O(N×M) find_one-сканов коллекции.
+            settings_map = await asyncio.to_thread(preferences_service.get_settings_map)
             enabled = {
                 user['user_id']
                 for user in users
                 if user.get('user_id')
-                and preferences_service.get_notification_settings(user['user_id']).get('lesson_reminders', False)
+                and settings_map.get(user['user_id'], UserPreferencesService._default_settings())
+                    .get('lesson_reminders', False)
             }
             user_classes = {
                 user_id: target
@@ -140,7 +143,7 @@ class BackgroundUpdater:
                 if key in self.sent_reminders:
                     continue
                 # Тихие часы: не шлём, но помечаем ключ, чтобы не дублировать позже
-                settings = preferences_service.get_notification_settings(user_id)
+                settings = settings_map.get(user_id, UserPreferencesService._default_settings())
                 if NotificationService._is_quiet_hours(settings, now):
                     self.sent_reminders[key] = time.time()
                     reminders_changed = True
@@ -158,7 +161,6 @@ class BackgroundUpdater:
                         self.logger.warning(f"Напоминание {user_id} не доставлено, будет повтор")
                 except Exception as e:
                     self.logger.error(f"Ошибка отправки напоминания {user_id}: {e}")
-                await asyncio.sleep(0.05)
             if reminders_changed:
                 # Одна запись на проход вместо записи на каждого получателя
                 await asyncio.to_thread(self._save_sent_reminders)
@@ -229,11 +231,14 @@ class BackgroundUpdater:
             user_classes = self.reminder_service.to_user_classes(users)
 
             preferences_service = UserPreferencesService(user_service.db)
+            # Пакетно одним проходом: снимает O(N×M) find_one-сканов коллекции.
+            settings_map = await asyncio.to_thread(preferences_service.get_settings_map)
             enabled = {
                 user['user_id']
                 for user in users
                 if user.get('user_id')
-                and preferences_service.get_notification_settings(user['user_id']).get('daily_digest', False)
+                and settings_map.get(user['user_id'], UserPreferencesService._default_settings())
+                    .get('daily_digest', False)
             }
             user_classes = {
                 user_id: target
@@ -254,7 +259,7 @@ class BackgroundUpdater:
                 if key in self.sent_digests:
                     continue
                 # Тихие часы: не шлём, но помечаем ключ, чтобы не дублировать позже
-                settings = preferences_service.get_notification_settings(user_id)
+                settings = settings_map.get(user_id, UserPreferencesService._default_settings())
                 if NotificationService._is_quiet_hours(settings, now):
                     self.sent_digests[key] = time.time()
                     digests_changed = True
@@ -271,7 +276,6 @@ class BackgroundUpdater:
                         self.logger.warning(f"Дайджест {user_id} не доставлен, будет повтор")
                 except Exception as e:
                     self.logger.error(f"Ошибка отправки дайджеста {user_id}: {e}")
-                await asyncio.sleep(0.05)
             if digests_changed:
                 # Одна запись на проход вместо записи на каждого получателя
                 await asyncio.to_thread(self._save_sent_digests)

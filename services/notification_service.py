@@ -237,7 +237,6 @@ class NotificationService:
                             continue
                     if await self._send_message(context.bot, user_id, text, parse_mode=parse_mode):
                         sent += 1
-                        await asyncio.sleep(0.05)
                 except Exception as e:
                     self.logger.error(f"Failed to notify subscriber {user_id}: {e}")
             self.logger.info(
@@ -384,8 +383,6 @@ class NotificationService:
                         remaining += 1
                         failed += 1
                         self.logger.warning(f"Exchange notification failed for user {user_id}, will retry")
-                    # Небольшая пауза между отправками — защита от flood-лимитов Telegram
-                    await asyncio.sleep(0.05)
                 except Exception as e:
                     remaining += 1
                     failed += 1

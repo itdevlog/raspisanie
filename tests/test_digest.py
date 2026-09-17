@@ -267,6 +267,67 @@ def test_send_digests_saved_once_per_pass(make_db, tz, monkeypatch):
     assert len(save_calls) == 1
 
 
+def test_send_digests_uses_batch_settings_map_once(make_db, tz, monkeypatch):
+    """Настройки дайджеста читаются одним пакетным проходом по коллекции."""
+    db = make_db()
+    us = UserService(db)
+    us.set_user_class(1, '5а', 'school_133')
+    us.set_user_class(2, '5а', 'school_133')
+    prefs = UserPreferencesService(db)
+    prefs.set_notification_settings(1, {'daily_digest': True})
+    prefs.set_notification_settings(2, {'daily_digest': False})
+
+    updater = _make_updater(db, _school_data())
+    sent = []
+    batch_calls = []
+
+    async def _fake_send(bot, chat_id, text, parse_mode='Markdown'):
+        sent.append(chat_id)
+        return True
+
+    original_map = UserPreferencesService.get_settings_map
+
+    def _counting_map(self):
+        batch_calls.append(1)
+        return original_map(self)
+
+    monkeypatch.setattr(UserPreferencesService, 'get_settings_map', _counting_map)
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)
+
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=tz)
+    monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
+    monkeypatch.setattr(updater, '_save_sent_digests', lambda: None, raising=False)
+
+    asyncio.run(updater._send_digests())
+
+    assert sent == [1]
+    assert batch_calls == [1]
+
+
+def test_send_digests_user_without_preferences_record_disabled(make_db, tz, monkeypatch):
+    """Пользователь без записи настроек получает дефолт (дайджест выключен)."""
+    db = make_db()
+    us = UserService(db)
+    us.set_user_class(1, '5а', 'school_133')
+
+    updater = _make_updater(db, _school_data())
+    sent = []
+
+    async def _fake_send(bot, chat_id, text, parse_mode='Markdown'):
+        sent.append(chat_id)
+        return True
+
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)
+
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=tz)
+    monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
+    monkeypatch.setattr(updater, '_save_sent_digests', lambda: None, raising=False)
+
+    asyncio.run(updater._send_digests())
+
+    assert sent == []
+
+
 def test_sent_digests_persist_across_restart(tmp_path, monkeypatch):
     from config.config import Config
 

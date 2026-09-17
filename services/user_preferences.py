@@ -41,6 +41,28 @@ class UserPreferencesService:
         merged.update(settings)
         return merged
 
+    def get_settings_map(self) -> dict[int, dict]:
+        """Пакетно: `{user_id: merged_settings}` одним проходом по коллекции.
+
+        Убирает линейный `find_one`-скан коллекции `user_preferences` на каждого
+        пользователя при массовых рассылках (было O(N×M)). Логика дополнения
+        дефолтами — та же, что в `get_notification_settings`. Пользователей без
+        записи (или без блока `notifications`) в мапе нет — вызывающий при
+        необходимости берёт `_default_settings()`.
+        """
+        result: dict[int, dict] = {}
+        for preferences in self.preferences_collection.find({}):
+            user_id = preferences.get('user_id')
+            if user_id is None:
+                continue
+            settings = preferences.get('notifications')
+            if not settings:
+                continue
+            merged = self._default_settings()
+            merged.update(settings)
+            result[user_id] = merged
+        return result
+
     def set_notification_settings(self, user_id: int, settings: dict) -> bool:
         """Устанавливает настройки уведомлений пользователя"""
         preferences = self.preferences_collection.find_one({'user_id': user_id}) or {}

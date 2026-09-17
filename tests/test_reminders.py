@@ -420,3 +420,104 @@ def test_lesson_reminders_toggle_roundtrip(make_db):
     assert prefs.get_notification_settings(1)['lesson_reminders'] is False
     prefs.disable_lesson_reminders(1)
     assert prefs.get_notification_settings(1)['lesson_reminders'] is False
+
+
+def test_get_settings_map_merges_defaults_and_skips_missing(make_db):
+    db = make_db()
+    us = UserService(db)
+    prefs = UserPreferencesService(db)
+    prefs.set_notification_settings(1, {'lesson_reminders': True})
+    us.set_user_class(2, '5а', 'school_133')  # запись в user_preferences отсутствует
+
+    settings_map = prefs.get_settings_map()
+    assert settings_map[1]['lesson_reminders'] is True
+    # недостающие ключи дополнены дефолтами
+    assert settings_map[1]['daily_digest'] is False
+    assert settings_map[1]['quiet_hours'] == {'enabled': False, 'start': 22, 'end': 7}
+    # пользователя без записи в карте нет
+    assert 2 not in settings_map
+
+
+def test_reminder_uses_batch_settings_map_once(make_db, tz, monkeypatch):
+    """Настройки читаются одним пакетным проходом, а не find_one на пользователя."""
+    db = make_db()
+    us = UserService(db)
+    us.set_user_class(1, '5а', 'school_133')
+    us.set_user_class(2, '5а', 'school_133')
+    prefs = UserPreferencesService(db)
+    prefs.set_notification_settings(1, {'lesson_reminders': True})
+    prefs.set_notification_settings(2, {'lesson_reminders': False})
+
+    updater = object.__new__(BackgroundUpdater)
+    updater.logger = __import__('logging').getLogger('test')
+    updater.application = SimpleNamespace(
+        bot_data={
+            'user_service': us,
+            'schools_data': {'school_133': _school_data()},
+        },
+        bot=None,
+    )
+    updater.reminder_service = ReminderService()
+    updater.sent_reminders = {}
+
+    sent = []
+    batch_calls = []
+
+    async def _fake_send(bot, chat_id, text, parse_mode='Markdown'):
+        sent.append(chat_id)
+        return True
+
+    original_map = UserPreferencesService.get_settings_map
+
+    def _counting_map(self):
+        batch_calls.append(1)
+        return original_map(self)
+
+    monkeypatch.setattr(UserPreferencesService, 'get_settings_map', _counting_map)
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)  # type: ignore[assignment]
+
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=tz)
+    monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
+    monkeypatch.setattr(updater, '_save_sent_reminders', lambda: None, raising=False)
+
+    import asyncio
+    asyncio.run(updater._send_reminders())
+
+    assert sent == [1]
+    assert batch_calls == [1]  # один проход по коллекции, не по пользователям
+
+
+def test_reminder_user_without_preferences_record_gets_default_disabled(make_db, tz, monkeypatch):
+    """Пользователь с классом, но без записи настроек, не получает напоминание."""
+    db = make_db()
+    us = UserService(db)
+    us.set_user_class(1, '5а', 'school_133')  # запись в user_preferences отсутствует
+
+    updater = object.__new__(BackgroundUpdater)
+    updater.logger = __import__('logging').getLogger('test')
+    updater.application = SimpleNamespace(
+        bot_data={
+            'user_service': us,
+            'schools_data': {'school_133': _school_data()},
+        },
+        bot=None,
+    )
+    updater.reminder_service = ReminderService()
+    updater.sent_reminders = {}
+
+    sent = []
+
+    async def _fake_send(bot, chat_id, text, parse_mode='Markdown'):
+        sent.append(chat_id)
+        return True
+
+    updater.notification_service = SimpleNamespace(_send_message=_fake_send)  # type: ignore[assignment]
+
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=tz)
+    monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
+    monkeypatch.setattr(updater, '_save_sent_reminders', lambda: None, raising=False)
+
+    import asyncio
+    asyncio.run(updater._send_reminders())
+
+    assert sent == []
