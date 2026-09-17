@@ -1,5 +1,6 @@
 # services/notification_service.py
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -259,15 +260,45 @@ class NotificationService:
         except Exception as e:
             self.logger.error(f"Error in notify_admins: {e}")
 
+    @staticmethod
+    def _exchange_identity(ex: dict) -> str:
+        """Стабильный идентификатор одной замены (порядок полей фиксирован).
+
+        Используется как основа дедуп-ключа пары (замена, пользователь):
+        добавление новой замены в набор не меняет идентичность уже
+        доставленных, поэтому старые повторно не отправляются.
+        """
+        parts = [
+            str(ex.get('lesson_num', '')),
+            str(ex.get('new_subject', '')),
+            str(ex.get('new_teacher', '')),
+            str(ex.get('new_room', '')),
+            str(ex.get('is_cancelled', '')),
+            str(ex.get('removed', '')),
+        ]
+        if ex.get('removed'):
+            parts.extend([
+                str(ex.get('original_subject', '')),
+                str(ex.get('original_teacher', '')),
+                str(ex.get('original_room', '')),
+            ])
+        return "_".join(parts)
+
+    def _exchange_user_key(self, school_id: str, class_name: str, date: datetime, ex: dict) -> str:
+        """Дедуп-ключ одной замены для класса/даты (без пользователя)."""
+        identity = hashlib.md5(self._exchange_identity(ex).encode()).hexdigest()[:8]
+        return f"{school_id}_{class_name}_{date.strftime('%Y%m%d')}_{identity}"
+
     async def notify_exchange_updates(self, context: ContextTypes.DEFAULT_TYPE, school_id: str,
                                     class_name: str, exchanges: list[dict]) -> bool:
         """Уведомляет пользователей о новых заменах в формате полного расписания.
 
-        Доставка отслеживается по каждому получателю: ключ группы помечается
-        отправленным только когда всем доставлено. Пользователи на тихих часах
-        и с transient-сбоем остаются pending — следующий цикл дошлёт им без
-        дублей уже доставленным. Возвращает True, если ничего не осталось
-        (можно коммитить baseline), иначе False (нужен ретрай).
+        Дедуп ведётся по каждой замене отдельно: пользователю повторно шлются
+        только те замены, которых он ещё не получал. Добавление новой замены в
+        набор не вызывает повторную отправку старых. Доставка отслеживается по
+        каждому получателю; пользователи на тихих часах и с transient-сбоем
+        остаются pending — следующий цикл дошлёт им без дублей. Возвращает True,
+        если ничего не осталось (можно коммитить baseline), иначе False.
         """
         try:
             # Проверяем, доступен ли bot_data
@@ -288,34 +319,27 @@ class NotificationService:
                 self.logger.info(f"No users found for class {class_name} in school {school_id}")
                 return True
 
-            # Получаем дату из первой замены (предполагаем, что все замены на одну дату)
-            raw_date = exchanges[0].get('timestamp') if exchanges else None
-            date = raw_date if isinstance(raw_date, datetime) else datetime.now(self.moscow_tz)
-
-            # Форматируем уведомление
-            notification_text = self._format_exchange_notification(class_name, exchanges, date)
-            if not notification_text:
+            if not exchanges:
                 self.logger.info(f"No new exchanges to notify for class {class_name}")
                 return True
 
-            # Проверяем, не отправляли ли мы уже эти конкретные замены
-            # Создаем уникальный ключ для каждой комбинации замен
-            import hashlib
-            exchanges_signature = "_".join([
-                f"{ex.get('lesson_num', '')}_{ex.get('new_subject', '')}_{ex.get('new_teacher', '')}_{ex.get('new_room', '')}_{ex.get('is_cancelled', '')}"
-                for ex in exchanges
-            ])
-            notification_key = f"{school_id}_{class_name}_{date.strftime('%Y%m%d')}_{hashlib.md5(exchanges_signature.encode()).hexdigest()[:8]}"
+            # Получаем дату из первой замены (предполагаем, что все замены на одну дату)
+            raw_date = exchanges[0].get('timestamp')
+            date = raw_date if isinstance(raw_date, datetime) else datetime.now(self.moscow_tz)
 
-            if self._is_notification_sent(notification_key):
-                self.logger.info(f"Notification already sent for {notification_key}")
-                return True
+            # Ключи замен (без пользователя) — порядок соответствует exchanges
+            exchange_keys = [
+                self._exchange_user_key(school_id, class_name, date, ex) for ex in exchanges
+            ]
 
-            # Кто ещё не получил именно эту замену
-            pending = [uid for uid in users if not self._is_user_notified(notification_key, uid)]
-            if not pending:
-                self.logger.info(f"All users already notified for {notification_key}")
-                self._mark_notification_sent(notification_key)
+            # Быстрый путь: каждая замена уже доставлена всем получателям.
+            # Групповой ключ не может привести к повторной отправке старых замен.
+            all_delivered = all(
+                all(self._is_user_notified(key, uid) for uid in users)
+                for key in exchange_keys
+            )
+            if all_delivered:
+                self.logger.info(f"All users already notified for class {class_name} {date.strftime('%Y%m%d')}")
                 await asyncio.to_thread(self.save_notifications_cache)
                 return True
 
@@ -329,7 +353,14 @@ class NotificationService:
             sent_count = 0
             remaining = 0
             failed = 0
-            for user_id in pending:
+            for user_id in users:
+                # Только те замены, которые пользователь ещё не получал
+                new_for_user = [
+                    ex for ex, key in zip(exchanges, exchange_keys)
+                    if not self._is_user_notified(key, user_id)
+                ]
+                if not new_for_user:
+                    continue
                 try:
                     user_settings = preferences_service.get_notification_settings(user_id)
                     if self._is_quiet_hours(user_settings, now):
@@ -337,8 +368,12 @@ class NotificationService:
                         remaining += 1
                         self.logger.info(f"Тихие часы: отложено уведомление для {user_id}")
                         continue
-                    if await self._send_message(context.bot, user_id, notification_text, parse_mode='Markdown'):
-                        self._mark_user_notified(notification_key, user_id)
+                    user_text = self._format_exchange_notification(class_name, new_for_user, date)
+                    if user_text and await self._send_message(context.bot, user_id, user_text, parse_mode='Markdown'):
+                        # Помечаем только реально отправленные в этом тексте замены
+                        for ex in new_for_user:
+                            self._mark_user_notified(
+                                self._exchange_user_key(school_id, class_name, date, ex), user_id)
                         sent_count += 1
                         self.logger.info(f"Exchange notification sent to user {user_id}")
                     else:
@@ -354,11 +389,6 @@ class NotificationService:
 
             # Пер-пользовательские метки нужно сохранять даже при неполной доставке
             await asyncio.to_thread(self.save_notifications_cache)
-
-            # Группа считается отправленной, только если pending не осталось
-            if remaining == 0 and failed == 0:
-                self._mark_notification_sent(notification_key)
-                await asyncio.to_thread(self.save_notifications_cache)
 
             self.logger.info(
                 f"Exchange notifications sent to {sent_count}/{len(users)} users "

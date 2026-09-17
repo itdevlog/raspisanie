@@ -337,6 +337,70 @@ async def test_notify_entity_subscribers_distinct_classes_same_signature(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_notify_entity_subscribers_filters_relevant_exchanges(monkeypatch):
+    """T34: подписчик учителя X получает только замены X, не учителя Y."""
+    from core.background_updater import BackgroundUpdater
+
+    calls = []
+
+    class _Notif:
+        def _format_exchange_notification(self, class_name, exchanges, date):
+            subjects = [e.get('new_subject', '') for e in exchanges]
+            return '|'.join(subjects)
+
+        async def notify_subscribers(self, context, school_id, kind, name, text):
+            calls.append((kind, name, text))
+            return (1, 0)
+
+    app = SimpleNamespace(bot_data={}, bot=None)
+    updater = BackgroundUpdater(app)
+    date = datetime(2026, 9, 11)
+    exchanges = [
+        {'class_name': '5А', 'lesson_num': 1, 'new_subject': 'Физика',
+         'new_teacher': 'Иванов', 'new_room': '101'},
+        {'class_name': '5А', 'lesson_num': 2, 'new_subject': 'Химия',
+         'new_teacher': 'Петров', 'new_room': '102'},
+    ]
+
+    await updater._notify_entity_subscribers(
+        SimpleNamespace(), _Notif(), 'school_133', '5А', exchanges, date)
+
+    by_entity = {(kind, name): text for kind, name, text in calls}
+    assert by_entity[('teacher', 'Иванов')] == 'Физика'
+    assert by_entity[('teacher', 'Петров')] == 'Химия'
+    assert by_entity[('room', '101')] == 'Физика'
+    assert by_entity[('room', '102')] == 'Химия'
+
+
+@pytest.mark.asyncio
+async def test_notify_entity_subscribers_no_exchanges_no_send(monkeypatch):
+    """T34: нет замен -> подписчикам ничего не уходит."""
+    from core.background_updater import BackgroundUpdater
+
+    calls = []
+
+    class _Notif:
+        def _format_exchange_notification(self, class_name, exchanges, date):
+            return 'Замена'
+
+        async def notify_subscribers(self, context, school_id, kind, name, text):
+            calls.append((kind, name))
+            return (1, 0)
+
+    app = SimpleNamespace(bot_data={}, bot=None)
+    updater = BackgroundUpdater(app)
+
+    await updater._notify_entity_subscribers(
+        SimpleNamespace(), _Notif(), 'school_133', '5А', [], datetime(2026, 9, 11))
+    await updater._notify_entity_subscribers(
+        SimpleNamespace(), _Notif(), 'school_133', '5А',
+        [{'class_name': '5А', 'new_subject': 'Физика', 'new_teacher': '', 'new_room': ''}],
+        datetime(2026, 9, 11))
+
+    assert calls == []
+
+
+@pytest.mark.asyncio
 async def test_background_hook_notifies_new_teacher_and_room(monkeypatch):
     from core.background_updater import BackgroundUpdater
 

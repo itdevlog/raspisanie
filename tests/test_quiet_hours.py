@@ -201,6 +201,76 @@ def test_exchange_notification_quiet_deferred_until_quiet_ends(make_db, tz, monk
     assert bot.sent[0][0] == 1
 
 
+def test_exchange_dedup_per_exchange_sends_only_new(make_db, tz, monkeypatch):
+    """T33: A доставлена, затем A+B -> пользователь получает только B, без дубля A."""
+    db = make_db()
+    us = UserService(db)
+    us.set_user_class(1, '5а', 'school_133')
+    us.set_user_notification_settings(1, True, 'school_133')
+
+    now = datetime(2026, 9, 11, 12, 0)
+    bot = _fake_bot()
+    svc, context = _make_exchange_svc(db, bot, tz, monkeypatch, now)
+
+    a = {'lesson_num': 1, 'new_subject': 'Физика', 'new_teacher': '',
+         'new_room': '', 'is_cancelled': False, 'timestamp': now}
+    b = {'lesson_num': 2, 'new_subject': 'Химия', 'new_teacher': '',
+         'new_room': '', 'is_cancelled': False, 'timestamp': now}
+
+    import asyncio
+    r1 = asyncio.run(svc.notify_exchange_updates(context, 'school_133', '5а', [a]))
+    assert r1 is True
+    assert len(bot.sent) == 1
+    assert 'Физика' in bot.sent[0][1]
+
+    r2 = asyncio.run(svc.notify_exchange_updates(context, 'school_133', '5а', [a, b]))
+    assert r2 is True
+    assert len(bot.sent) == 2
+    assert 'Химия' in bot.sent[1][1]
+    assert 'Физика' not in bot.sent[1][1]  # старую замену повторно не шлём
+
+    r3 = asyncio.run(svc.notify_exchange_updates(context, 'school_133', '5а', [a, b]))
+    assert r3 is True
+    assert len(bot.sent) == 2  # ничего нового — тишина
+
+
+def test_exchange_quiet_deferred_then_only_new_exchange(make_db, tz, monkeypatch):
+    """T33 + тихие часы: A не помечена в тишину, после окна — A, затем только B."""
+    db = make_db()
+    us = UserService(db)
+    us.set_user_class(1, '5а', 'school_133')
+    us.set_user_notification_settings(1, True, 'school_133')
+    UserPreferencesService(db).set_notification_settings(1, {
+        'quiet_hours': {'enabled': True, 'start': 22, 'end': 7},
+    })
+
+    quiet_now = datetime(2026, 9, 11, 23, 0)
+    bot = _fake_bot()
+    svc, context = _make_exchange_svc(db, bot, tz, monkeypatch, quiet_now)
+
+    a = {'lesson_num': 1, 'new_subject': 'Физика', 'new_teacher': '',
+         'new_room': '', 'is_cancelled': False, 'timestamp': quiet_now}
+    b = {'lesson_num': 2, 'new_subject': 'Химия', 'new_teacher': '',
+         'new_room': '', 'is_cancelled': False, 'timestamp': quiet_now}
+
+    import asyncio
+    r1 = asyncio.run(svc.notify_exchange_updates(context, 'school_133', '5а', [a]))
+    assert r1 is False
+    assert bot.sent == []
+
+    monkeypatch.setattr(svc, '_now', lambda: datetime(2026, 9, 12, 12, 0), raising=False)
+    r2 = asyncio.run(svc.notify_exchange_updates(context, 'school_133', '5а', [a]))
+    assert r2 is True
+    assert len(bot.sent) == 1
+    assert 'Физика' in bot.sent[0][1]
+
+    r3 = asyncio.run(svc.notify_exchange_updates(context, 'school_133', '5а', [a, b]))
+    assert r3 is True
+    assert len(bot.sent) == 2
+    assert 'Физика' not in bot.sent[1][1]
+    assert 'Химия' in bot.sent[1][1]
+
+
 def test_exchange_transient_failure_retries_without_duplicate(make_db, tz, monkeypatch):
     """Сбой отправки оставляет pending; повторная попытка шлёт ровно один раз."""
     db = make_db()

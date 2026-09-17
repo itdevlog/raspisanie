@@ -659,10 +659,6 @@ class BackgroundUpdater:
             if not notification_service or not hasattr(notification_service, 'notify_subscribers'):
                 return
 
-            text = notification_service._format_exchange_notification(class_name, class_exchanges, date)
-            if not text:
-                return
-
             self._cleanup_sent_entity_notifications()
             date_str = date.strftime('%Y%m%d') if hasattr(date, 'strftime') else 'unknown'
 
@@ -674,8 +670,20 @@ class BackgroundUpdater:
                         continue
                     seen.add((kind, name))
 
+                    # Подписчику сущности шлём только замены, её касающиеся
+                    relevant = [
+                        ex for ex in class_exchanges
+                        if (ex.get(field) or '').strip() == name
+                    ]
+                    if not relevant:
+                        continue
+                    text = notification_service._format_exchange_notification(
+                        class_name, relevant, date)
+                    if not text:
+                        continue
+
                     signature = self._entity_exchanges_signature(
-                        class_exchanges, kind, name, class_name)
+                        relevant, kind, name, class_name)
                     digest = hashlib.md5(signature.encode()).hexdigest()[:8]
                     key = f"{school_id}:{class_name}:{kind}:{name}:{date_str}:{digest}"
                     if key in self.sent_entity_notifications:
