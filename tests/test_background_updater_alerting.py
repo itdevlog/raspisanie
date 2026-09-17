@@ -27,6 +27,16 @@ def _make_updater(alert_service=None, metrics=None):
     return updater
 
 
+class _EmptyLoader:
+    def load_all_schools_data(self):
+        return {}
+
+
+class _BoomLoader:
+    def load_all_schools_data(self):
+        raise RuntimeError('school down')
+
+
 async def test_repeated_background_error_alerts_once():
     alert = AlertService(threshold=3, window_seconds=300, now=lambda: 0.0)
     notifier = _NotificationStub()
@@ -39,6 +49,53 @@ async def test_repeated_background_error_alerts_once():
 
     assert len(notifier.messages) == 1
     assert 'RuntimeError' in notifier.messages[0]
+
+
+async def test_no_data_cycles_notify_admins_once_per_window():
+    alert = AlertService(threshold=3, window_seconds=300, now=lambda: 0.0)
+    notifier = _NotificationStub()
+    updater = _make_updater(alert_service=alert)
+    updater.application.bot_data['notification_service'] = notifier
+    updater.data_loader = _EmptyLoader()
+
+    for _ in range(5):
+        await updater._perform_update_locked()
+
+    # первый сбой уведомил, повторы в окне подавлены
+    assert len(notifier.messages) == 1
+    assert 'данные школ' in notifier.messages[0]
+
+
+async def test_error_cycles_notify_admins_once_per_window(monkeypatch):
+    alert = AlertService(threshold=3, window_seconds=300, now=lambda: 0.0)
+    notifier = _NotificationStub()
+    updater = _make_updater(alert_service=alert)
+    updater.application.bot_data['notification_service'] = notifier
+    updater.data_loader = _BoomLoader()
+    monkeypatch.setattr(
+        updater, '_get_admin_notification_settings',
+        lambda: {'update_notifications': True})
+
+    for _ in range(5):
+        await updater._perform_update_locked()
+
+    assert len(notifier.messages) == 1
+    assert 'Ошибка автоматического обновления' in notifier.messages[0]
+
+
+async def test_no_data_notifies_again_after_window():
+    clock = {'t': 0.0}
+    alert = AlertService(threshold=3, window_seconds=300, now=lambda: clock['t'])
+    notifier = _NotificationStub()
+    updater = _make_updater(alert_service=alert)
+    updater.application.bot_data['notification_service'] = notifier
+    updater.data_loader = _EmptyLoader()
+
+    await updater._perform_update_locked()
+    clock['t'] = 400.0
+    await updater._perform_update_locked()
+
+    assert len(notifier.messages) == 2
 
 
 async def test_alert_is_noop_without_alert_service():

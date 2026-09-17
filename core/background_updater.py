@@ -107,38 +107,54 @@ class BackgroundUpdater:
             return self.application.bot_data.get('metrics')
         return None
 
-    async def _alert_repeated_error(self, error, source: str) -> None:
-        """Best-effort алерт админам при повторяющейся фоновой ошибке (T44a).
+    def _claim_admin_alert(self, error, source: str) -> bool:
+        """Резервирует одно уведомление админам по ключу в окне (T44a).
 
-        Антиспам живёт в AlertService: один алерт на ключ за окно, поэтому
-        затяжной сбой не спамит администраторов каждый цикл. В текст попадают
-        только тип ошибки и источник — без сообщения/секретов.
+        Порог=1: первый сбой уведомляет, повторные идентичные сбои в окне
+        подавляются. Один и тот же ключ используется и legacy-веткой
+        (`update_notifications`), и generic-алертом, поэтому двойного
+        уведомления на одно событие быть не может.
+
+        Без AlertService (нестандартная сборка/тесты) — False: не уведомляем,
+        чтобы не получить неограниченный спам. В проде сервис всегда создаётся
+        в `bot.py::setup_services`.
+        """
+        alert_service = None
+        if self.application and hasattr(self.application, 'bot_data'):
+            alert_service = self.application.bot_data.get('alert_service')
+        if not alert_service:
+            return False
+        alert_service.record(error, source)
+        key = alert_service.error_key(error, source)
+        return alert_service.should_alert(key, threshold=1)
+
+    async def _alert_repeated_error(self, error, source: str) -> bool:
+        """Best-effort generic-алерт админам: не более одного раза за окно.
+
+        Первый сбой уведомляет, повторы в окне подавляются (антиспам
+        AlertService). Возвращает True, если уведомление отправлено. В текст
+        попадают только тип ошибки и источник — без сообщения/секретов.
         """
         try:
-            alert_service = None
-            if self.application and hasattr(self.application, 'bot_data'):
-                alert_service = self.application.bot_data.get('alert_service')
-            if not alert_service:
-                return
-            alert_service.record(error, source)
-            key = alert_service.error_key(error, source)
-            if not alert_service.should_alert(key):
-                return
             notification_service = self._notification_service()
             if not notification_service:
-                return
+                return False
+            if not self._claim_admin_alert(error, source):
+                return False
             error_type = type(error).__name__ if error is not None else 'UnknownError'
             text = (
-                "🚨 Повторяющаяся ошибка фонового обновления\n\n"
+                "🚨 Ошибка фонового обновления\n\n"
                 f"Тип: {error_type}\n"
                 f"Источник: {source}\n"
-                f"Повторов за окно: ≥{alert_service.threshold}"
+                "Повторы в окне не дублируются"
             )
             await notification_service.notify_admins(
                 self._make_context(), text, parse_mode=None
             )
+            return True
         except Exception as e:
             self.logger.error(f"Ошибка алертинга админам: {e}")
+            return False
 
     async def _reminder_job(self, context):
         """Задача JobQueue: напоминания об уроках и утренний дайджест (раз в минуту)."""
@@ -506,35 +522,36 @@ class BackgroundUpdater:
             else:
                 error_msg = "❌ Фоновое обновление не удалось - не получены данные"
                 self.logger.error(error_msg)
-                await self._alert_repeated_error(
-                    RuntimeError("schools_data пуст"), "background_update_no_data"
-                )
-
-                # Уведомляем админов об ошибке
-                context = self._make_context()
+                # Одно уведомление на ключ за окно: первый сбой сообщаем,
+                # повторяющиеся (например все школы недоступны) — подавляем.
                 notification_service = self._notification_service()
-                if notification_service:
+                if notification_service and self._claim_admin_alert(
+                    RuntimeError("schools_data пуст"), "background_update_no_data"
+                ):
                     await notification_service.notify_admins(
-                        context,
+                        self._make_context(),
                         "❌ *Ошибка автоматического обновления*\n\nНе удалось загрузить данные школ"
                     )
 
         except Exception as e:
             error_msg = f"❌ Ошибка фонового обновления: {e}"
             self.logger.error(error_msg, exc_info=True)
-            await self._alert_repeated_error(e, "background_update")
 
             # Проверяем настройки уведомлений администратора перед отправкой уведомления об ошибке
             notification_settings = self._get_admin_notification_settings()
             if notification_settings.get('update_notifications', False):
-                # Уведомляем админов об ошибке
-                context = self._make_context()
+                # Legacy-уведомление с деталями: тоже не чаще одного раза за окно,
+                # тот же ключ, что и у generic-алерта, чтобы не задваивать событие.
                 notification_service = self._notification_service()
-                if notification_service:
+                if notification_service and self._claim_admin_alert(e, "background_update"):
                     await notification_service.notify_admins(
-                        context,
+                        self._make_context(),
                         f"❌ *Ошибка автоматического обновления*\n\n`{str(e)}`"
                     )
+            else:
+                # Настройка выключена: страхуем generic-алертом (без деталей),
+                # он тоже антиспамится по тому же ключу.
+                await self._alert_repeated_error(e, "background_update")
 
     def _get_admin_notification_settings(self):
         """Получает настройки уведомлений для администраторов.
