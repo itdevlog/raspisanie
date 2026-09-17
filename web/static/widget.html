@@ -152,6 +152,15 @@ function getQueryParam(name) {
   return params.get(name);
 }
 
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function loadWidget() {
   const userId = getQueryParam('user_id');
   if (!userId) {
@@ -202,10 +211,10 @@ function renderWidget(data) {
   
   container.innerHTML = data.lessons.map(lesson => `
     <div class="lesson ${lesson.exchange ? 'exchange' : ''} ${lesson.cancelled ? 'cancelled' : ''}">
-      <div class="lesson-num">${lesson.num}</div>
-      <div class="lesson-time">${lesson.time || '—'}</div>
-      <div class="lesson-subject">${lesson.subject || '—'}</div>
-      ${lesson.room ? `<div class="lesson-room">${lesson.room}</div>` : ''}
+      <div class="lesson-num">${escapeHtml(lesson.num)}</div>
+      <div class="lesson-time">${escapeHtml(lesson.time) || '—'}</div>
+      <div class="lesson-subject">${escapeHtml(lesson.subject) || '—'}</div>
+      ${lesson.room ? `<div class="lesson-room">${escapeHtml(lesson.room)}</div>` : ''}
     </div>
   `).join('');
   

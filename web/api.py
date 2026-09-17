@@ -39,6 +39,15 @@ def _now() -> datetime:
     return datetime.now(get_timezone())
 
 
+def _lesson_time(lesson: dict) -> str:
+    """'08:00-08:45' из полей start/end реального payload."""
+    start = lesson.get('start') or ''
+    end = lesson.get('end') or ''
+    if start and end:
+        return f'{start}-{end}'
+    return start or end or ''
+
+
 def _parse_date_or_none(date_str: str | None) -> datetime:
     if not date_str:
         return _now()
@@ -121,11 +130,17 @@ def create_app(services: dict) -> FastAPI:
         return {'user': user, 'school_id': school_id, 'class_name': class_name}
 
     @app.get('/api/widget/{user_id}')
-    async def widget_data(user_id: int, date: str | None = None):
+    async def widget_data(user_id: int, date: str | None = None,
+                          x_telegram_init_data: str | None = Header(None)):
         """Данные для виджета PWA: расписание на сегодня + следующий урок.
 
         Формат для iOS Shortcuts / Android виджетов / PWA widget.
         """
+        token = (services.get('config') or Config()).TELEGRAM_TOKEN or ''
+        user = get_user_from_init_data(x_telegram_init_data, token) if x_telegram_init_data else None
+        if not user or user.get('id') != user_id:
+            raise HTTPException(403, 'Недействительная подпись Telegram')
+
         user_service = services['bot_data'].get('user_service')
         if not user_service:
             raise HTTPException(503, 'Сервис пользователей недоступен')
@@ -151,25 +166,28 @@ def create_app(services: dict) -> FastAPI:
         lessons = day_data.get('lessons', [])
 
         for lesson in lessons:
-            lesson_time = lesson.get('time', '')
-            if lesson_time:
-                try:
-                    lesson_start = datetime.strptime(
-                        f"{current_date.strftime('%Y-%m-%d')} {lesson_time.split('-')[0]}",
-                        '%Y-%m-%d %H:%M'
-                    ).replace(tzinfo=get_timezone())
-                    if lesson_start > now and not lesson.get('is_cancelled'):
-                        minutes_until = int((lesson_start - now).total_seconds() / 60)
-                        next_lesson = {
-                            'num': lesson.get('num'),
-                            'time': lesson_time,
-                            'subject': lesson.get('subject', ''),
-                            'room': lesson.get('room', ''),
-                            'in_minutes': minutes_until
-                        }
-                        break
-                except (ValueError, IndexError):
-                    continue
+            start = lesson.get('start', '')
+            if not start:
+                continue
+            try:
+                lesson_start = datetime.strptime(
+                    f"{current_date.strftime('%Y-%m-%d')} {start}",
+                    '%Y-%m-%d %H:%M'
+                ).replace(tzinfo=get_timezone())
+            except ValueError:
+                continue
+            if lesson_start > now and not lesson.get('is_cancelled'):
+                items = lesson.get('items') or [{}]
+                first_item = items[0]
+                minutes_until = int((lesson_start - now).total_seconds() / 60)
+                next_lesson = {
+                    'num': lesson.get('num'),
+                    'time': _lesson_time(lesson),
+                    'subject': first_item.get('subject') or '',
+                    'room': first_item.get('room') or '',
+                    'in_minutes': minutes_until
+                }
+                break
 
         # Считаем замены
         exchanges_count = sum(1 for lesson in lessons if lesson.get('has_exchange'))
@@ -183,11 +201,10 @@ def create_app(services: dict) -> FastAPI:
             'lessons': [
                 {
                     'num': lesson.get('num'),
-                    'time': lesson.get('time', ''),
-                    'subject': lesson.get('subject', ''),
-                    'room': lesson.get('room', ''),
+                    'time': _lesson_time(lesson),
+                    'subject': (lesson.get('items') or [{}])[0].get('subject') or '',
+                    'room': (lesson.get('items') or [{}])[0].get('room') or '',
                     'exchange': lesson.get('has_exchange', False),
-                    'was_subject': lesson.get('was_subject', ''),
                     'cancelled': lesson.get('is_cancelled', False)
                 }
                 for lesson in lessons

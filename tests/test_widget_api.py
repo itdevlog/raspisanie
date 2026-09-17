@@ -1,93 +1,154 @@
 # tests/test_widget_api.py
 """Тесты API виджета PWA."""
+import hashlib
+import hmac
+import json
+import time
+from datetime import datetime
+from types import SimpleNamespace
+from urllib.parse import quote
+
 from fastapi.testclient import TestClient
+
+from config.config import get_timezone
+
+BOT_TOKEN = '123456:ABC-DEF_token'
+SECRET = hmac.new(b'WebAppData', BOT_TOKEN.encode(), hashlib.sha256).digest()
+
+
+def _make_init_data(user_id: int, sign: bool = True) -> str:
+    params = {'user': json.dumps({'id': user_id}), 'auth_date': str(int(time.time()))}
+    pairs = sorted(params.items())
+    data_check_string = '\n'.join(f'{k}={v}' for k, v in pairs)
+    if sign:
+        sig = hmac.new(SECRET, data_check_string.encode(), hashlib.sha256).hexdigest()
+        pairs.append(('hash', sig))
+    return '&'.join(f'{k}={quote(str(v))}' for k, v in pairs)
+
+
+def _school():
+    return {
+        'SCHOOL_NAME': 'Тест',
+        'CLASSES': {'c1': '5А'},
+        'TEACHERS': {'t1': 'Иванов'},
+        'ROOMS': {'r1': '101', 'r2': '202'},
+        'SUBJECTS': {'s1': 'Математика', 's2': 'Физика'},
+        'PERIODS': {'p1': {'b': '01.09.2026', 'e': '31.05.2027'}},
+        'LESSON_TIMES': {'1': ['08:00', '08:45'], '2': ['09:00', '09:45']},
+        'LESSONSINDAY': 6,
+        'CLASS_SCHEDULE': {
+            'p1': {'c1': {
+                '101': {'s': ['s1'], 't': ['t1'], 'r': ['r1']},
+                '102': {'s': ['s2'], 't': ['t1'], 'r': ['r2']},
+            }}
+        },
+        'CLASS_EXCHANGE': {},
+    }
+
+
+class FakeUserService:
+    def __init__(self, school='school_133', class_name='5А'):
+        self._school = school
+        self._class = class_name
+
+    def get_user_school(self, uid):
+        return self._school
+
+    def get_user_class(self, uid, sid):
+        return self._class
+
+
+def _client(user_service=None, config=None):
+    from web.api import create_app
+
+    services = {
+        'bot_data': {
+            'user_service': user_service or FakeUserService(),
+            'schools_data': {'school_133': _school()},
+        },
+        'config': config or SimpleNamespace(TELEGRAM_TOKEN=BOT_TOKEN),
+    }
+    return TestClient(create_app(services))
+
+
+def _auth(user_id: int):
+    return {'X-Telegram-Init-Data': _make_init_data(user_id)}
 
 
 def test_widget_endpoint_requires_valid_user_id():
     """Widget endpoint требует валидный user_id (int)."""
-    from web.api import create_app
-
-    class FakeUserService:
-        def get_user_school(self, uid): return 'school_133'
-        def get_user_class(self, uid, sid): return '9А'
-
-    services = {
-        'bot_data': {
-            'user_service': FakeUserService(),
-            'schools_data': {}
-        }
-    }
-    app = create_app(services)
-    client = TestClient(app)
-
-    # Невалидный user_id (строка вместо int) — 422
-    response = client.get('/api/widget/abc')
+    response = _client().get('/api/widget/abc', headers=_auth(1))
     assert response.status_code == 422
 
 
-def test_widget_returns_schedule_structure():
-    """Widget возвращает правильную структуру."""
-    from web.api import create_app
+def test_widget_returns_schedule_values(monkeypatch):
+    """Widget возвращает непустые значения времени/предмета/кабинета."""
+    import web.api as api_module
 
-    class FakeUserService:
-        def get_user_school(self, uid): return 'school_133'
-        def get_user_class(self, uid, sid): return '5А'
+    fixed_now = datetime(2026, 12, 7, 7, 30, tzinfo=get_timezone())
+    monkeypatch.setattr(api_module, '_now', lambda: fixed_now)
 
-    services = {
-        'bot_data': {
-            'user_service': FakeUserService(),
-            'schools_data': {
-                'school_133': {
-                    'CLASSES': {'c1': '5А'},
-                    'TEACHERS': {'t1': 'Иванов'},
-                    'ROOMS': {'r1': '101'},
-                    'SUBJECTS': {'s1': 'Математика'},
-                    'PERIODS': {'p1': {'b': '01.09.2026', 'e': '31.05.2027'}},
-                    'LESSON_TIMES': {'1': ['08:00', '08:45'], '2': ['09:00', '09:45']},
-                    'LESSONSINDAY': 6,
-                    'CLASS_SCHEDULE': {
-                        'p1': {'c1': {
-                            '101': {'s': ['s1'], 't': ['t1'], 'r': ['r1']},
-                            '102': {'s': ['s1'], 't': ['t1'], 'r': ['r1']}
-                        }}
-                    },
-                    'CLASS_EXCHANGE': {},
-                }
-            }
-        }
-    }
-
-    app = create_app(services)
-    client = TestClient(app)
-
-    response = client.get('/api/widget/123456')
+    response = _client().get('/api/widget/123456?date=07.12.2026', headers=_auth(123456))
     assert response.status_code == 200
 
     data = response.json()
-    assert 'class' in data
     assert data['class'] == '5А'
-    assert 'lessons' in data
+    assert data['date'] == '2026-12-07'
+    assert data['exchanges_count'] == 0
+
     assert isinstance(data['lessons'], list)
-    assert 'date' in data
-    assert 'exchanges_count' in data
+    assert len(data['lessons']) == 2
+    first = data['lessons'][0]
+    assert first['num'] == 1
+    assert first['time'] == '08:00-08:45'
+    assert first['subject'] == 'Математика'
+    assert first['room'] == '101'
+
+    assert data['next_lesson'] is not None
+    assert data['next_lesson']['num'] == 1
+    assert data['next_lesson']['time'] == '08:00-08:45'
+    assert data['next_lesson']['subject'] == 'Математика'
+    assert data['next_lesson']['room'] == '101'
+    assert data['next_lesson']['in_minutes'] == 30
+
+
+def test_widget_next_lesson_skips_cancelled_and_past(monkeypatch):
+    """Следующим считается ближайший будущий непотменённый урок."""
+    import web.api as api_module
+
+    fixed_now = datetime(2026, 12, 7, 8, 30, tzinfo=get_timezone())
+    monkeypatch.setattr(api_module, '_now', lambda: fixed_now)
+
+    response = _client().get('/api/widget/123456?date=07.12.2026', headers=_auth(123456))
+    assert response.status_code == 200
+    nxt = response.json()['next_lesson']
+    assert nxt is not None
+    assert nxt['num'] == 2
+    assert nxt['subject'] == 'Физика'
+    assert nxt['room'] == '202'
+
+
+def test_widget_rejects_missing_init_data():
+    """Без X-Telegram-Init-Data — 403."""
+    response = _client().get('/api/widget/123456')
+    assert response.status_code == 403
+
+
+def test_widget_rejects_invalid_init_data():
+    """Невалидная подпись initData — 403."""
+    response = _client().get('/api/widget/123456',
+                             headers={'X-Telegram-Init-Data': 'auth_date=1&hash=deadbeef'})
+    assert response.status_code == 403
+
+
+def test_widget_rejects_mismatched_user():
+    """Подпись валидна, но user_id другой — 403 (закрытие IDOR)."""
+    response = _client().get('/api/widget/43', headers=_auth(42))
+    assert response.status_code == 403
 
 
 def test_widget_user_not_found():
     """Widget возвращает 404 для неизвестного пользователя."""
-    from web.api import create_app
-
-    class FakeUserService:
-        def get_user_school(self, uid): return None
-        def get_user_class(self, uid, sid): return None
-
-    services = {
-        'bot_data': {
-            'user_service': FakeUserService()
-        }
-    }
-
-    app = create_app(services)
-    client = TestClient(app)
-
-    response = client.get('/api/widget/999999')
+    user_service = FakeUserService(school=None, class_name=None)
+    response = _client(user_service=user_service).get('/api/widget/999999', headers=_auth(999999))
     assert response.status_code == 404
