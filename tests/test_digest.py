@@ -2,19 +2,13 @@
 """Утренний дайджест: привязка к первому уроку, дедуп, отправка."""
 import asyncio
 import logging
-import os
-import tempfile
 from datetime import datetime
 from types import SimpleNamespace
-from zoneinfo import ZoneInfo
 
 from core.background_updater import BackgroundUpdater
-from database.file_db import FileDB
 from services.digest_service import DigestService
 from services.user_preferences import UserPreferencesService
 from services.user_service import UserService
-
-TZ = ZoneInfo('Asia/Yekaterinburg')
 
 
 def _school_data(first_lesson_start='08:00'):
@@ -31,8 +25,8 @@ def _school_data(first_lesson_start='08:00'):
     }
 
 
-def test_digest_fires_at_offset_before_first_lesson():
-    now = datetime(2026, 9, 11, 7, 0, tzinfo=TZ)  # за 60 мин до 08:00
+def test_digest_fires_at_offset_before_first_lesson(tz):
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=tz)  # за 60 мин до 08:00
     out = DigestService().get_due_digests(
         {'school_133': _school_data()},
         {1: ('school_133', '5а')},
@@ -45,9 +39,9 @@ def test_digest_fires_at_offset_before_first_lesson():
     assert key == 'digest:1:school_133:5а:20260911'
 
 
-def test_digest_handles_second_shift_in_afternoon():
+def test_digest_handles_second_shift_in_afternoon(tz):
     """Вторая смена: первый урок в 14:00 — дайджест в 13:00, не утром."""
-    now = datetime(2026, 9, 11, 13, 0, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 13, 0, tzinfo=tz)
     out = DigestService().get_due_digests(
         {'school_133': _school_data('14:00')},
         {1: ('school_133', '5а')},
@@ -56,8 +50,8 @@ def test_digest_handles_second_shift_in_afternoon():
     assert len(out) == 1
 
 
-def test_digest_not_sent_outside_window():
-    now = datetime(2026, 9, 11, 6, 0, tzinfo=TZ)  # за 2 часа — рано
+def test_digest_not_sent_outside_window(tz):
+    now = datetime(2026, 9, 11, 6, 0, tzinfo=tz)  # за 2 часа — рано
     out = DigestService().get_due_digests(
         {'school_133': _school_data()},
         {1: ('school_133', '5а')},
@@ -66,8 +60,8 @@ def test_digest_not_sent_outside_window():
     assert out == []
 
 
-def test_digest_catchup_window():
-    now = datetime(2026, 9, 11, 7, 10, tzinfo=TZ)  # +10 мин после триггера
+def test_digest_catchup_window(tz):
+    now = datetime(2026, 9, 11, 7, 10, tzinfo=tz)  # +10 мин после триггера
     out = DigestService().get_due_digests(
         {'school_133': _school_data()},
         {1: ('school_133', '5а')},
@@ -76,8 +70,8 @@ def test_digest_catchup_window():
     assert len(out) == 1
 
 
-def test_digest_skips_weekend():
-    now = datetime(2026, 9, 12, 7, 0, tzinfo=TZ)  # суббота
+def test_digest_skips_weekend(tz):
+    now = datetime(2026, 9, 12, 7, 0, tzinfo=tz)  # суббота
     out = DigestService().get_due_digests(
         {'school_133': _school_data()},
         {1: ('school_133', '5а')},
@@ -86,10 +80,10 @@ def test_digest_skips_weekend():
     assert out == []
 
 
-def test_digest_skips_class_without_lessons():
+def test_digest_skips_class_without_lessons(tz):
     school = _school_data()
     school['CLASS_SCHEDULE']['p1']['c1'] = {}
-    now = datetime(2026, 9, 11, 7, 0, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=tz)
     out = DigestService().get_due_digests(
         {'school_133': school},
         {1: ('school_133', '5а')},
@@ -98,13 +92,13 @@ def test_digest_skips_class_without_lessons():
     assert out == []
 
 
-def test_digest_includes_exchanges():
+def test_digest_includes_exchanges(tz):
     school = _school_data()
     school['CLASS_EXCHANGE'] = {'c1': {'11.09.2026': {'1': {'s': '2', 't': '1', 'r': '101'}}}}
     school['SUBJECTS']['2'] = 'Биология'
     school['TEACHERS']['1'] = 'Иванов Иван Иванович'
     school['ROOMS']['101'] = '101'
-    now = datetime(2026, 9, 11, 7, 0, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=tz)
     out = DigestService().get_due_digests(
         {'school_133': school},
         {1: ('school_133', '5а')},
@@ -114,13 +108,13 @@ def test_digest_includes_exchanges():
     assert 'Биология' in out[0][1]
 
 
-def test_digest_on_transfer_day_uses_transferred_weekday():
+def test_digest_on_transfer_day_uses_transferred_weekday(tz):
     """Перенос: пятница работает по субботнему расписанию (daynum=6)."""
     school = _school_data()
     school['SUBJECTS']['2'] = 'Биология'
     school['CLASS_SCHEDULE']['p1']['c1']['601'] = {'s': ['2'], 't': [], 'r': []}
     school['HOLIDAY_TRANSFER'] = {'11.09.2026': {'type': 'transfer', 'daynum': 6}}
-    now = datetime(2026, 9, 11, 7, 0, tzinfo=TZ)  # пятница, за 60 мин до 08:00
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=tz)  # пятница, за 60 мин до 08:00
     out = DigestService().get_due_digests(
         {'school_133': school},
         {1: ('school_133', '5а')},
@@ -131,10 +125,10 @@ def test_digest_on_transfer_day_uses_transferred_weekday():
     assert 'Математика' not in out[0][1]
 
 
-def test_digest_on_vacation_day_is_empty():
+def test_digest_on_vacation_day_is_empty(tz):
     school = _school_data()
     school['HOLIDAY_TRANSFER'] = {'11.09.2026': {'type': 'vacation'}}
-    now = datetime(2026, 9, 11, 7, 0, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=tz)
     out = DigestService().get_due_digests(
         {'school_133': school},
         {1: ('school_133', '5а')},
@@ -143,7 +137,7 @@ def test_digest_on_vacation_day_is_empty():
     assert out == []
 
 
-def test_digest_transfer_weeknum_used():
+def test_digest_transfer_weeknum_used(tz):
     """weeknum=2 у переноса: ключ расписания с префиксом недели."""
     school = _school_data()
     school['SUBJECTS']['2'] = 'Биология'
@@ -151,7 +145,7 @@ def test_digest_transfer_weeknum_used():
     school['HOLIDAY_TRANSFER'] = {
         '11.09.2026': {'type': 'transfer', 'daynum': 6, 'weeknum': 2}
     }
-    now = datetime(2026, 9, 11, 7, 0, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=tz)
     out = DigestService().get_due_digests(
         {'school_133': school},
         {1: ('school_133', '5а')},
@@ -161,19 +155,13 @@ def test_digest_transfer_weeknum_used():
     assert 'Биология' in out[0][1]
 
 
-def test_digest_toggle_roundtrip():
-    d = tempfile.mkdtemp()
-    prefs = UserPreferencesService(FileDB(os.path.join(d, 'database.json')))
+def test_digest_toggle_roundtrip(make_db):
+    prefs = UserPreferencesService(make_db())
     assert prefs.get_notification_settings(1)['daily_digest'] is False
     prefs.enable_daily_digest(1)
     assert prefs.get_notification_settings(1)['daily_digest'] is True
     prefs.toggle_daily_digest(1)
     assert prefs.get_notification_settings(1)['daily_digest'] is False
-
-
-def _make_db() -> FileDB:
-    d = tempfile.mkdtemp()
-    return FileDB(os.path.join(d, 'database.json'))
 
 
 def _make_updater(db, school_data):
@@ -194,8 +182,8 @@ def _make_updater(db, school_data):
     return updater
 
 
-def test_send_digests_respects_toggle_and_dedups(monkeypatch):
-    db = _make_db()
+def test_send_digests_respects_toggle_and_dedups(make_db, tz, monkeypatch):
+    db = make_db()
     us = UserService(db)
     us.set_user_class(1, '5а', 'school_133')
     UserPreferencesService(db).set_notification_settings(1, {'daily_digest': True})
@@ -211,7 +199,7 @@ def test_send_digests_respects_toggle_and_dedups(monkeypatch):
 
     updater.notification_service = SimpleNamespace(_send_message=_fake_send)
 
-    now = datetime(2026, 9, 11, 7, 0, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=tz)
     monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
     monkeypatch.setattr(updater, '_save_sent_digests', lambda: None, raising=False)
 
@@ -223,8 +211,8 @@ def test_send_digests_respects_toggle_and_dedups(monkeypatch):
     assert len(sent) == 1
 
 
-def test_send_digests_respects_quiet_hours(monkeypatch):
-    db = _make_db()
+def test_send_digests_respects_quiet_hours(make_db, tz, monkeypatch):
+    db = make_db()
     us = UserService(db)
     us.set_user_class(1, '5а', 'school_133')
     school = _school_data('07:00')
@@ -243,7 +231,7 @@ def test_send_digests_respects_quiet_hours(monkeypatch):
     updater.notification_service = SimpleNamespace(_send_message=_fake_send)
 
     # 06:00 — триггер дайджеста для урока 07:00, но тихий час до 08:00
-    now = datetime(2026, 9, 11, 6, 0, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 6, 0, tzinfo=tz)
     monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
     monkeypatch.setattr(updater, '_save_sent_digests', lambda: None, raising=False)
 
@@ -252,8 +240,8 @@ def test_send_digests_respects_quiet_hours(monkeypatch):
     assert updater.sent_digests != {}
 
 
-def test_send_digests_saved_once_per_pass(monkeypatch):
-    db = _make_db()
+def test_send_digests_saved_once_per_pass(make_db, tz, monkeypatch):
+    db = make_db()
     us = UserService(db)
     us.set_user_class(1, '5а', 'school_133')
     UserPreferencesService(db).set_notification_settings(1, {'daily_digest': True})
@@ -270,7 +258,7 @@ def test_send_digests_saved_once_per_pass(monkeypatch):
     save_calls = []
     monkeypatch.setattr(updater, '_save_sent_digests',
                         lambda: save_calls.append(1), raising=False)
-    now = datetime(2026, 9, 11, 7, 0, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=tz)
     monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
 
     asyncio.run(updater._send_digests())

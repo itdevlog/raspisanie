@@ -1,67 +1,54 @@
-import os
-import tempfile
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
-from zoneinfo import ZoneInfo
 
-from database.file_db import FileDB
 from services.notification_service import NotificationService
 from services.user_preferences import UserPreferencesService
 from services.user_service import UserService
 
-TZ = ZoneInfo('Asia/Yekaterinburg')
 
-
-def test_quiet_hours_detection():
+def test_quiet_hours_detection(tz):
     svc = NotificationService.__new__(NotificationService)
     settings = {'quiet_hours': {'enabled': True, 'start': 22, 'end': 7}}
-    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 23, 0, tzinfo=TZ)) is True
-    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 12, 0, tzinfo=TZ)) is False
-    assert svc._is_quiet_hours({'quiet_hours': {'enabled': False}}, datetime(2026, 9, 11, 23, 0, tzinfo=TZ)) is False
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 23, 0, tzinfo=tz)) is True
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 12, 0, tzinfo=tz)) is False
+    assert svc._is_quiet_hours({'quiet_hours': {'enabled': False}}, datetime(2026, 9, 11, 23, 0, tzinfo=tz)) is False
 
 
-def test_quiet_hours_malformed_settings_not_quiet():
+def test_quiet_hours_malformed_settings_not_quiet(tz):
     svc = NotificationService.__new__(NotificationService)
-    now = datetime(2026, 9, 11, 23, 0, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 23, 0, tzinfo=tz)
     assert svc._is_quiet_hours({}, now) is False
     assert svc._is_quiet_hours(None, now) is False  # type: ignore[arg-type]  # None обрабатывается функцией
     assert svc._is_quiet_hours({'quiet_hours': {'enabled': True}}, now) is False
     assert svc._is_quiet_hours({'quiet_hours': {'enabled': True, 'start': 'x', 'end': 7}}, now) is False
 
 
-def test_quiet_hours_wrap_around_boundaries():
+def test_quiet_hours_wrap_around_boundaries(tz):
     svc = NotificationService.__new__(NotificationService)
     settings = {'quiet_hours': {'enabled': True, 'start': 22, 'end': 7}}
-    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 22, 0, tzinfo=TZ)) is True
-    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 6, 59, tzinfo=TZ)) is True
-    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 7, 0, tzinfo=TZ)) is False
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 22, 0, tzinfo=tz)) is True
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 6, 59, tzinfo=tz)) is True
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 7, 0, tzinfo=tz)) is False
 
 
-def test_quiet_hours_same_day_range():
+def test_quiet_hours_same_day_range(tz):
     svc = NotificationService.__new__(NotificationService)
     settings = {'quiet_hours': {'enabled': True, 'start': 1, 'end': 5}}
-    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 3, 0, tzinfo=TZ)) is True
-    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 6, 0, tzinfo=TZ)) is False
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 3, 0, tzinfo=tz)) is True
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 6, 0, tzinfo=tz)) is False
 
 
-def test_quiet_hours_start_equals_end_is_not_quiet():
+def test_quiet_hours_start_equals_end_is_not_quiet(tz):
     svc = NotificationService.__new__(NotificationService)
     settings = {'quiet_hours': {'enabled': True, 'start': 22, 'end': 22}}
-    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 22, 0, tzinfo=TZ)) is False
-    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 3, 0, tzinfo=TZ)) is False
-    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 12, 0, tzinfo=TZ)) is False
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 22, 0, tzinfo=tz)) is False
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 3, 0, tzinfo=tz)) is False
+    assert svc._is_quiet_hours(settings, datetime(2026, 9, 11, 12, 0, tzinfo=tz)) is False
 
 
-def _make_db() -> FileDB:
-    d = tempfile.mkdtemp()
-    db = FileDB(os.path.join(d, 'database.json'))
-    UserService(db)
-    return db
-
-
-def test_default_settings_gain_quiet_hours():
-    db = _make_db()
+def test_default_settings_gain_quiet_hours(make_db):
+    db = make_db()
     prefs = UserPreferencesService(db)
     settings = prefs.get_notification_settings(999)
     assert settings['quiet_hours'] == {'enabled': False, 'start': 22, 'end': 7}
@@ -70,8 +57,8 @@ def test_default_settings_gain_quiet_hours():
     assert settings['lesson_reminders'] is False
 
 
-def test_enable_quiet_hours_roundtrip():
-    db = _make_db()
+def test_enable_quiet_hours_roundtrip(make_db):
+    db = make_db()
     prefs = UserPreferencesService(db)
     prefs.enable_quiet_hours(1, start=23, end=6)
     quiet = prefs.get_notification_settings(1)['quiet_hours']
@@ -122,10 +109,10 @@ async def test_send_message_no_wait_when_interval_zero():
     assert [m[1] for m in bot.sent] == ['a', 'b']
 
 
-async def test_toggle_quiet_hours_handler_roundtrip():
+async def test_toggle_quiet_hours_handler_roundtrip(make_db):
     from handlers.common.settings import toggle_quiet_hours
 
-    db = _make_db()
+    db = make_db()
     us = UserService(db)
 
     class _Query:
@@ -159,11 +146,11 @@ async def test_toggle_quiet_hours_handler_roundtrip():
     assert any('Тихие часы' in (a or '') for a in query.answers)
 
 
-def _make_exchange_svc(db, bot, monkeypatch=None, now=None):
+def _make_exchange_svc(db, bot, tz, monkeypatch=None, now=None):
     us = UserService(db)
     svc = NotificationService.__new__(NotificationService)
     svc.logger = __import__('logging').getLogger('test')
-    svc.moscow_tz = TZ
+    svc.moscow_tz = tz
     svc.sent_notifications = {}
     svc._user_class_index = {}
     svc._index_loaded_for_school = None
@@ -177,9 +164,9 @@ def _make_exchange_svc(db, bot, monkeypatch=None, now=None):
     return svc, context
 
 
-def test_exchange_notification_quiet_deferred_until_quiet_ends(monkeypatch):
+def test_exchange_notification_quiet_deferred_until_quiet_ends(make_db, tz, monkeypatch):
     """Тихие часы: пользователь НЕ помечается навсегда — после окна получает замену."""
-    db = _make_db()
+    db = make_db()
     us = UserService(db)
     us.set_user_class(1, '5а', 'school_133')
     us.set_user_notification_settings(1, True, 'school_133')
@@ -192,7 +179,7 @@ def test_exchange_notification_quiet_deferred_until_quiet_ends(monkeypatch):
 
     bot = _fake_bot()
     quiet_now = datetime(2026, 9, 11, 23, 0)  # naive; hour matters only
-    svc, context = _make_exchange_svc(db, bot, monkeypatch, quiet_now)
+    svc, context = _make_exchange_svc(db, bot, tz, monkeypatch, quiet_now)
 
     exchanges = [{'lesson_num': 1, 'new_subject': 'Физика', 'new_teacher': '',
                   'new_room': '', 'is_cancelled': False, 'timestamp': quiet_now}]
@@ -214,9 +201,9 @@ def test_exchange_notification_quiet_deferred_until_quiet_ends(monkeypatch):
     assert bot.sent[0][0] == 1
 
 
-def test_exchange_transient_failure_retries_without_duplicate(monkeypatch):
+def test_exchange_transient_failure_retries_without_duplicate(make_db, tz, monkeypatch):
     """Сбой отправки оставляет pending; повторная попытка шлёт ровно один раз."""
-    db = _make_db()
+    db = make_db()
     us = UserService(db)
     us.set_user_class(1, '5а', 'school_133')
     us.set_user_class(2, '5а', 'school_133')
@@ -225,7 +212,7 @@ def test_exchange_transient_failure_retries_without_duplicate(monkeypatch):
 
     now = datetime(2026, 9, 11, 12, 0)
     bot = _fake_bot()
-    svc, context = _make_exchange_svc(db, bot, monkeypatch, now)
+    svc, context = _make_exchange_svc(db, bot, tz, monkeypatch, now)
 
     exchanges = [{'lesson_num': 1, 'new_subject': 'Физика', 'new_teacher': '',
                   'new_room': '', 'is_cancelled': False, 'timestamp': now}]

@@ -8,3 +8,5 @@ cache/
 backups/
 bot.pid
 .env
+.coverage
+htmlcov/

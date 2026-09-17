@@ -1,21 +1,15 @@
-import os
-import tempfile
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from core.background_updater import BackgroundUpdater
-from database.file_db import FileDB
 from services.reminder_service import ReminderService
 from services.user_preferences import UserPreferencesService
 from services.user_service import UserService
 
-TZ = ZoneInfo('Asia/Yekaterinburg')
 
-
-def test_due_reminder_within_window():
-    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
+def test_due_reminder_within_window(tz):
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=tz)
     school_data = {
         'CLASSES': {'c1': '5а'},
         'LESSON_TIMES': {'1': ['08:00', '08:45']},
@@ -43,8 +37,8 @@ def _school_data():
     }
 
 
-def test_no_reminder_outside_window():
-    now = datetime(2026, 9, 11, 7, 30, tzinfo=TZ)
+def test_no_reminder_outside_window(tz):
+    now = datetime(2026, 9, 11, 7, 30, tzinfo=tz)
     svc = ReminderService()
     out = svc.get_due_reminders(
         {'school_133': _school_data()},
@@ -55,8 +49,8 @@ def test_no_reminder_outside_window():
     assert out == []
 
 
-def test_reminder_skips_weekend():
-    now = datetime(2026, 9, 12, 7, 55, tzinfo=TZ)  # суббота
+def test_reminder_skips_weekend(tz):
+    now = datetime(2026, 9, 12, 7, 55, tzinfo=tz)  # суббота
     svc = ReminderService()
     out = svc.get_due_reminders(
         {'school_133': _school_data()},
@@ -67,8 +61,8 @@ def test_reminder_skips_weekend():
     assert out == []
 
 
-def test_reminder_not_produced_for_cancelled_lesson():
-    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)  # пятница, урок в 08:00
+def test_reminder_not_produced_for_cancelled_lesson(tz):
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=tz)  # пятница, урок в 08:00
     school_data = _school_data()
     school_data['CLASS_EXCHANGE'] = {'c1': {'11.09.2026': {'1': {'s': 'F'}}}}
     svc = ReminderService()
@@ -81,8 +75,8 @@ def test_reminder_not_produced_for_cancelled_lesson():
     assert out == []
 
 
-def test_reminder_uses_exchange_replaced_subject():
-    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
+def test_reminder_uses_exchange_replaced_subject(tz):
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=tz)
     school_data = _school_data()
     school_data['SUBJECTS']['2'] = 'Биология'
     school_data['CLASS_EXCHANGE'] = {'c1': {'11.09.2026': {'1': {'s': '2'}}}}
@@ -97,8 +91,8 @@ def test_reminder_uses_exchange_replaced_subject():
     assert 'Математика' not in out[0][1]
 
 
-def test_reminder_on_transfer_day_uses_transferred_weekday():
-    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)  # пятница
+def test_reminder_on_transfer_day_uses_transferred_weekday(tz):
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=tz)  # пятница
     school_data = _school_data()
     school_data['SUBJECTS']['2'] = 'Биология'
     # пятница переносится на субботу (daynum=6): биология в 08:00
@@ -115,8 +109,8 @@ def test_reminder_on_transfer_day_uses_transferred_weekday():
     assert 'Математика' not in out[0][1]
 
 
-def test_reminder_on_transfer_to_day_without_lesson_is_skipped():
-    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)  # пятница, свой урок в 08:00
+def test_reminder_on_transfer_to_day_without_lesson_is_skipped(tz):
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=tz)  # пятница, свой урок в 08:00
     school_data = _school_data()
     # перенос на воскресенье (daynum=7) — уроков нет
     school_data['HOLIDAY_TRANSFER'] = {'11.09.2026': {'type': 'transfer', 'daynum': 7}}
@@ -130,8 +124,8 @@ def test_reminder_on_transfer_to_day_without_lesson_is_skipped():
     assert out == []
 
 
-def test_reminder_vacation_day_is_skipped():
-    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
+def test_reminder_vacation_day_is_skipped(tz):
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=tz)
     school_data = _school_data()
     school_data['HOLIDAY_TRANSFER'] = {'11.09.2026': {'type': 'vacation'}}
     svc = ReminderService()
@@ -189,15 +183,8 @@ def test_to_user_classes_without_current_school_keeps_existing_behavior():
     assert mapping == {7: ('school_181', '7б')}
 
 
-def _make_db() -> FileDB:
-    d = tempfile.mkdtemp()
-    db = FileDB(os.path.join(d, 'database.json'))
-    UserService(db)
-    return db
-
-
-def test_reminder_loop_dedups_and_respects_toggle(monkeypatch):
-    db = _make_db()
+def test_reminder_loop_dedups_and_respects_toggle(make_db, tz, monkeypatch):
+    db = make_db()
     us = UserService(db)
     us.set_user_class(1, '5а', 'school_133')
     UserPreferencesService(db).set_notification_settings(1, {'lesson_reminders': True})
@@ -226,7 +213,7 @@ def test_reminder_loop_dedups_and_respects_toggle(monkeypatch):
 
     updater.notification_service = SimpleNamespace(_send_message=_fake_send)  # type: ignore[assignment]
 
-    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=tz)
     monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
     import asyncio
     asyncio.run(updater._send_reminders())
@@ -239,8 +226,8 @@ def test_reminder_loop_dedups_and_respects_toggle(monkeypatch):
     assert len(sent) == 1
 
 
-def test_reminder_loop_two_enabled_users_same_class_both_notified(monkeypatch):
-    db = _make_db()
+def test_reminder_loop_two_enabled_users_same_class_both_notified(make_db, tz, monkeypatch):
+    db = make_db()
     us = UserService(db)
     us.set_user_class(1, '5а', 'school_133')
     UserPreferencesService(db).set_notification_settings(1, {'lesson_reminders': True})
@@ -269,7 +256,7 @@ def test_reminder_loop_two_enabled_users_same_class_both_notified(monkeypatch):
 
     updater.notification_service = SimpleNamespace(_send_message=_fake_send)  # type: ignore[assignment]
 
-    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=tz)
     monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
     import asyncio
     asyncio.run(updater._send_reminders())
@@ -283,8 +270,8 @@ def test_reminder_loop_two_enabled_users_same_class_both_notified(monkeypatch):
     assert len(sent) == 2
 
 
-def test_reminders_saved_once_per_pass(monkeypatch):
-    db = _make_db()
+def test_reminders_saved_once_per_pass(make_db, tz, monkeypatch):
+    db = make_db()
     us = UserService(db)
     us.set_user_class(1, '5а', 'school_133')
     UserPreferencesService(db).set_notification_settings(1, {'lesson_reminders': True})
@@ -311,7 +298,7 @@ def test_reminders_saved_once_per_pass(monkeypatch):
     save_calls = []
     monkeypatch.setattr(updater, '_save_sent_reminders',
                         lambda: save_calls.append(1), raising=False)
-    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=tz)
     monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
 
     import asyncio
@@ -321,8 +308,8 @@ def test_reminders_saved_once_per_pass(monkeypatch):
     assert len(save_calls) == 1
 
 
-def test_reminder_loop_skips_quiet_hours_but_dedups(monkeypatch):
-    db = _make_db()
+def test_reminder_loop_skips_quiet_hours_but_dedups(make_db, tz, monkeypatch):
+    db = make_db()
     us = UserService(db)
     us.set_user_class(1, '5а', 'school_133')
     UserPreferencesService(db).set_notification_settings(1, {
@@ -356,7 +343,7 @@ def test_reminder_loop_skips_quiet_hours_but_dedups(monkeypatch):
     updater.notification_service = SimpleNamespace(_send_message=_fake_send)  # type: ignore[assignment]
 
     # 06:55, урок в 07:00 попадает в окно, но идёт тихий час (22–8)
-    now = datetime(2026, 9, 11, 6, 55, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 6, 55, tzinfo=tz)
     monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
     import asyncio
     asyncio.run(updater._send_reminders())
@@ -369,8 +356,8 @@ def test_reminder_loop_skips_quiet_hours_but_dedups(monkeypatch):
     assert sent == []
 
 
-def test_reminder_loop_does_not_mark_sent_on_send_failure(monkeypatch):
-    db = _make_db()
+def test_reminder_loop_does_not_mark_sent_on_send_failure(make_db, tz, monkeypatch):
+    db = make_db()
     us = UserService(db)
     us.set_user_class(1, '5а', 'school_133')
     UserPreferencesService(db).set_notification_settings(1, {'lesson_reminders': True})
@@ -394,7 +381,7 @@ def test_reminder_loop_does_not_mark_sent_on_send_failure(monkeypatch):
 
     updater.notification_service = SimpleNamespace(_send_message=_fake_send)  # type: ignore[assignment]
 
-    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=tz)
     monkeypatch.setattr(updater, '_now', lambda: now, raising=False)
     import asyncio
     asyncio.run(updater._send_reminders())
@@ -423,8 +410,8 @@ def test_sent_reminders_persist_across_restart(tmp_path, monkeypatch):
     assert 'k1' in restarted.sent_reminders
 
 
-def test_lesson_reminders_toggle_roundtrip():
-    db = _make_db()
+def test_lesson_reminders_toggle_roundtrip(make_db):
+    db = make_db()
     prefs = UserPreferencesService(db)
     assert prefs.get_notification_settings(1)['lesson_reminders'] is False
     prefs.enable_lesson_reminders(1)

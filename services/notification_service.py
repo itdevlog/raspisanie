@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from telegram.error import RetryAfter
 from telegram.ext import ContextTypes
@@ -183,7 +183,11 @@ class NotificationService:
                 self._last_sent_at[chat_id] = time.monotonic()
                 return True
             except RetryAfter as e:
-                wait = float(getattr(e, 'retry_after', 1) or 1)
+                retry_after = getattr(e, 'retry_after', None)
+                if isinstance(retry_after, timedelta):
+                    wait = retry_after.total_seconds()
+                else:
+                    wait = float(retry_after or 1)
                 self.logger.warning(f"Telegram RetryAfter {wait}s (попытка {attempt + 1})")
                 await asyncio.sleep(wait)
             except Exception as e:
