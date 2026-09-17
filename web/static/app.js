@@ -39,7 +39,7 @@ async function cachedApi(path) {
     const cached = await caches.match(path);
     if (!cached) return null;
     const cachedAt = Number(cached.headers.get('X-SW-Cached-At') || 0);
-    if (cachedAt && Date.now() - cachedAt > API_TTL_MS) return null;
+    if (!cachedAt || Date.now() - cachedAt > API_TTL_MS) return null;
     return cached;
   } catch (_) { return null; }
 }

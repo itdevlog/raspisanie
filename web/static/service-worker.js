@@ -20,7 +20,8 @@ const STATIC_ASSETS = [
 
 // Персональные данные — никогда не кэшируем
 function isPrivateApi(pathname) {
-  return pathname === '/api/me' || pathname.startsWith('/api/widget/');
+  return pathname === '/api/me' || pathname.startsWith('/api/me/')
+    || pathname === '/api/widget' || pathname.startsWith('/api/widget/');
 }
 
 // Добавляет/переопределяет заголовки, сохраняя тело и метаданные ответа
@@ -61,25 +62,34 @@ async function pruneApiCache(cache, force) {
 
 // Network-first с TTL-fallback: свежий кэш отдаём с пометкой, старый — нет
 async function handleApiRequest(request) {
-  const cache = await caches.open(API_CACHE_NAME);
+  let cache = null;
+  try {
+    cache = await caches.open(API_CACHE_NAME);
+  } catch (openErr) {
+    // Кэш недоступен — деградируем до работы только через сеть
+  }
   try {
     const response = await fetch(request);
-    if (response.ok) {
-      const stamped = await taggedResponse(response.clone(), {
-        [CACHED_AT_HEADER]: String(Date.now())
-      });
-      await cache.put(request, stamped);
-      await pruneApiCache(cache, false);
+    if (response.ok && cache) {
+      try {
+        const stamped = await taggedResponse(response.clone(), {
+          [CACHED_AT_HEADER]: String(Date.now())
+        });
+        await cache.put(request, stamped);
+        await pruneApiCache(cache, false);
+      } catch (cacheErr) {
+        // Сбой кэша (например QuotaExceededError) не должен ломать успешный ответ
+      }
     }
     return response;
   } catch (err) {
-    const cached = await cache.match(request);
+    const cached = cache ? await cache.match(request).catch(() => null) : null;
     if (cached) {
       const cachedAt = Number(cached.headers.get(CACHED_AT_HEADER) || 0);
       if (cachedAt && Date.now() - cachedAt <= API_TTL_MS) {
         return taggedResponse(cached, { [FROM_CACHE_HEADER]: '1' });
       }
-      await cache.delete(request);
+      await cache.delete(request).catch(() => {});
     }
     // Свежих данных нет — лучше ошибка, чем устаревшее расписание
     return new Response(
