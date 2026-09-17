@@ -12,6 +12,7 @@ from config.config import Config, get_timezone
 from config.schools import get_display_name
 from core.data_loader import DataLoader
 from services.digest_service import DigestService
+from services.metrics import MetricsService
 from services.notification_service import NotificationService
 from services.reminder_service import ReminderService
 
@@ -100,6 +101,45 @@ class BackgroundUpdater:
                 return service
         return self.notification_service
 
+    def _metrics(self) -> MetricsService | None:
+        """Метрики рассылок из bot_data (best-effort)."""
+        if self.application and hasattr(self.application, 'bot_data'):
+            return self.application.bot_data.get('metrics')
+        return None
+
+    async def _alert_repeated_error(self, error, source: str) -> None:
+        """Best-effort алерт админам при повторяющейся фоновой ошибке (T44a).
+
+        Антиспам живёт в AlertService: один алерт на ключ за окно, поэтому
+        затяжной сбой не спамит администраторов каждый цикл. В текст попадают
+        только тип ошибки и источник — без сообщения/секретов.
+        """
+        try:
+            alert_service = None
+            if self.application and hasattr(self.application, 'bot_data'):
+                alert_service = self.application.bot_data.get('alert_service')
+            if not alert_service:
+                return
+            alert_service.record(error, source)
+            key = alert_service.error_key(error, source)
+            if not alert_service.should_alert(key):
+                return
+            notification_service = self._notification_service()
+            if not notification_service:
+                return
+            error_type = type(error).__name__ if error is not None else 'UnknownError'
+            text = (
+                "🚨 Повторяющаяся ошибка фонового обновления\n\n"
+                f"Тип: {error_type}\n"
+                f"Источник: {source}\n"
+                f"Повторов за окно: ≥{alert_service.threshold}"
+            )
+            await notification_service.notify_admins(
+                self._make_context(), text, parse_mode=None
+            )
+        except Exception as e:
+            self.logger.error(f"Ошибка алертинга админам: {e}")
+
     async def _reminder_job(self, context):
         """Задача JobQueue: напоминания об уроках и утренний дайджест (раз в минуту)."""
         if not self.is_running:
@@ -110,6 +150,7 @@ class BackgroundUpdater:
         except Exception as e:
             # JobQueue сам логирует исключение, но сохраняем наш формат лога.
             self.logger.error(f"❌ Ошибка в цикле напоминаний: {e}", exc_info=True)
+            await self._alert_repeated_error(e, "reminder_loop")
 
     async def _send_reminders(self):
         """Считает и отправляет напоминания, дедуп за 24 часа."""
@@ -151,6 +192,7 @@ class BackgroundUpdater:
 
             self._cleanup_sent_reminders()
             notification_service = self._notification_service()
+            metrics = self._metrics()
             bot = bot_data.get('bot') or self.application.bot
             reminders_changed = False
             for user_id, text, key in due:
@@ -170,11 +212,17 @@ class BackgroundUpdater:
                     if delivered:
                         self.sent_reminders[key] = time.time()
                         reminders_changed = True
+                        if metrics:
+                            metrics.incr('reminders_sent')
                     else:
                         # Реальная ошибка отправки — не помечаем, чтобы повторить позже
                         self.logger.warning(f"Напоминание {user_id} не доставлено, будет повтор")
+                        if metrics:
+                            metrics.incr('send_errors')
                 except Exception as e:
                     self.logger.error(f"Ошибка отправки напоминания {user_id}: {e}")
+                    if metrics:
+                        metrics.incr('send_errors')
             if reminders_changed:
                 # Одна запись на проход вместо записи на каждого получателя
                 await asyncio.to_thread(self._save_sent_reminders)
@@ -268,6 +316,7 @@ class BackgroundUpdater:
 
             self._cleanup_sent_digests()
             notification_service = self._notification_service()
+            metrics = self._metrics()
             bot = bot_data.get('bot') or self.application.bot
             digests_changed = False
             for user_id, text, key in due:
@@ -287,10 +336,16 @@ class BackgroundUpdater:
                     if delivered:
                         self.sent_digests[key] = time.time()
                         digests_changed = True
+                        if metrics:
+                            metrics.incr('digests_sent')
                     else:
                         self.logger.warning(f"Дайджест {user_id} не доставлен, будет повтор")
+                        if metrics:
+                            metrics.incr('send_errors')
                 except Exception as e:
                     self.logger.error(f"Ошибка отправки дайджеста {user_id}: {e}")
+                    if metrics:
+                        metrics.incr('send_errors')
             if digests_changed:
                 # Одна запись на проход вместо записи на каждого получателя
                 await asyncio.to_thread(self._save_sent_digests)
@@ -358,11 +413,19 @@ class BackgroundUpdater:
             await self._perform_update()
             self.logger.info("✅ Плановое обновление завершено")
 
-        except TimeoutError:
+        except TimeoutError as e:
             self.logger.error("❌ Таймаут при выполнении обновления")
+            await self._alert_repeated_error(e, "background_update")
         except Exception as e:
             # JobQueue сам логирует исключение, но сохраняем наш формат лога.
             self.logger.error(f"❌ Ошибка в цикле обновления: {e}", exc_info=True)
+            await self._alert_repeated_error(e, "background_update")
+
+        # Агрегат метрик раз в цикл (только числа, без персональных данных)
+        metrics = self._metrics()
+        if metrics:
+            metrics.incr('update_cycles')
+            metrics.log_snapshot()
 
     @staticmethod
     def _merge_schools_data(old: dict, new: dict) -> dict:
@@ -443,6 +506,9 @@ class BackgroundUpdater:
             else:
                 error_msg = "❌ Фоновое обновление не удалось - не получены данные"
                 self.logger.error(error_msg)
+                await self._alert_repeated_error(
+                    RuntimeError("schools_data пуст"), "background_update_no_data"
+                )
 
                 # Уведомляем админов об ошибке
                 context = self._make_context()
@@ -456,6 +522,7 @@ class BackgroundUpdater:
         except Exception as e:
             error_msg = f"❌ Ошибка фонового обновления: {e}"
             self.logger.error(error_msg, exc_info=True)
+            await self._alert_repeated_error(e, "background_update")
 
             # Проверяем настройки уведомлений администратора перед отправкой уведомления об ошибке
             notification_settings = self._get_admin_notification_settings()
@@ -532,6 +599,7 @@ class BackgroundUpdater:
 
             exchange_detector = self.application.bot_data['exchange_detector']
             notification_service = self._notification_service()
+            metrics = self._metrics()
 
             if not notification_service:
                 self.logger.error("Notification service недоступен")
@@ -582,8 +650,13 @@ class BackgroundUpdater:
                                     context, school_id, class_name, class_exchanges
                                 )
                                 self.logger.info(f"Notification result for class {class_name}: {result}")
-                                if not result:
+                                if result:
+                                    if metrics:
+                                        metrics.incr('exchanges_sent', len(class_exchanges))
+                                else:
                                     all_handled = False
+                                    if metrics:
+                                        metrics.incr('send_errors')
 
                                 # Best-effort: уведомляем подписчиков преподавателей/кабинетов
                                 await self._notify_entity_subscribers(

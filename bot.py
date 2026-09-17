@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import logging.handlers
+import os
 import socket
 import time
 
@@ -37,7 +38,9 @@ from handlers.inline_schedule import inline_query_handler
 
 # Импорт обработчиков
 from handlers.start import cancel_handler, help_handler, start_handler
+from services.alert_service import AlertService
 from services.cache_service import CacheService
+from services.metrics import MetricsService
 from services.notification_service import NotificationService
 from services.state_service import UserStateService
 from services.user_service import UserService
@@ -48,6 +51,7 @@ class ScheduleBot:
     def __init__(self):
         self.config = Config()
         self.setup_logging()
+        self._init_sentry()
 
         if not self.config.TELEGRAM_TOKEN:
             raise RuntimeError(
@@ -146,6 +150,28 @@ class ScheduleBot:
 
         self.logger = logging.getLogger(__name__)
 
+    def _init_sentry(self) -> None:
+        """Опциональная инициализация Sentry (T44c).
+
+        Sentry не является обязательной зависимостью: без `SENTRY_DSN` или без
+        установленного `sentry_sdk` инициализация молча пропускается. Ошибки
+        инициализации не должны мешать запуску бота.
+        """
+        dsn = os.getenv('SENTRY_DSN', '').strip()
+        if not dsn:
+            return
+        try:
+            import sentry_sdk
+
+            sentry_sdk.init(dsn=dsn, traces_sample_rate=0.0)
+            self.logger.info("✅ Sentry инициализирован")
+        except ImportError:
+            self.logger.info(
+                "SENTRY_DSN задан, но пакет sentry_sdk не установлен — Sentry отключён"
+            )
+        except Exception as e:
+            self.logger.error(f"Не удалось инициализировать Sentry: {e}")
+
     def setup_services(self):
         """Инициализирует сервисы и базу данных"""
         # Инициализируем базу данных
@@ -168,6 +194,10 @@ class ScheduleBot:
         # Инициализируем сервис уведомлений
         notification_service = NotificationService()
 
+        # Алертинг админам о повторяющихся ошибках и метрики рассылок (T44)
+        alert_service = AlertService()
+        metrics_service = MetricsService()
+
         # Инициализируем сервис подписок на преподавателей/кабинеты
         from services.subscription_service import SubscriptionService
         subscription_service = SubscriptionService(db)
@@ -182,6 +212,8 @@ class ScheduleBot:
         self.application.bot_data['config'] = self.config
         self.application.bot_data['cache_service'] = cache_service
         self.application.bot_data['notification_service'] = notification_service
+        self.application.bot_data['alert_service'] = alert_service
+        self.application.bot_data['metrics'] = metrics_service
         self.application.bot_data['subscription_service'] = subscription_service
         self.application.bot_data['schools_config'] = SCHOOLS_CONFIG
         self.application.bot_data['state_service'] = state_service  # ДОБАВЛЕНО
@@ -260,6 +292,38 @@ class ScheduleBot:
         # Глобальная обработка ошибок
         self.application.add_error_handler(self.error_handler)
 
+    async def _alert_admins_on_error(self, context, error) -> None:
+        """Best-effort алерт админам при повторяющейся ошибке (T44a).
+
+        Никакие ошибки алертинга не должны утекать в глобальный обработчик.
+        В текст попадают только тип ошибки и источник — без сообщения/секретов.
+        """
+        try:
+            bot_data = getattr(context, 'bot_data', None)
+            if not bot_data:
+                return
+            alert_service = bot_data.get('alert_service')
+            if not alert_service:
+                return
+            source = 'update_handler'
+            alert_service.record(error, source)
+            key = alert_service.error_key(error, source)
+            if not alert_service.should_alert(key):
+                return
+            notification_service = bot_data.get('notification_service')
+            if not notification_service:
+                return
+            error_type = type(error).__name__ if error is not None else 'UnknownError'
+            text = (
+                "🚨 Повторяющаяся ошибка\n\n"
+                f"Тип: {error_type}\n"
+                f"Источник: {source}\n"
+                f"Повторов за окно: ≥{alert_service.threshold}"
+            )
+            await notification_service.notify_admins(context, text, parse_mode=None)
+        except Exception as e:
+            self.logger.error(f"Ошибка алертинга админам: {e}")
+
     async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
         """Базовая обработка ошибок"""
         try:
@@ -268,6 +332,9 @@ class ScheduleBot:
                 f"Exception while handling an update: {context.error}",
                 exc_info=context.error
             )
+
+            # Алертим админов при повторяющихся ошибках (best-effort)
+            await self._alert_admins_on_error(context, context.error)
 
             # Уведомление пользователю
             effective_message = getattr(update, 'effective_message', None)
