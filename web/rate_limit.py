@@ -14,6 +14,8 @@ class RateLimiter:
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self._hits: dict[str, deque[float]] = {}
+        self._sweep_every = 1000
+        self._calls = 0
 
     def allow(self, key: str, now: float | None = None) -> bool:
         if self.max_requests <= 0:
@@ -27,6 +29,10 @@ class RateLimiter:
         if len(hits) >= self.max_requests:
             return False
         hits.append(now)
+        self._calls += 1
+        if self._calls >= self._sweep_every:
+            self._calls = 0
+            self.cleanup(now)
         return True
 
     def cleanup(self, now: float | None = None) -> None:

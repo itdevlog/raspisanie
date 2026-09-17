@@ -39,9 +39,20 @@ def test_cleanup_removes_empty_keys():
     limiter = RateLimiter(max_requests=1, window_seconds=10.0)
     assert limiter.allow('a', now=0.0) is True
     assert limiter.allow('b', now=0.0) is True
+    assert set(limiter._hits) == {'a', 'b'}
+    limiter.cleanup(now=0.5)
+    assert set(limiter._hits) == {'a', 'b'}
     limiter.cleanup(now=100.0)
-    assert limiter.allow('a', now=100.0) is True
-    assert limiter.allow('b', now=100.0) is True
+    assert limiter._hits == {}
+
+
+def test_allow_evicts_stale_keys_without_external_cleanup():
+    limiter = RateLimiter(max_requests=1, window_seconds=10.0)
+    limiter._sweep_every = 3
+    assert limiter.allow('old1', now=0.0) is True
+    assert limiter.allow('old2', now=0.0) is True
+    assert limiter.allow('new', now=100.0) is True
+    assert set(limiter._hits) == {'new'}
 
 
 def _school():
