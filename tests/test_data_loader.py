@@ -175,6 +175,6 @@ def test_load_all_schools_sequential(monkeypatch):
     loader.session = _FakeClient()  # type: ignore[assignment]
     loader._ensure_cache()
 
-    loader.load_school_data = lambda cfg, max_retries=None, client=None: {'name': cfg['name']}  # type: ignore[assignment]
+    loader.load_school_data = lambda cfg, max_retries=None, client=None: {'name': cfg['name']}  # type: ignore[assignment,return-value]
     result = loader.load_all_schools_data()
     assert set(result) == {'s1', 's2'}

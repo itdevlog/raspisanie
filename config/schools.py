@@ -1,4 +1,4 @@
-from typing import cast
+from typing import Any, Mapping, cast
 
 # Конфигурация поддерживаемых школ
 SCHOOLS_CONFIG: dict[str, dict] = {
@@ -24,7 +24,7 @@ SCHOOLS_CONFIG: dict[str, dict] = {
 DEFAULT_SCHOOL_ID = "school_133"
 
 
-def get_display_name(school_id: str, school_data: dict) -> str:
+def get_display_name(school_id: str, school_data: Mapping[str, Any]) -> str:
     """Возвращает отображаемое имя школы.
 
     Использует переданный school_data['SCHOOL_NAME'], но устойчив к пустой строке

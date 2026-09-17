@@ -10,6 +10,7 @@ import httpx
 
 from config.config import Config
 from config.schools import SCHOOLS_CONFIG  # Добавить импорт
+from services.school_types import SchoolData
 
 
 class DataLoader:
@@ -121,7 +122,7 @@ class DataLoader:
         return None
 
     def download_schedule_data(self, base_url: str, filename: str, max_retries: int | None = None,
-                               client: httpx.Client | None = None) -> dict | None:
+                               client: httpx.Client | None = None) -> SchoolData | None:
         """Скачивает и парсит данные расписания с повторными попытками.
 
         Если сервер ответил 304 Not Modified, возвращается копия ранее
@@ -177,7 +178,7 @@ class DataLoader:
         return None
 
     def load_school_data(self, school_config: dict, max_retries: int | None = None,
-                         client: httpx.Client | None = None) -> dict | None:
+                         client: httpx.Client | None = None) -> SchoolData | None:
         """Полная загрузка данных для школы с повторными попытками"""
         if max_retries is None:
             max_retries = self.config.MAX_RETRIES
@@ -210,7 +211,7 @@ class DataLoader:
 
         return None
 
-    def load_all_schools_data(self, max_workers: int | None = None) -> dict[str, dict]:
+    def load_all_schools_data(self, max_workers: int | None = None) -> dict[str, SchoolData]:
         """Загружает данные всех активных школ.
 
         Школы загружаются параллельно через ThreadPoolExecutor (по умолчанию

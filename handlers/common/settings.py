@@ -6,7 +6,7 @@ from telegram.ext import ContextTypes
 from config.config import Config
 from handlers.common.typing import require_query, require_user
 from services.text_utils import escape_markdown
-from services.user_preferences import UserPreferencesService
+from services.user_repository import UserRepository
 from web.auth import generate_widget_token
 
 
@@ -31,7 +31,7 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_admin = Config.is_admin(config, user_id)
 
     # Напоминания об уроках и тихие часы — доступны всем пользователям
-    preferences_service = UserPreferencesService(user_service.db)
+    preferences_service = UserRepository(user_service).preferences
     user_notification_settings = preferences_service.get_notification_settings(user_id)
     lesson_reminders_enabled = user_notification_settings.get('lesson_reminders', False)
     daily_digest_enabled = user_notification_settings.get('daily_digest', False)
@@ -209,7 +209,7 @@ async def toggle_lesson_reminders(update: Update, context: ContextTypes.DEFAULT_
         await query.answer("❌ Сервис не доступен")
         return
 
-    preferences_service = UserPreferencesService(user_service.db)
+    preferences_service = UserRepository(user_service).preferences
     if state == 'on':
         await asyncio.to_thread(preferences_service.enable_lesson_reminders, user_id)
         status_text = "включены"
@@ -231,7 +231,7 @@ async def toggle_quiet_hours(update: Update, context: ContextTypes.DEFAULT_TYPE,
         await query.answer("❌ Сервис не доступен")
         return
 
-    preferences_service = UserPreferencesService(user_service.db)
+    preferences_service = UserRepository(user_service).preferences
     if state == 'on':
         await asyncio.to_thread(preferences_service.enable_quiet_hours, user_id)
         status_text = "включены"
@@ -277,7 +277,7 @@ async def shift_quiet_hours(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await query.answer("❌ Сервис не доступен")
         return
 
-    preferences_service = UserPreferencesService(user_service.db)
+    preferences_service = UserRepository(user_service).preferences
     quiet = preferences_service.get_notification_settings(user_id).get('quiet_hours') or {}
     start = int(quiet.get('start', 22) or 0)
     end = int(quiet.get('end', 7) or 0)
@@ -308,7 +308,7 @@ async def toggle_daily_digest(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.answer("❌ Сервис не доступен")
         return
 
-    preferences_service = UserPreferencesService(user_service.db)
+    preferences_service = UserRepository(user_service).preferences
     if state == 'on':
         await asyncio.to_thread(preferences_service.enable_daily_digest, user_id)
         status_text = "включён"
@@ -338,9 +338,8 @@ async def toggle_update_notifications(update: Update, context: ContextTypes.DEFA
         await query.answer("❌ Только администраторы могут изменять эти настройки")
         return
 
-    # Используем UserPreferencesService для изменения настроек
-    from services.user_preferences import UserPreferencesService
-    preferences_service = UserPreferencesService(user_service.db)
+    # Используем UserRepository для изменения настроек
+    preferences_service = UserRepository(user_service).preferences
 
     # Устанавливаем новые настройки
     if state == 'on':

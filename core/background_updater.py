@@ -121,11 +121,12 @@ class BackgroundUpdater:
                 return
 
             from services.user_preferences import UserPreferencesService
+            from services.user_repository import UserRepository
 
             users = user_service.get_users_with_classes()
             user_classes = self.reminder_service.to_user_classes(users)
 
-            preferences_service = UserPreferencesService(user_service.db)
+            preferences_service = UserRepository(user_service).preferences
             # Пакетно одним проходом: снимает O(N×M) find_one-сканов коллекции.
             settings_map = await asyncio.to_thread(preferences_service.get_settings_map)
             enabled = {
@@ -239,11 +240,12 @@ class BackgroundUpdater:
                 return
 
             from services.user_preferences import UserPreferencesService
+            from services.user_repository import UserRepository
 
             users = user_service.get_users_with_classes()
             user_classes = self.reminder_service.to_user_classes(users)
 
-            preferences_service = UserPreferencesService(user_service.db)
+            preferences_service = UserRepository(user_service).preferences
             # Пакетно одним проходом: снимает O(N×M) find_one-сканов коллекции.
             settings_map = await asyncio.to_thread(preferences_service.get_settings_map)
             enabled = {
@@ -494,8 +496,8 @@ class BackgroundUpdater:
             # хотя бы один администратор включил их в меню настроек.
             admin_ids = config.ADMIN_IDS
             if admin_ids:
-                from services.user_preferences import UserPreferencesService
-                preferences_service = UserPreferencesService(user_service.db)
+                from services.user_repository import UserRepository
+                preferences_service = UserRepository(user_service).preferences
                 any_enabled = any(
                     preferences_service.get_notification_settings(admin_id).get('update_notifications', False)
                     for admin_id in admin_ids

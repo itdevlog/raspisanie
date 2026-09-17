@@ -13,6 +13,14 @@ from telegram.ext import ContextTypes
 from config.config import Config, get_timezone
 from config.schools import get_display_name
 from services.text_utils import escape_markdown
+from services.user_repository import UserRepository
+
+
+def _as_user_repository(user_service) -> UserRepository:
+    """Оборачивает `UserService` в `UserRepository` (идемпотентно)."""
+    if isinstance(user_service, UserRepository):
+        return user_service
+    return UserRepository(user_service)
 
 
 class NotificationService:
@@ -40,12 +48,14 @@ class NotificationService:
 
         Снимает O(N²) при массовой рассылке замен по многим классам: раньше
         _get_users_by_class сканировал всех пользователей на каждый класс.
+        Пользователи читаются через `UserRepository` — прямой доступ к
+        `user_service.db` здесь больше не нужен.
         """
         try:
-            users_collection = user_service.db.get_collection('users')
+            repo = _as_user_repository(user_service)
             idx: dict[tuple, list[int]] = {}
             self._settings_for_school = {}
-            for user_data in users_collection.find():
+            for user_data in repo.iter_users_with_classes():
                 user_id = user_data.get('user_id')
                 if not user_id:
                     continue
@@ -61,6 +71,18 @@ class NotificationService:
         except Exception as e:
             self.logger.error(f"Error building user class index: {e}", exc_info=True)
             return {}
+
+    @staticmethod
+    def _preferences_from_user_service(user_service):
+        """Настройки из `UserRepository`/`UserService`, иначе None (best-effort)."""
+        if not user_service:
+            return None
+        if isinstance(user_service, UserRepository):
+            return user_service.preferences
+        try:
+            return UserRepository(user_service).preferences
+        except AttributeError:
+            return None
 
     def get_users_by_class_indexed(self, user_service, school_id: str, class_name: str) -> list[int]:
         """Возвращает пользователей класса, строя индекс один раз для school_id."""
@@ -225,13 +247,10 @@ class NotificationService:
             if not subscribers:
                 return 0, 0
 
-            # Тихие часы: читаем настройки подписчиков через UserPreferencesService.
+            # Тихие часы: читаем настройки подписчиков через UserRepository.
             # Если user_service недоступен — фильтр пропускаем (best-effort).
-            from services.user_preferences import UserPreferencesService
-
             user_service = context.bot_data.get('user_service')
-            db = getattr(user_service, 'db', None)
-            preferences_service = UserPreferencesService(db) if db is not None else None
+            preferences_service = self._preferences_from_user_service(user_service)
             now = self._now()
 
             sent = 0
@@ -356,10 +375,8 @@ class NotificationService:
                 await asyncio.to_thread(self.save_notifications_cache)
                 return True
 
-            # Настройки тихих часов читаем из UserPreferencesService
-            from services.user_preferences import UserPreferencesService
-
-            preferences_service = UserPreferencesService(getattr(user_service, 'db', None))
+            # Настройки тихих часов читаем через UserRepository
+            preferences_service = self._preferences_from_user_service(user_service)
             now = self._now()
 
             # Получатели уже отфильтрованы по настройкам уведомлений в get_users_for_exchange
