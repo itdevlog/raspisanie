@@ -29,11 +29,9 @@ class BackgroundUpdater:
         self.update_interval = self.config.UPDATE_INTERVAL
         self.logger = logging.getLogger(__name__)
         self.moscow_tz = get_timezone()
-        self._update_task = None
         self._update_lock = asyncio.Lock()
         # Напоминания об уроках: отдельный цикл + дедуп (ключ -> timestamp).
         self.reminder_service = ReminderService()
-        self._reminder_task = None
         self.sent_reminders: dict[str, float] = {}
         self.sent_reminders_file = self._get_sent_reminders_file()
         self._load_sent_reminders()
@@ -46,24 +44,45 @@ class BackgroundUpdater:
         self.sent_entity_notifications: dict[str, float] = {}
 
     def start_periodic_updates(self):
-        """Запускает периодическое обновление внутри event loop бота"""
+        """Регистрирует периодические задачи в JobQueue приложения.
+
+        JobQueue живёт в event loop бота и сам останавливает задачи при
+        `application.stop()`, поэтому ручной `asyncio.create_task` больше не нужен.
+        Первый запуск — через `first` (как раньше `asyncio.sleep` перед работой).
+        """
         if self.is_running:
             self.logger.warning("Фоновое обновление уже запущено")
             return
 
-        self.is_running = True
-        self._update_task = asyncio.create_task(self._update_loop())
-        self._reminder_task = asyncio.create_task(self._reminder_loop())
+        job_queue = getattr(self.application, 'job_queue', None) if self.application else None
+        if job_queue is None:
+            self.logger.error(
+                "JobQueue недоступен (нужен python-telegram-bot[job-queue]) — "
+                "периодические задачи не запущены"
+            )
+            return
 
+        self.is_running = True
+        job_queue.run_repeating(
+            self._update_job,
+            interval=self.update_interval,
+            first=self.update_interval,
+            name='background_update',
+        )
+        job_queue.run_repeating(
+            self._reminder_job,
+            interval=60,
+            first=60,
+            name='lesson_reminders',
+        )
+
+        self.logger.info("🔄 Цикл фонового обновления начал работу")
+        self.logger.info("⏰ Цикл напоминаний об уроках начал работу")
         self.logger.info(f"✅ Фоновое обновление запущено (интервал: {self.update_interval} сек)")
 
     def stop(self):
-        """Останавливает фоновое обновление"""
+        """Совместимая остановка: задачи снимает JobQueue при `application.stop()`."""
         self.is_running = False
-        if self._update_task and not self._update_task.done():
-            self._update_task.cancel()
-        if self._reminder_task and not self._reminder_task.done():
-            self._reminder_task.cancel()
 
     def _now(self):
         """Текущее время в таймзоне приложения (точка подмены в тестах)."""
@@ -81,22 +100,16 @@ class BackgroundUpdater:
                 return service
         return self.notification_service
 
-    async def _reminder_loop(self):
-        """Минутный цикл: напоминания об уроках и утренний дайджест."""
-        self.logger.info("⏰ Цикл напоминаний об уроках начал работу")
-        while self.is_running:
-            try:
-                await asyncio.sleep(60)
-                if not self.is_running:
-                    break
-                await self._send_reminders()
-                await self._send_digests()
-            except asyncio.CancelledError:
-                self.logger.info("🔴 Цикл напоминаний отменён")
-                break
-            except Exception as e:
-                self.logger.error(f"❌ Ошибка в цикле напоминаний: {e}", exc_info=True)
-        self.logger.info("🔴 Цикл напоминаний остановлен")
+    async def _reminder_job(self, context):
+        """Задача JobQueue: напоминания об уроках и утренний дайджест (раз в минуту)."""
+        if not self.is_running:
+            return
+        try:
+            await self._send_reminders()
+            await self._send_digests()
+        except Exception as e:
+            # JobQueue сам логирует исключение, но сохраняем наш формат лога.
+            self.logger.error(f"❌ Ошибка в цикле напоминаний: {e}", exc_info=True)
 
     async def _send_reminders(self):
         """Считает и отправляет напоминания, дедуп за 24 часа."""
@@ -333,34 +346,21 @@ class BackgroundUpdater:
         for key in [k for k, ts in self.sent_entity_notifications.items() if ts < cutoff]:
             del self.sent_entity_notifications[key]
 
-    async def _update_loop(self):
-        """Цикл обновления внутри event loop с оффлоадингом синхронного IO в to_thread"""
-        self.logger.info("🔄 Цикл фонового обновления начал работу")
+    async def _update_job(self, context):
+        """Задача JobQueue: плановое обновление данных (оффлоадинг IO в to_thread)."""
+        if not self.is_running:
+            return
+        try:
+            self.logger.info("🔄 Запуск планового обновления данных...")
 
-        while self.is_running:
-            try:
-                # Ждем до следующего обновления (asyncio.sleep не блокирует event loop)
-                await asyncio.sleep(self.update_interval)
+            await self._perform_update()
+            self.logger.info("✅ Плановое обновление завершено")
 
-                if not self.is_running:
-                    break
-
-                self.logger.info("🔄 Запуск планового обновления данных...")
-
-                await self._perform_update()
-                self.logger.info("✅ Плановое обновление завершено")
-
-            except asyncio.CancelledError:
-                self.logger.info("🔴 Цикл фонового обновления отменен")
-                break
-            except TimeoutError:
-                self.logger.error("❌ Таймаут при выполнении обновления")
-            except Exception as e:
-                self.logger.error(f"❌ Ошибка в цикле обновления: {e}", exc_info=True)
-                # Ждем перед повторной попыткой
-                await asyncio.sleep(300)  # 5 минут при ошибке
-
-        self.logger.info("🔴 Цикл фонового обновления остановлен")
+        except TimeoutError:
+            self.logger.error("❌ Таймаут при выполнении обновления")
+        except Exception as e:
+            # JobQueue сам логирует исключение, но сохраняем наш формат лога.
+            self.logger.error(f"❌ Ошибка в цикле обновления: {e}", exc_info=True)
 
     @staticmethod
     def _merge_schools_data(old: dict, new: dict) -> dict:
