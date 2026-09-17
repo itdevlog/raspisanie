@@ -59,18 +59,31 @@ class DigestService:
                 svc = ScheduleService(school_data, school_id=school_id)
                 period_cache[school_id] = svc
 
-            if now.isoweekday() > 5:
+            period_id = svc._get_period_for_date(now)
+            if not period_id:
+                continue
+
+            info = svc._get_holiday_info(now) or {}
+            week_num = int(info.get('weeknum') or 0)
+
+            effective = svc._get_effective_day(now, period_id)
+            if effective is None:
+                continue
+            eff_period_id, day_num = effective
+            if not eff_period_id:
+                continue
+
+            if now.isoweekday() > 5 and not svc._get_holiday_info(now):
                 continue
 
             class_key = (school_id, class_name)
             schedule = lessons_by_class.get(class_key)
             if schedule is None:
                 class_id = find_class_id(school_data, class_name)
-                period_id = svc._get_period_for_date(now) if class_id else None
-                if not class_id or not period_id:
+                if not class_id:
                     lessons_by_class[class_key] = []
                     continue
-                schedule = svc._get_schedule_data(period_id, class_id, now.isoweekday())
+                schedule = svc._get_schedule_data(eff_period_id, class_id, day_num, week_num)
                 schedule = svc.exchange_service.apply_exchanges_to_schedule(
                     class_name, schedule, now)
                 lessons_by_class[class_key] = schedule

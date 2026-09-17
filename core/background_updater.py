@@ -21,7 +21,10 @@ class BackgroundUpdater:
         self.config = Config()
         self.application = application
         self.data_loader = DataLoader()
-        self.notification_service = NotificationService()
+        # Резервный/инъектируемый экземпляр. В продакшене единственный сервис
+        # живёт в bot_data, сюда не кладём — иначе два объекта над одним
+        # notifications_cache.json дадут last-write-wins и дубли.
+        self.notification_service: NotificationService | None = None
         self.is_running = False
         self.update_interval = self.config.UPDATE_INTERVAL
         self.logger = logging.getLogger(__name__)
@@ -65,6 +68,18 @@ class BackgroundUpdater:
     def _now(self):
         """Текущее время в таймзоне приложения (точка подмены в тестах)."""
         return datetime.now(self.moscow_tz)
+
+    def _notification_service(self):
+        """Единственный NotificationService: из bot_data, иначе инъектированный.
+
+        В продакшене сервис создаётся один раз в `bot.py` и кладётся в
+        bot_data; атрибут `notification_service` — только для тестов.
+        """
+        if self.application and hasattr(self.application, 'bot_data'):
+            service = self.application.bot_data.get('notification_service')
+            if service:
+                return service
+        return self.notification_service
 
     async def _reminder_loop(self):
         """Минутный цикл: напоминания об уроках и утренний дайджест."""
@@ -118,7 +133,7 @@ class BackgroundUpdater:
             )
 
             self._cleanup_sent_reminders()
-            notification_service = bot_data.get('notification_service') or self.notification_service
+            notification_service = self._notification_service()
             bot = bot_data.get('bot') or self.application.bot
             for user_id, text, key in due:
                 if key in self.sent_reminders:
@@ -228,7 +243,7 @@ class BackgroundUpdater:
             due = self.digest_service.get_due_digests(schools_data, user_classes, now)
 
             self._cleanup_sent_digests()
-            notification_service = bot_data.get('notification_service') or self.notification_service
+            notification_service = self._notification_service()
             bot = bot_data.get('bot') or self.application.bot
             for user_id, text, key in due:
                 if key in self.sent_digests:
@@ -405,7 +420,9 @@ class BackgroundUpdater:
                             message += f"• {school}\n"
 
                         context = self._make_context()
-                        await self.notification_service.notify_admins(context, message)
+                        notification_service = self._notification_service()
+                        if notification_service:
+                            await notification_service.notify_admins(context, message)
                 else:
                     self.logger.info("✅ Фоновое обновление завершено. Изменений нет")
 
@@ -415,10 +432,12 @@ class BackgroundUpdater:
 
                 # Уведомляем админов об ошибке
                 context = self._make_context()
-                await self.notification_service.notify_admins(
-                    context,
-                    "❌ *Ошибка автоматического обновления*\n\nНе удалось загрузить данные школ"
-                )
+                notification_service = self._notification_service()
+                if notification_service:
+                    await notification_service.notify_admins(
+                        context,
+                        "❌ *Ошибка автоматического обновления*\n\nНе удалось загрузить данные школ"
+                    )
 
         except Exception as e:
             error_msg = f"❌ Ошибка фонового обновления: {e}"
@@ -429,10 +448,12 @@ class BackgroundUpdater:
             if notification_settings.get('update_notifications', False):
                 # Уведомляем админов об ошибке
                 context = self._make_context()
-                await self.notification_service.notify_admins(
-                    context,
-                    f"❌ *Ошибка автоматического обновления*\n\n`{str(e)}`"
-                )
+                notification_service = self._notification_service()
+                if notification_service:
+                    await notification_service.notify_admins(
+                        context,
+                        f"❌ *Ошибка автоматического обновления*\n\n`{str(e)}`"
+                    )
 
     def _get_admin_notification_settings(self):
         """Получает настройки уведомлений для администраторов.
@@ -496,15 +517,11 @@ class BackgroundUpdater:
                 self.application.bot_data['exchange_detector'] = ExchangeDetector()
 
             exchange_detector = self.application.bot_data['exchange_detector']
-            notification_service = self.application.bot_data.get('notification_service')
+            notification_service = self._notification_service()
 
             if not notification_service:
-                self.logger.error("Notification service не найден в bot_data")
-                # Используем self.notification_service как резервный вариант
-                notification_service = self.notification_service
-                if not notification_service:
-                    self.logger.error("Notification service недоступен")
-                    return
+                self.logger.error("Notification service недоступен")
+                return
 
             # Проверяем замены на сегодня И завтра — раньше смотрели только «сегодня»,
             # из-за чего замены на завтра обнаруживались только после полуночи (или вовсе
@@ -663,7 +680,7 @@ class BackgroundUpdater:
                 self.application.bot_data['exchange_detector'] = ExchangeDetector()
 
             exchange_detector = self.application.bot_data['exchange_detector']
-            notification_service = self.application.bot_data.get('notification_service')
+            notification_service = self._notification_service()
 
             if not notification_service:
                 return

@@ -123,8 +123,10 @@ class NotificationService:
                  else:
                      cache_data[key] = value
 
-             with open(self.notifications_cache_file, 'w', encoding='utf-8') as f:
+             tmp = f"{self.notifications_cache_file}.tmp"
+             with open(tmp, 'w', encoding='utf-8') as f:
                  json.dump(cache_data, f, ensure_ascii=False, indent=2)
+             os.replace(tmp, self.notifications_cache_file)
              self.logger.info(f"Кэш уведомлений сохранен в {self.notifications_cache_file}")
          except Exception as e:
              self.logger.error(f"Ошибка сохранения кэша уведомлений: {e}")

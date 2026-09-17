@@ -114,6 +114,53 @@ def test_digest_includes_exchanges():
     assert 'Биология' in out[0][1]
 
 
+def test_digest_on_transfer_day_uses_transferred_weekday():
+    """Перенос: пятница работает по субботнему расписанию (daynum=6)."""
+    school = _school_data()
+    school['SUBJECTS']['2'] = 'Биология'
+    school['CLASS_SCHEDULE']['p1']['c1']['601'] = {'s': ['2'], 't': [], 'r': []}
+    school['HOLIDAY_TRANSFER'] = {'11.09.2026': {'type': 'transfer', 'daynum': 6}}
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=TZ)  # пятница, за 60 мин до 08:00
+    out = DigestService().get_due_digests(
+        {'school_133': school},
+        {1: ('school_133', '5а')},
+        now=now,
+    )
+    assert len(out) == 1
+    assert 'Биология' in out[0][1]
+    assert 'Математика' not in out[0][1]
+
+
+def test_digest_on_vacation_day_is_empty():
+    school = _school_data()
+    school['HOLIDAY_TRANSFER'] = {'11.09.2026': {'type': 'vacation'}}
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=TZ)
+    out = DigestService().get_due_digests(
+        {'school_133': school},
+        {1: ('school_133', '5а')},
+        now=now,
+    )
+    assert out == []
+
+
+def test_digest_transfer_weeknum_used():
+    """weeknum=2 у переноса: ключ расписания с префиксом недели."""
+    school = _school_data()
+    school['SUBJECTS']['2'] = 'Биология'
+    school['CLASS_SCHEDULE']['p1']['c1']['2601'] = {'s': ['2'], 't': [], 'r': []}
+    school['HOLIDAY_TRANSFER'] = {
+        '11.09.2026': {'type': 'transfer', 'daynum': 6, 'weeknum': 2}
+    }
+    now = datetime(2026, 9, 11, 7, 0, tzinfo=TZ)
+    out = DigestService().get_due_digests(
+        {'school_133': school},
+        {1: ('school_133', '5а')},
+        now=now,
+    )
+    assert len(out) == 1
+    assert 'Биология' in out[0][1]
+
+
 def test_digest_toggle_roundtrip():
     d = tempfile.mkdtemp()
     prefs = UserPreferencesService(FileDB(os.path.join(d, 'database.json')))

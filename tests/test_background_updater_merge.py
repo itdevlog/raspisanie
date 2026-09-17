@@ -48,6 +48,27 @@ def _make():
     return up, app
 
 
+def test_notification_service_prefers_bot_data_instance():
+    notif = _FakeNotif()
+    app = SimpleNamespace(bot_data={'notification_service': notif}, bot=None)
+    up = BackgroundUpdater(app)
+    assert up._notification_service() is notif
+
+
+def test_notification_service_falls_back_to_injected_attribute():
+    app = SimpleNamespace(bot_data={}, bot=None)
+    up = BackgroundUpdater(app)
+    fake = _FakeNotif()
+    up.notification_service = fake  # type: ignore[assignment]
+    assert up._notification_service() is fake
+
+
+def test_notification_service_none_when_unavailable():
+    up = BackgroundUpdater(None)
+    assert up.notification_service is None
+    assert up._notification_service() is None
+
+
 def test_on_data_replaced_clears_cache_and_index():
     up, app = _make()
     calls = {'cleared': 0, 'reset': 0}
