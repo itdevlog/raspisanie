@@ -50,6 +50,14 @@ def test_schools_list():
     assert body[0]['loaded'] is True
 
 
+def test_schools_today_format():
+    import re
+
+    r = _client(None).get('/api/schools')
+    assert r.status_code == 200
+    assert re.fullmatch(r'\d{2}\.\d{2}\.\d{4}', r.json()['today'])
+
+
 def test_classes_list():
     r = _client(None).get('/api/school_133/classes')
     assert r.json()['classes'] == ['5а']

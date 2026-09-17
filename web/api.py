@@ -88,10 +88,13 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
     @app.get('/api/schools')
     async def schools():
         schools_data = services['bot_data'].get('schools_data', {})
-        return {'schools': [
-            {'id': sid, 'name': cfg.get('name'), 'loaded': sid in schools_data}
-            for sid, cfg in SCHOOLS_CONFIG.items() if cfg.get('active', True)
-        ]}
+        return {
+            'today': _now().strftime('%d.%m.%Y'),
+            'schools': [
+                {'id': sid, 'name': cfg.get('name'), 'loaded': sid in schools_data}
+                for sid, cfg in SCHOOLS_CONFIG.items() if cfg.get('active', True)
+            ],
+        }
 
     @app.get('/api/{school_id}/classes')
     async def classes(school_id: str):

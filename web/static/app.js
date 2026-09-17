@@ -15,7 +15,9 @@ function escapeHtml(s) {
 
 const state = {
   schoolId: null, kind: 'class', entity: null,
-  date: null,          // ISO-подобная dd.mm.yyyy или null = сегодня
+  date: null,          // dd.mm.yyyy или null = серверная «сегодня»
+  today: null,         // серверная «сегодня» dd.mm.yyyy
+  weekOffset: 0,       // смещение недели, клампится -2..2
   mode: 'day',         // 'day' | 'week'
   schools: [], entities: [],
 };
@@ -35,9 +37,15 @@ function fmtDate(d) {
 }
 
 function shiftDate(days) {
-  const base = state.date ? parseDate(state.date) : new Date();
+  const base = state.date ? parseDate(state.date)
+    : state.today ? parseDate(state.today) : new Date();
   base.setDate(base.getDate() + days);
   state.date = fmtDate(base);
+  render();
+}
+
+function shiftWeek(delta) {
+  state.weekOffset = Math.max(-2, Math.min(2, state.weekOffset + delta));
   render();
 }
 
@@ -50,6 +58,8 @@ async function init() {
   try {
     const [schools, me] = await Promise.all([api('/api/schools'), api('/api/me')]);
     state.schools = schools.schools;
+    state.today = schools.today || null;
+    state.date = state.today;
     const sel = $('school-select');
     sel.innerHTML = schools.schools.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('');
     if (me.school_id && schools.schools.some(s => s.id === me.school_id)) sel.value = me.school_id;
@@ -95,7 +105,7 @@ async function render() {
   const container = $('schedule-container');
   const free = $('free-rooms-result');
   free.hidden = true; container.hidden = false;
-  $('date-label').textContent = state.date || fmtDate(new Date());
+  $('date-label').textContent = state.date || state.today || '';
   if (!state.entity) {
     container.innerHTML = `<div class="hint">Выберите ${state.kind === 'class' ? 'класс' : state.kind === 'teacher' ? 'преподавателя' : 'кабинет'} выше</div>`;
     return;
@@ -107,8 +117,9 @@ async function render() {
       const day = await api(`/api/${state.schoolId}/schedule/${state.kind}/${encodeURIComponent(state.entity)}${q}`);
       container.innerHTML = `<div class="day-title">${escapeHtml(day.day_name)}, ${escapeHtml(day.date)}</div>` + dayHtml(day);
     } else {
-      const off = 0; // неделя — всегда текущая (лимит ±2)
-      const body = await api(`/api/${state.schoolId}/schedule/${state.kind}/${encodeURIComponent(state.entity)}/week?offset=${off}`);
+      const body = await api(`/api/${state.schoolId}/schedule/${state.kind}/${encodeURIComponent(state.entity)}/week?offset=${state.weekOffset}`);
+      const first = body.days.length ? body.days[0].date : '';
+      $('date-label').textContent = first ? `нед. ${first}` : '';
       container.innerHTML = body.days.map(d =>
         `<div class="day-title">${escapeHtml(d.day_name)}, ${escapeHtml(d.date)}</div>` + dayHtml(d)).join('<hr>');
     }
@@ -121,8 +132,7 @@ async function showFreeRooms() {
   $('free-rooms-result').hidden = false;
   container.hidden = true;
   const el = $('free-rooms-result');
-  const lesson = promptLesson();
-  if (!lesson) { el.hidden = true; container.hidden = false; return; }
+  const lesson = Number($('free-room-lesson').value) || 1;
   try {
     const q = `lesson=${lesson}${state.date ? `&date=${state.date}` : ''}`;
     const body = await api(`/api/${state.schoolId}/free-rooms?${q}`);
@@ -131,19 +141,14 @@ async function showFreeRooms() {
   } catch (e) { el.innerHTML = `<div class="hint">⚠️ ${escapeHtml(e.message)}</div>`; }
 }
 
-function promptLesson() {
-  const n = window.prompt('Номер урока (1-12)', '1');
-  return n && Number(n) >= 1 && Number(n) <= 12 ? Number(n) : null;
-}
-
 function showError(msg) { $('schedule-container').innerHTML = `<div class="hint">⚠️ ${escapeHtml(msg)}</div>`; }
 
 $('tab-class').onclick = () => setKind('class');
 $('tab-teacher').onclick = () => setKind('teacher');
 $('tab-room').onclick = () => setKind('room');
 $('free-rooms-btn').onclick = () => showFreeRooms();
-$('date-prev').onclick = () => shiftDate(-1);
-$('date-next').onclick = () => shiftDate(1);
+$('date-prev').onclick = () => state.mode === 'week' ? shiftWeek(-1) : shiftDate(-1);
+$('date-next').onclick = () => state.mode === 'week' ? shiftWeek(1) : shiftDate(1);
 $('mode-day').onclick = () => { state.mode = 'day'; $('mode-day').classList.add('active'); $('mode-week').classList.remove('active'); render(); };
 $('mode-week').onclick = () => { state.mode = 'week'; $('mode-week').classList.add('active'); $('mode-day').classList.remove('active'); render(); };
 $('search-input').oninput = (e) => { state.entity = e.target.value || null; clearTimeout(state._t); state._t = setTimeout(render, 400); };

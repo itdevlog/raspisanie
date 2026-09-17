@@ -1,5 +1,5 @@
 // Service Worker для PWA
-const CACHE_NAME = 'raspisanie-v1';
+const CACHE_NAME = 'raspisanie-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -13,9 +13,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_ASSETS);
-    })
+    }).then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 // Активация — чистим старые кэши
@@ -37,31 +36,47 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // API запросы — только сеть, но с кэшированием ответа
+  // Кэшируем только GET — остальные запросы проксируем в сеть
+  if (request.method !== 'GET') {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // Персональные API — только сеть, без кэширования
+  if (url.pathname === '/api/me') {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // Прочие API — сеть с fallback на кэш (для офлайна)
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) => {
         return fetch(request)
           .then((response) => {
-            // Кэшируем успешные ответы
             if (response.ok) {
               cache.put(request, response.clone());
             }
             return response;
           })
-          .catch(() => {
-            // Если сети нет — возвращаем из кэша
-            return cache.match(request);
-          });
+          .catch(() => cache.match(request));
       })
     );
     return;
   }
 
-  // Статика — кэш с обновлением
+  // Статика — stale-while-revalidate
   event.respondWith(
-    caches.match(request).then((cached) => {
-      return cached || fetch(request);
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.match(request).then((cached) => {
+        const network = fetch(request).then((response) => {
+          if (response.ok) {
+            cache.put(request, response.clone());
+          }
+          return response;
+        }).catch(() => cached);
+        return cached || network;
+      });
     })
   );
 });
@@ -103,7 +118,8 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || event.notification.data || '/';
   event.waitUntil(
-    self.clients.openWindow(event.notification.data)
+    self.clients.openWindow(typeof target === 'string' ? target : '/')
   );
 });
