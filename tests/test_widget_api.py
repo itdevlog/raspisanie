@@ -11,6 +11,7 @@ from urllib.parse import quote
 from fastapi.testclient import TestClient
 
 from config.config import get_timezone
+from web.auth import generate_widget_token, validate_widget_token
 
 BOT_TOKEN = '123456:ABC-DEF_token'
 SECRET = hmac.new(b'WebAppData', BOT_TOKEN.encode(), hashlib.sha256).digest()
@@ -135,9 +136,10 @@ def test_widget_rejects_missing_init_data():
 
 
 def test_widget_rejects_invalid_init_data():
-    """Невалидная подпись initData — 403."""
+    """Невалидная подпись initData (свежий auth_date, битый hash) — 403."""
+    fresh = _make_init_data(123456, sign=False) + '&hash=deadbeef'
     response = _client().get('/api/widget/123456',
-                             headers={'X-Telegram-Init-Data': 'auth_date=1&hash=deadbeef'})
+                             headers={'X-Telegram-Init-Data': fresh})
     assert response.status_code == 403
 
 
@@ -147,8 +149,96 @@ def test_widget_rejects_mismatched_user():
     assert response.status_code == 403
 
 
+def test_widget_accepts_valid_token_header():
+    """Валидный widget-токен в X-Widget-Token — 200."""
+    token = generate_widget_token(123456, BOT_TOKEN)
+    response = _client().get('/api/widget/123456',
+                             headers={'X-Widget-Token': token})
+    assert response.status_code == 200
+    assert response.json()['class'] == '5А'
+
+
+def test_widget_accepts_valid_token_query():
+    """Валидный widget-токен в query-параметре token — 200."""
+    token = generate_widget_token(123456, BOT_TOKEN)
+    response = _client().get(f'/api/widget/123456?token={token}')
+    assert response.status_code == 200
+
+
+def test_widget_rejects_wrong_token():
+    """Битый widget-токен — 403."""
+    response = _client().get('/api/widget/123456',
+                             headers={'X-Widget-Token': 'nonsense'})
+    assert response.status_code == 403
+
+
+def test_widget_rejects_expired_token():
+    """Просроченный widget-токен — 403."""
+    token = generate_widget_token(123456, BOT_TOKEN, ttl=-1)
+    response = _client().get('/api/widget/123456',
+                             headers={'X-Widget-Token': token})
+    assert response.status_code == 403
+
+
+def test_widget_rejects_token_for_other_user():
+    """Токен, выписанный на другого пользователя — 403."""
+    token = generate_widget_token(42, BOT_TOKEN)
+    response = _client().get('/api/widget/123456',
+                             headers={'X-Widget-Token': token})
+    assert response.status_code == 403
+
+
+def test_widget_handles_empty_items(monkeypatch):
+    """Урок без items не падает; subject/room пустые."""
+    import web.api as api_module
+    from services.schedule_service import ScheduleService
+
+    monkeypatch.setattr(api_module, '_now',
+                        lambda: datetime(2026, 12, 7, 7, 0, tzinfo=get_timezone()))
+
+    def _fake_get_day(self, class_name, date):
+        return {
+            'lessons': [
+                {'num': 1, 'start': '08:00', 'end': '08:45', 'items': [],
+                 'has_exchange': False, 'is_cancelled': False},
+            ],
+            'vacation': False, 'weekend': False,
+        }
+
+    monkeypatch.setattr(ScheduleService, 'get_day', _fake_get_day)
+
+    token = generate_widget_token(123456, BOT_TOKEN)
+    response = _client().get('/api/widget/123456',
+                             headers={'X-Widget-Token': token})
+    assert response.status_code == 200
+    lesson = response.json()['lessons'][0]
+    assert lesson['subject'] == ''
+    assert lesson['room'] == ''
+    assert lesson['time'] == '08:00-08:45'
+
+
 def test_widget_user_not_found():
     """Widget возвращает 404 для неизвестного пользователя."""
     user_service = FakeUserService(school=None, class_name=None)
-    response = _client(user_service=user_service).get('/api/widget/999999', headers=_auth(999999))
+    response = _client(user_service=user_service).get('/api/widget/999999',
+                                                      headers=_auth(999999))
     assert response.status_code == 404
+
+
+def test_generate_and_validate_widget_token_roundtrip():
+    token = generate_widget_token(7, BOT_TOKEN, now=1000)
+    assert validate_widget_token(token, 7, BOT_TOKEN, now=1001) is True
+
+
+def test_validate_widget_token_rejects_malformed():
+    assert validate_widget_token('no-dot', 7, BOT_TOKEN) is False
+    assert validate_widget_token('abc.def', 7, BOT_TOKEN) is False
+    assert validate_widget_token('', 7, BOT_TOKEN) is False
+
+
+def test_validate_widget_token_rejects_expired_and_other_user():
+    token = generate_widget_token(7, BOT_TOKEN, ttl=10, now=1000)
+    assert validate_widget_token(token, 7, BOT_TOKEN, now=1011) is False
+    assert validate_widget_token(token, 8, BOT_TOKEN, now=1001) is False
+    assert validate_widget_token(token, 7, 'other-token', now=1001) is False
+

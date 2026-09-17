@@ -37,7 +37,8 @@ class CallbackRouter:
             'toggle_quiet_hours': NavigationCallbackHandler(),
             'toggle_daily_digest': NavigationCallbackHandler(),
             'toggle_update_notifications': NavigationCallbackHandler(),
-            'unsubscribe': NavigationCallbackHandler()
+            'unsubscribe': NavigationCallbackHandler(),
+            'widget_link': NavigationCallbackHandler()
         }
 
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -94,6 +95,8 @@ class CallbackRouter:
             return 'toggle_update_notifications'
         elif callback_data.startswith('unsubscribe_'):
             return 'unsubscribe'
+        elif callback_data == 'widget_link':
+            return 'widget_link'
         elif callback_data in ['main_menu', 'change_class']:
             return callback_data
 

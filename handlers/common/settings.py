@@ -5,6 +5,7 @@ from config.config import Config
 from handlers.common.typing import require_query, require_user
 from services.text_utils import escape_markdown
 from services.user_preferences import UserPreferencesService
+from web.auth import generate_widget_token
 
 
 async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -89,6 +90,10 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 callback_data=f"toggle_update_notifications_{'off' if update_notifications_enabled else 'on'}"
             )
         ])
+
+    keyboard.append([
+        InlineKeyboardButton("📱 Ссылка на виджет", callback_data="widget_link")
+    ])
 
     keyboard.append([
         InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
@@ -270,3 +275,35 @@ async def toggle_update_notifications(update: Update, context: ContextTypes.DEFA
 
     # Обновляем меню настроек
     await settings_handler(update, context)
+
+
+async def send_widget_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отправляет подписанную ссылку на standalone-виджет PWA."""
+    query = require_query(update)
+    user_id = require_user(update).id
+
+    webapp_url = context.bot_data.get('webapp_url')
+    config = context.bot_data.get('config')
+    token = getattr(config, 'TELEGRAM_TOKEN', None)
+
+    if not webapp_url:
+        await query.answer("❌ URL Mini App не настроен (WEBAPP_URL)")
+        return
+    if not token:
+        await query.answer("❌ Токен бота не настроен")
+        return
+
+    widget_token = generate_widget_token(user_id, token)
+    link = f"{webapp_url.rstrip('/')}/widget.html?user_id={user_id}&token={widget_token}"
+    await query.answer()
+    await query.edit_message_text(
+        "📱 *Виджет расписания*\n\n"
+        "Добавьте расписание на главный экран. Ссылка действует 30 дней, "
+        "после чего получите новую здесь же.\n\n"
+        f"`{link}`",
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("⚙️ Настройки", callback_data="menu_settings"),
+             InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
+        ])
+    )

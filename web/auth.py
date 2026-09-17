@@ -45,3 +45,34 @@ def get_user_from_init_data(init_data: str, bot_token: str) -> dict | None:
     data = validate_init_data(init_data, bot_token)
     user = (data or {}).get('user')
     return user if isinstance(user, dict) else None
+
+
+def _widget_sig(user_id: int, expiry: int, bot_token: str) -> str:
+    message = f'widget:{user_id}:{expiry}'.encode()
+    return hmac.new(bot_token.encode(), message, hashlib.sha256).hexdigest()
+
+
+def generate_widget_token(user_id: int, bot_token: str, ttl: int = 2592000,
+                          now: int | None = None) -> str:
+    """HMAC-токен для виджета: `{expiry}.{sig}`; ttl по умолчанию 30 дней."""
+    expiry = (now if now is not None else int(time.time())) + ttl
+    return f'{expiry}.{_widget_sig(user_id, expiry, bot_token)}'
+
+
+def validate_widget_token(token: str, user_id: int, bot_token: str,
+                          now: int | None = None) -> bool:
+    """True, если токен валиден для user_id и не истёк. Никогда не бросает."""
+    if not token or not bot_token:
+        return False
+    expiry_str, sep, sig = token.partition('.')
+    if not sep or not sig:
+        return False
+    try:
+        expiry = int(expiry_str)
+    except ValueError:
+        return False
+    current = now if now is not None else int(time.time())
+    if expiry < current:
+        return False
+    expected = _widget_sig(user_id, expiry, bot_token)
+    return hmac.compare_digest(expected.encode(), sig.encode())

@@ -26,11 +26,12 @@ PWA (Progressive Web App) виджет — это возможность доб�
 
 **Вариант 3: iOS Shortcuts (для продвинутых)**
 
-1. Откройте приложение **Shortcuts** (Команды)
-2. Создайте новую команду:
-   - Действие: `GET https://YOUR_BOT_URL/api/widget/USER_ID`
+1. Получите подписанную ссылку: `/settings` → **«📱 Ссылка на виджет»**
+2. Откройте приложение **Shortcuts** (Команды)
+3. Создайте новую команду:
+   - Действие: `GET https://YOUR_BOT_URL/api/widget/USER_ID?token=TOKEN`
    - Действие: `Show Result` или `Quick Look`
-3. Добавьте команду на главный экран как виджет
+4. Добавьте команду на главный экран как виджет
 
 ---
 
@@ -52,23 +53,26 @@ PWA (Progressive Web App) виджет — это возможность доб�
 **Вариант 3: KWGT виджет (требует настройки)**
 
 1. Установите [KWGT Kustom Widget](https://play.google.com/store/apps/details?id=org.kustom.widget)
-2. Создайте новый виджет
-3. Добавьте веб-запрос к `/api/widget/{user_id}`
-4. Настройте отображение по своему вкусу
+2. Получите подписанную ссылку: `/settings` → **«📱 Ссылка на виджет»**
+3. Создайте новый виджет
+4. Добавьте веб-запрос к `/api/widget/{user_id}?token=TOKEN`
+5. Настройте отображение по своему вкусу
 
 ---
 
 ## 🔗 Прямая ссылка на виджет
 
-Откройте в браузере:
+Получите ссылку в боте: `/settings` → **«📱 Ссылка на виджет»**. Она имеет вид:
 
 ```
-https://YOUR_BOT_URL/widget.html?user_id=YOUR_TELEGRAM_ID
+https://YOUR_BOT_URL/widget.html?user_id=YOUR_TELEGRAM_ID&token=WIDGET_TOKEN
 ```
 
 Где:
 - `YOUR_BOT_URL` — URL вашего Mini App (из `.env` → `WEBAPP_URL`)
-- `YOUR_TELEGRAM_ID` — ваш Telegram user ID (можно узнать у бота @userinfobot)
+- `YOUR_TELEGRAM_ID` — ваш Telegram user ID
+- `WIDGET_TOKEN` — HMAC-подпись, привязанная к `user_id`; действует **30 дней**.
+  Когда истечёт — получите новую ссылку в `/settings`.
 
 ---
 
@@ -118,8 +122,14 @@ Service Worker кэширует данные для офлайн-доступа.
 ### API endpoint
 
 ```
-GET /api/widget/{user_id}?date=dd.mm.YYYY
+GET /api/widget/{user_id}?date=dd.mm.YYYY&token=WIDGET_TOKEN
 ```
+
+Доступ разрешён при **любом** из вариантов:
+- заголовок `X-Telegram-Init-Data` с валидной подписью Telegram, чей `id` совпадает с `{user_id}`;
+- заголовок `X-Widget-Token` **или** query-параметр `token` с подписанным widget-токеном.
+
+Иначе — `403`.
 
 **Ответ:**
 
@@ -194,7 +204,12 @@ A: Обновите данные в боте (выберите класс зан
 
 ## 🔒 Безопасность
 
-- API endpoint требует заголовок `X-Telegram-Init-Data` с валидной HMAC-подписью Telegram; `user_id` из подписи сверяется с `{user_id}` в URL, иначе 403
+- API endpoint разрешает доступ либо по `X-Telegram-Init-Data` (валидная HMAC-подпись
+  Telegram; `id` из подписи сверяется с `{user_id}` в URL), либо по подписанному
+  widget-токену (`X-Widget-Token` / query `token`), привязанному к `user_id`.
+  Иначе — `403`.
+- Widget-токен — HMAC-SHA256 от `widget:{user_id}:{expiry}`, действует 30 дней.
+  Он равносилен паролю: не публикуйте ссылку с токеном и получайте новую после истечения.
 - Рекомендуется использовать HTTPS (обязательно для PWA)
 - Данные кэшируются локально на устройстве
 

@@ -14,7 +14,7 @@ from services.schedule_exceptions import EntityNotFoundError, PeriodNotFoundErro
 from services.schedule_service import ScheduleService
 from services.teacher_service import TeacherService
 
-from .auth import get_user_from_init_data
+from .auth import get_user_from_init_data, validate_widget_token
 
 
 def _school_or_404(services: dict, school_id: str) -> dict:
@@ -130,15 +130,23 @@ def create_app(services: dict) -> FastAPI:
         return {'user': user, 'school_id': school_id, 'class_name': class_name}
 
     @app.get('/api/widget/{user_id}')
-    async def widget_data(user_id: int, date: str | None = None,
-                          x_telegram_init_data: str | None = Header(None)):
+    async def widget_data(user_id: int, date: str | None = None, token: str | None = None,
+                          x_telegram_init_data: str | None = Header(None),
+                          x_widget_token: str | None = Header(None)):
         """Данные для виджета PWA: расписание на сегодня + следующий урок.
 
         Формат для iOS Shortcuts / Android виджетов / PWA widget.
+
+        Доступ: валидный initData (Telegram) ИЛИ подписанный widget-токен
+        (X-Widget-Token / query `token`) для standalone-виджетов.
         """
-        token = (services.get('config') or Config()).TELEGRAM_TOKEN or ''
-        user = get_user_from_init_data(x_telegram_init_data, token) if x_telegram_init_data else None
-        if not user or user.get('id') != user_id:
+        token_cfg = (services.get('config') or Config()).TELEGRAM_TOKEN or ''
+        user = get_user_from_init_data(x_telegram_init_data, token_cfg) if x_telegram_init_data else None
+        authorized = bool(user and user.get('id') == user_id)
+        if not authorized:
+            candidate = x_widget_token or token or ''
+            authorized = validate_widget_token(candidate, user_id, token_cfg)
+        if not authorized:
             raise HTTPException(403, 'Недействительная подпись Telegram')
 
         user_service = services['bot_data'].get('user_service')

@@ -169,8 +169,11 @@ async function loadWidget() {
     return;
   }
 
+  const token = getQueryParam('token') || '';
+
   try {
-    const response = await fetch(`${API_URL}${userId}`);
+    const headers = token ? { 'X-Widget-Token': token } : {};
+    const response = await fetch(`${API_URL}${userId}`, { headers });
     if (!response.ok) throw new Error('Ошибка загрузки');
     
     const data = await response.json();

@@ -34,6 +34,8 @@ class NavigationCallbackHandler:
             await self._handle_toggle_update_notifications(update, context, callback_data)
         elif callback_data.startswith("unsubscribe_"):
             await self._handle_unsubscribe(update, context, callback_data)
+        elif callback_data == "widget_link":
+            await self._handle_widget_link(update, context)
         elif callback_data.startswith("select_school_"):
             await self._handle_school_selection(update, context, callback_data)
         elif callback_data.startswith("show_all_"):
@@ -152,6 +154,11 @@ class NavigationCallbackHandler:
 
         payload = callback_data.replace("unsubscribe_", "")
         await unsubscribe_by_callback(update, context, payload)
+
+    async def _handle_widget_link(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Отправляет подписанную ссылку на standalone-виджет."""
+        from handlers.common.settings import send_widget_link
+        await send_widget_link(update, context)
 
     async def _handle_toggle_notifications(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает переключение уведомлений"""

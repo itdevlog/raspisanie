@@ -28,6 +28,7 @@ CASES = {
     'main_menu': 'main_menu',
     'change_class': 'change_class',
     'unsubscribe_teacher_0': 'unsubscribe',
+    'widget_link': 'widget_link',
     'no_such_prefix': 'menu',
 }
 
