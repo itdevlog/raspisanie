@@ -10,6 +10,7 @@ from handlers.common.menu_builder import (
 from handlers.common.messaging import reset_user_flow
 from handlers.common.typing import require_message, require_user
 from services.status_service import StatusService
+from services.text_utils import escape_markdown
 
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -21,7 +22,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Приветственное сообщение
     welcome_text = (
-        f"👋 Привет, {user.first_name}!\n\n"
+        f"👋 Привет, {escape_markdown(user.first_name)}!\n\n"
         "Я бот для просмотра школьного расписания.\n\n"
         "🎯 *С чего начать:*\n"
         "1. Выберите школу\n"
