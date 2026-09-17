@@ -55,3 +55,20 @@ def test_init_sentry_failure_is_swallowed(monkeypatch):
     monkeypatch.setitem(sys.modules, 'sentry_sdk', SimpleNamespace(init=_boom))
 
     _make_bot()._init_sentry()  # не должно бросать
+
+
+def test_init_sentry_failure_logs_only_exception_type(monkeypatch, caplog):
+    """Текст исключения (может содержать DSN) не должен попадать в логи."""
+    monkeypatch.setenv('SENTRY_DSN', 'https://example@sentry.io/1')
+    leaked = 'SECRET-DSN-LEAK'
+
+    def _boom(**kwargs):
+        raise RuntimeError(leaked)
+
+    monkeypatch.setitem(sys.modules, 'sentry_sdk', SimpleNamespace(init=_boom))
+
+    with caplog.at_level(logging.ERROR, logger='bot'):
+        _make_bot()._init_sentry()
+
+    assert 'RuntimeError' in caplog.text
+    assert leaked not in caplog.text

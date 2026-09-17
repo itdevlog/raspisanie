@@ -168,8 +168,12 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
         user = get_user_from_init_data(x_telegram_init_data, token_cfg) if x_telegram_init_data else None
         authorized = bool(user and user.get('id') == user_id)
         if not authorized:
-            candidate = x_widget_token or token or ''
-            authorized = validate_widget_token(candidate, user_id, token_cfg)
+            # Проверяем источники независимо: битый заголовок не должен
+            # перекрывать валидный query-параметр (и наоборот).
+            authorized = (
+                validate_widget_token(x_widget_token or '', user_id, token_cfg)
+                or validate_widget_token(token or '', user_id, token_cfg)
+            )
         if not authorized:
             raise HTTPException(403, 'Недействительная подпись Telegram')
 

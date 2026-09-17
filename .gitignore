@@ -9,4 +9,6 @@ backups/
 bot.pid
 .env
 .coverage
+.coverage.*
+.requirements.before
 htmlcov/

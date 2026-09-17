@@ -67,6 +67,21 @@ def test_start_without_job_queue_does_not_mark_running():
     assert up.is_running is False
 
 
+def test_start_without_job_queue_logs_critical(caplog):
+    """Отсутствие JobQueue — fail-visible: CRITICAL с инструкцией."""
+    up = BackgroundUpdater.__new__(BackgroundUpdater)
+    up.logger = logging.getLogger('test.jobqueue_missing')
+    up.application = None
+    up.is_running = False
+    up.update_interval = 10
+
+    with caplog.at_level(logging.CRITICAL, logger='test.jobqueue_missing'):
+        up.start_periodic_updates()
+
+    assert any(r.levelno == logging.CRITICAL for r in caplog.records)
+    assert 'JobQueue недоступен' in caplog.text
+
+
 async def test_update_job_runs_perform_update():
     queue = _FakeJobQueue()
     up = _updater_with_queue(queue)

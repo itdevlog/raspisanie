@@ -57,9 +57,9 @@ class BackgroundUpdater:
 
         job_queue = getattr(self.application, 'job_queue', None) if self.application else None
         if job_queue is None:
-            self.logger.error(
-                "JobQueue недоступен (нужен python-telegram-bot[job-queue]) — "
-                "периодические задачи не запущены"
+            self.logger.critical(
+                "JobQueue недоступен: установите python-telegram-bot[job-queue] / "
+                "выполните pip install -r requirements.txt — фоновые задачи отключены"
             )
             return
 

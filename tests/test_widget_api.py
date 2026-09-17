@@ -165,6 +165,15 @@ def test_widget_accepts_valid_token_query():
     assert response.status_code == 200
 
 
+def test_widget_malformed_header_falls_back_to_query_token():
+    """Битый X-Widget-Token не должен перекрывать валидный ?token=."""
+    token = generate_widget_token(123456, BOT_TOKEN)
+    response = _client().get(f'/api/widget/123456?token={token}',
+                             headers={'X-Widget-Token': 'nonsense'})
+    assert response.status_code == 200
+    assert response.json()['class'] == '5А'
+
+
 def test_widget_rejects_wrong_token():
     """Битый widget-токен — 403."""
     response = _client().get('/api/widget/123456',

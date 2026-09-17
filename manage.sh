@@ -674,9 +674,27 @@ cmd_restore() {
 
     confirm "Восстановить ${latest}? Бот будет остановлен." n || exit 0
     do_stop || true
-    # Перед распаковкой сохраняем текущее состояние, чтобы было куда вернуться
+    # Перед распаковкой сохраняем текущее состояние, чтобы было куда вернуться.
+    # Это best-effort: сбой страховочного бэкапа НЕ прерывает восстановление.
+    # Имя pre-restore-* намеренно не попадает под glob bot-backup-*.tar.gz,
+    # иначе страховочная копия могла бы стать источником следующего restore.
     info "Сохраняю текущее состояние перед восстановлением..."
-    cmd_backup || warn "Не удалось создать страховочный бэкап — продолжаю восстановление"
+    local safety stamp
+    local safety_files=()
+    stamp=$(date +%Y%m%d-%H%M%S)
+    safety="${BACKUP_DIR}/pre-restore-${stamp}.tar.gz"
+    mkdir -p "$BACKUP_DIR" 2>/dev/null || true
+    [[ -d "${SCRIPT_DIR}/data" ]] && safety_files+=(data)
+    [[ -f "$ENV_FILE" ]] && safety_files+=(.env)
+    if [[ ${#safety_files[@]} -eq 0 ]]; then
+        warn "Нечего сохранять (data/ и .env отсутствуют) — продолжаю восстановление"
+    elif tar -czf "$safety" -C "$SCRIPT_DIR" "${safety_files[@]}" 2>/dev/null; then
+        chmod 600 "$safety" 2>/dev/null || warn "Не удалось ограничить права на страховочный бэкап"
+        ok "Страховочный бэкап: ${safety}"
+    else
+        rm -f "$safety" 2>/dev/null || true
+        warn "Не удалось создать страховочный бэкап — продолжаю восстановление"
+    fi
     tar -xzf "$latest" -C "$SCRIPT_DIR" || die "Не удалось распаковать бэкап"
     ok "Восстановлено из $(basename "$latest")"
     do_start || return 1
@@ -702,6 +720,14 @@ cmd_doctor() {
         ok "Зависимости: установлены"
     else
         fail "Зависимости не установлены — запустите: ./manage.sh install"
+        errors=$((errors + 1))
+    fi
+
+    # JobQueue (apscheduler) — обязателен: от него зависят фоновые задачи
+    if [[ -x "$VENV_DIR/bin/python" ]] && "$VENV_DIR/bin/python" -c 'import apscheduler' 2>/dev/null; then
+        ok "apscheduler: установлен (фоновые задачи)"
+    else
+        fail "apscheduler не установлен — фоновые задачи отключены. Установите: ./manage.sh install (python-telegram-bot[job-queue])"
         errors=$((errors + 1))
     fi
 

@@ -170,7 +170,8 @@ class ScheduleBot:
                 "SENTRY_DSN задан, но пакет sentry_sdk не установлен — Sentry отключён"
             )
         except Exception as e:
-            self.logger.error(f"Не удалось инициализировать Sentry: {e}")
+            # Не логируем текст исключения: неверный DSN может попасть в логи.
+            self.logger.error("Не удалось инициализировать Sentry: %s", type(e).__name__)
 
     def setup_services(self):
         """Инициализирует сервисы и базу данных"""
