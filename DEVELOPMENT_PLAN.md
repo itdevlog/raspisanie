@@ -1,508 +1,333 @@
 # План развития и улучшения проекта raspisanie
 
-**Дата анализа:** 16 сентября 2026  
-**Статус проекта:** Зрелый production-проект с отличной базой
+**Дата анализа:** 17 сентября 2026
+**Статус проекта:** Production-зрелая база; найден ряд критических багов, не видимых в локальных прогонах
 
 ---
 
-## 📊 Резюме анализа
+## 📊 Резюме анализа (17.09.2026)
 
-### Сильные стороны проекта
+### Проверено фактически
 
-1. **Отличная архитектура** — чистое разделение на handlers → services → core
-2. **Современный стек** — PTB 22.8, FastAPI, httpx, zoneinfo
-3. **Quality assurance** — 268 тестов, ruff clean, mypy почти clean
-4. **Production-ready** — manage.sh, systemd, multi-instance, backup/restore
-5. **Документация** — README (334 строки), WIKI (508 строк), CHANGELOG, ROADMAP
-6. **Активная разработка** — последнее обновление 13.09.2026
+| Проверка | Результат |
+|---|---|
+| `ruff check .` | ✅ чисто |
+| `mypy .` | ✅ 0 ошибок (112 файлов) |
+| `python -m pytest` (локально) | ✅ 288 passed |
+| `pytest -q` (как в CI) | ❌ INTERNALERROR: `ModuleNotFoundError: No module named 'handlers'` (exit 3) |
+| CI на GitHub (все 23 запуска) | ❌ **все красные**, шаг pytest падает |
+| `web/static/*.png` (иконки PWA) | ❌ отсутствуют, хотя указаны в manifest.json |
+| Схема данных widget API | ❌ читает ключи, которых нет в payload |
 
-### Критические проблемы
+### Контекст: что уже сделано (16.09.2026)
 
-1. ~~**mypy ошибки** — 10 ошибок в тестах~~ ✅ **исправлено 16.09.2026**
-2. ~~**JSON БД** — риск потери данных~~ ✅ **закрыто 16.09.2026** (`fsync` + `.bak`); остаётся отложенная запись
-3. ~~**ETag/If-Modified-Since** — нет HTTP-кэширования~~ ✅ **исправлено 16.09.2026**
-4. ~~**Параллельная загрузка школ**~~ ✅ **исправлено 16.09.2026** (`ThreadPoolExecutor`)
-
-### Выполнено 16.09.2026
-
-- ✅ Исправлены 10 mypy ошибок (`tests/test_teacher_exchanges.py`, `tests/test_integration.py`) — `mypy .` чистый (111 файлов)
-- ✅ `FileDB`: `flush` + `fsync` файла и директории, `.bak` предыдущей версии, корректная очистка temp
-- ✅ `DataLoader`: условные запросы `ETag`/`If-Modified-Since`, `304` → deepcopy из кэша; кэш имени файла
+- ✅ `FileDB`: `flush` + `fsync` файла и директории, `.bak`, корректная очистка temp
+- ✅ `DataLoader`: `ETag`/`If-Modified-Since`, `304` → кэш; кэш имени файла
 - ✅ Параллельная загрузка школ: `ThreadPoolExecutor`, `MAX_PARALLEL_SCHOOLS` (default 4)
-- ✅ Починен дато-зависимый `test_persist_flag_controls_disk_write` (`ExchangeDetector._now()`)
-- ✅ 285 тестов проходят, ruff чистый, mypy 0 ошибок
+- ✅ Исправлены 10 mypy-ошибок в тестах; починен дато-зависимый тест кэша замен
+- ✅ 288 тестов проходят локально, ruff/mypy чистые
 
-### Архитектурные рекомендации (из roadmap.md)
+### Главная проблема проекта
 
-1. Замена ручных asyncio.create_task на JobQueue
-2. ConversationHandler вместо FSM-флагов
-3. Слой UserRepository для доступа к данным
-4. Конфигурация через dataclass + JSON/YAML для школ
-5. TypedDict для типизации school_data
+**CI красный во всех 23 запусках.** `.github/workflows/ci.yml:27` запускает `pytest -q` (консольный скрипт): в этом режиме cwd не попадает в `sys.path`, а в проекте нет `conftest.py`, `pyproject.toml` или `PYTHONPATH`. Локально всё работает только через `python -m pytest` (внутренние прогоны документированы с `PYTHONPATH=.` — `docs/superpowers/plans/2026-09-13-modernization-webapp.md:16,19`). В CI тесты физически не запускались ни разу: любой сломанный код проходил «проверки».
 
 ---
 
-## 🎯 Приоритеты улучшений
+## 🐛 Найденные ошибки (17.09.2026)
 
-### 🔴 P0 — Критические (исправить в первую очередь)
+### 🔴 Критические
 
-#### 1. Исправить mypy ошибки
-**Файлы:** `tests/test_teacher_exchanges.py`, `tests/test_integration.py`  
-**Проблема:** 10 ошибок типизации  
-**Решение:** Добавить проверки на None, исправить типы
+#### 1. CI красный — тесты в CI не работают
+**Файл:** `.github/workflows/ci.yml:27` (воспроизведено локально: `pytest -q` → exit 3)
+**Причина:** нет `conftest.py`/`pyproject.toml`; консольный `pytest` не добавляет cwd в `sys.path`.
+**Решение:** добавить пустой `tests/conftest.py` (или `conftest.py` в корне) — однострочный фикс; проверить CI зелёным.
 
-```bash
-# Текущий статус
-.venv/bin/mypy .  # 10 errors
-```
+#### 2. Widget API нерабочий: несовместимая схема данных
+**Файлы:** `web/api.py:154-194` ↔ `services/base_schedule_service.py:167-174`
+`/api/widget/{user_id}` читает `lesson.get('time'/'subject'/'room'/'was_subject')`, но `_lessons_payload` возвращает `{num, start, end, items[{subject, teacher, room, class_name}], has_exchange, is_cancelled}`. Следствия:
+- `lesson_time` всегда `''` → `next_lesson` **всегда null** (api.py:154-170);
+- `subject`/`room`/`was_subject` всегда пустые → виджет показывает «—» вместо предметов.
+Тест `tests/test_widget_api.py:63-72` проверяет только наличие ключей, не значения — баг не пойман.
 
-**Задачи:**
-- [ ] Исправить `test_teacher_exchanges.py:49` — аргументы _get_teacher_schedule_data
-- [ ] Исправить `test_teacher_exchanges.py:147, 160` — аналогично
-- [ ] Исправить `test_integration.py:136, 141` — тип datetime
+#### 3. IDOR: `/api/widget/{user_id}` без аутентификации
+**Файл:** `web/api.py:123-137`
+Любой, зная (или перебирая) Telegram user_id, получает привязку «пользователь → школа → класс» и расписание. Контраст с `/api/me` (114-121), где проверяется HMAC-подпись `initData`. В `docs/WIDGET.md:201-203` рекомендация добавить HMAC есть, но не реализована.
 
----
+#### 4. XSS в widget.html
+**Файл:** `web/static/widget.html:203-209`
+`lesson.num/time/subject/room` интерполируются в `container.innerHTML` без `escapeHtml` (в отличие от `app.js`, где экранируется всё). Источник — названия предметов/кабинетов из внешней выгружаемой расписалки: компрометация выгрузки = stored-XSS с доступом к Cache Storage, API, Service Worker.
 
-#### 2. FileDB — атомарность и отложенная запись
-**Файл:** `database/file_db.py`  
-**Проблема:** Перезапись всего JSON на каждую операцию, риск потери данных
+#### 5. PWA полностью сломано: иконок нет на диске
+**Файлы:** `web/static/manifest.json:11-22`, `web/static/index.html:10-11`
+Ссылаются на `icon-192.png`/`icon-512.png`, которых нет в `web/static/` → 404, установка PWA невозможна, `beforeinstallprompt` никогда не сработает, весь код install-prompt (`index.html:76-99`) мёртв.
 
-**Решение A (минимальное):** Dirty-флаг + отложенная запись
-```python
-# Добавить буферизацию записи
-- Запись в временный файл → atomic rename
-- Dirty-флаг для пакетной записи
-- Backup при corruption
-```
+#### 6. Напоминания не применяют замены и переносы праздников
+**Файл:** `services/reminder_service.py:112-115`
+`get_due_reminders_detailed` берёт `day_num = now.isoweekday()` и вызывает `_get_schedule_data` **без** `apply_exchanges_to_schedule` и **без** `_get_effective_day`/`week_num` (сравните с `digest_service.py:73-75` и `schedule_service.py:101-120`). Пользователь получит напоминание об **отменённом** уроке, о заменённом предмете, а в день переноса — по расписанию «настоящего» дня недели.
 
-**Решение B (рекомендуемое):** Переход на SQLite
-```python
-# Преимущества:
-- Транзакции и ACID
-- Частичные обновления
-- Индексы для производительности
-- Встроен в stdlib
-```
-
-**Задачи:**
-- [ ] Реализовать atomic write (temp file + os.replace)
-- [ ] Добавить dirty-флаг для отложенной записи
-- [ ] Опционально: миграция на SQLite (breaking change)
+#### 7. Блокирующее дисковое I/O в event loop на каждом клике
+**Файлы:** `database/file_db.py:49-93` + вызовы из async-хэндлеров
+Каждая запись FileDB = полный `json.dump` всей БД + `fsync` + `shutil.copy2` (.bak) + `os.replace` + fsync директории. Вызывается синхронно из async-кода: `handlers/callbacks/class_callbacks.py:72` (каждый выбор класса), `handlers/schools/school_selection.py:88`, все тогглы `handlers/common/settings.py`, `entity_menu.py:308,311`, `_save_sent_reminders`/`_save_sent_digests` на каждого получателя в рассылках (`core/background_updater.py:130,139,240,249`), `save_notifications_cache()` из async-рассылки (`services/notification_service.py:330`). Event loop один на бота и веб (`bot.py:358-360`, `web/server.py:44-61`) — пики дисковой латентности бьют по всем пользователям и Mini App.
 
 ---
 
-#### 3. Data Loader — HTTP кэширование
-**Файл:** `core/data_loader.py`  
-**Проблема:** Нет ETag/If-Modified-Since, перекачивание данных при отсутствии изменений
+### 🟠 Серьёзные
 
-**Решение:**
-```python
-# Добавить заголовки кэширования
-headers = {
-    "If-None-Match": etag,  # из прошлого запроса
-    "If-Modified-Since": last_modified
-}
-# 304 Not Modified → не парсить JSON
-```
+#### 8. Дайджест не учитывает перенос праздников и weeknum
+**Файл:** `services/digest_service.py:73`
+Замены применяются, но `_get_schedule_data(period_id, class_id, now.isoweekday())` без `_get_effective_day` и `week_num` — в перенесённый день дайджест покажет расписание не того дня.
 
-**Задачи:**
-- [ ] Сохранять ETag и Last-Modified в кэше
-- [ ] Отправлять заголовки при запросе
-- [ ] Обрабатывать ответ 304
-- [ ] Закрывать httpx.Session явно (context manager)
+#### 9. Тихие часы: пользователи навсегда теряют уведомления о заменах
+**Файл:** `services/notification_service.py:313-317, 328-330`
+Если `sent_count > 0` (или все получатели в тихих часах), замена помечается отправленной **для всех** — пропущенные по тихим часам никогда не получат её. Для напоминаний/дайджестов это осознанно корректно (теряют актуальность), для замен — потеря важных данных.
 
----
+#### 10. Потеря уведомлений при сбое отправки
+**Файл:** `core/background_updater.py:525-551`
+`detect_exchanges` мутирует baseline до отправки, `save_cache` (571) фиксирует его независимо от результата notify. Если Telegram был недоступен и все отправки упали, замены уже не «новые» — уведомление не повторится никогда.
 
-### 🟠 P1 — Серьёзные (улучшение надёжности)
+#### 11. Неатомарная запись notifications_cache.json
+**Файл:** `services/notification_service.py:112-130`
+Единственный кэш, пишущийся прямым `open('w')` + `json.dump` (остальные — tmp+`os.replace`). Крах в момент записи → битый JSON → при старте `json.load` падает → кэш сбрасывается → **массовые дубли уведомлений**.
 
-#### 4. Параллельная загрузка школ
-**Файл:** `core/background_updater.py`  
-**Проблема:** Школы загружаются последовательно
+#### 12. Мультишкольные пользователи: напоминания по «случайной» школе
+**Файл:** `services/reminder_service.py:27-35`
+`to_user_classes` оставляет класс последней школы в порядке обхода; `current_school` игнорируется. Пользователь с классами в двух школах получает напоминания/дайджесты не по той, что выбрал текущей.
 
-**Решение:**
-```python
-async with asyncio.Semaphore(3):  # макс. 3 параллельных
-    tasks = [load_school(school_id) for school_id in schools]
-    await asyncio.gather(*tasks)
-```
+#### 13. Markdown-инъекция имени пользователя валит /start
+**Файл:** `handlers/start.py:23-24, 47`
+`user.first_name` вставляется в welcome-текст без `escape_markdown`, отправка с `parse_mode='Markdown'`. Имя с `*`/`_`/`` ` ``/`[` → «Can't parse entities» → вместо меню GENERIC_ERROR_MSG. Имя пользователь контролирует сам.
 
-**Задачи:**
-- [ ] Добавить Semaphore (напр. 3-5 параллельных)
-- [ ] Обработать ошибки каждой школы независимо
-- [ ] Логировать время загрузки каждой школы
+#### 14. Залипание FSM-флагов `waiting_for_*`
+**Файл:** `handlers/common/entity_menu.py:367-369`, `handlers/common/class_schedule.py:53-94`
+`search_input()` ставит флаг поиска, не сбрасывая sibling-флаг и без TTL: клики по старым кнопкам «Поиск» учителя и кабинета оставляют оба флага активными; клик по старой кнопке + любой текст спустя неделю интерпретируется как поисковый запрос.
 
----
+#### 15. callback_data >64 байт ломает клавиатуру «Обновить»
+**Файл:** `handlers/common/entity_menu.py:276-281`
+При `idx is None` (state-кэш истёк, кнопка на старом сообщении) callback строится с полным ФИО; кириллица ×2 байта + префикс `teacher_today_` легко превышают лимит → Telegram отклоняет всю клавиатуру → «❌ Произошла непредвиденная ошибка».
 
-#### 5. JobQueue вместо ручных asyncio.create_task
-**Файлы:** `bot.py`, `core/background_updater.py`  
-**Проблема:** Ручное управление задачами, проблемы с stop()
+#### 16. O(N×M)-сканы каждую минуту в event loop
+**Файл:** `core/background_updater.py:97-105, 209-217`
+`_send_reminders` и `_send_digests` (раз в минуту оба): полный проход users + для каждого — линейный скан всей коллекции preferences с deep-copy. Синхронно в event loop.
 
-**Решение:**
-```python
-# Вместо:
-asyncio.create_task(background_updater.start())
+#### 17. `window.prompt` в Telegram WebApp — «Свободные кабинеты» мертвы на мобильных
+**Файл:** `web/static/app.js:134-137`
+WebView Telegram (iOS/десктоп) не поддерживает `window.prompt`, молча возвращает null → фича недоступна без объяснения.
 
-# Использовать:
-application.job_queue.run_repeating(
-    callback=check_exchanges,
-    interval=UPDATE_INTERVAL,
-    first=0
-)
-```
+#### 18. Режим «Неделя» игнорирует навигацию по датам
+**Файл:** `web/static/app.js:110`
+`const off = 0; // неделя — всегда текущая`: стрелки «‹ ›» меняют подпись, но контент всегда текущая неделя.
 
-**Задачи:**
-- [ ] Перенести background_updater на JobQueue
-- [ ] Перенести reminder_loop на JobQueue
-- [ ] Перенести digest_loop на JobQueue
-- [ ] Удалить ручное управление задачами
+#### 19. manage.sh: откат при неудачном обновлении неполный
+**Файлы:** `manage.sh:489-497, 524`
+`pip install -r requirements.txt` выполняется до рестарта; при провале health-check откатывается только код (`git reset --hard`), зависимости остаются новыми поверх старого кода. Созданный бэкап при откате не применяется и даже не предлагается.
+
+#### 20. Отсутствие rate limiting на API
+**Файл:** `web/api.py` — все маршруты без лимитера. Дефолтный `127.0.0.1` предполагает reverse proxy, но защиты в приложении нет.
+
+#### 21. Конфиг живого сервера расходится с безопасными дефолтами
+**Файлы:** `.env:19-20` (`WEBAPP_HOST=0.0.0.0`, `WEBAPP_PORT=80`) vs `config/config.py:97`, `.env.example:27-29`
+API торчит в интернет без TLS; команда `manage.sh caddy` заблокирована собственной защитой (`manage.sh:819-822`). Ни `Config`, ни `doctor` не предупреждают о расхождении.
+
+#### 22. Бэкапы с токеном читаются всеми
+**Файл:** `manage.sh:599-602`
+tar.gz с `.env` (токен бота) создаётся с дефолтным umask → обычно chmod 644, читается всеми локальными пользователями сервера.
 
 ---
 
-#### 6. ConversationHandler вместо FSM-флагов
-**Файлы:** `handlers/**/*.py`  
-**Проблема:** Флаги `waiting_for_*` в user_data — источник «залипаний»
+### 🟡 Средние
 
-**Решение:**
-```python
-# Использовать ConversationHandler
-from telegram.ext import ConversationHandler
+#### 23. Service Worker: персональный кэш без TTL и ошибки жизненного цикла
+**Файл:** `web/static/service-worker.js:18, 41-58, 62-66`
+`/api/*` (включая `/api/me`) кладётся в Cache Storage без срока; `skipWaiting()` вне `event.waitUntil` (гонка активации); статику отдаёт cache-first навсегда — обновления не применяются до смены `CACHE_NAME`.
 
-WAITING_FOR_CLASS = 1
-WAITING_FOR_TEACHER = 2
+#### 24. Два независимых экземпляра NotificationService
+**Файлы:** `core/background_updater.py:121, 231` + `bot.py:168`
+Fallback `bot_data.get(...) or self.notification_service` поднимает второй экземпляр на тот же файл кэша: два писателя, last-write-wins.
 
-conv_handler = ConversationHandler(
-    entry_points=[...],
-    states={
-        WAITING_FOR_CLASS: [...],
-        WAITING_FOR_TEACHER: [...]
-    },
-    fallbacks=[...]
-)
-```
+#### 25. TOCTOU-гонка на `_update_lock`
+**Файлы:** `core/background_updater.py:361-364`, `handlers/callbacks/admin_callbacks.py:206-210, 258-262`
+`if lock.locked(): return` перед `async with` — между проверкой и захватом другую корутину можно пропустить вперёд. Последствия мягкие, но паттерн «пропустить, если занято» не гарантируется.
 
-**Задачи:**
-- [ ] Аудит всех FSM-флагов в коде
-- [ ] Выделить диалоги (выбор школы, класса, поиска)
-- [ ] Реализовать через ConversationHandler
-- [ ] Добавить fallbacks для /cancel
+#### 26. DataLoader без close() в ручном refresh
+**Файлы:** `handlers/callbacks/admin_callbacks.py:214, 266`, `bot.py:193`
+Создаётся `DataLoader()` (httpx.Client) и не закрывается — на GC.
 
----
+#### 27. Деактивированные школы остаются в bot_data
+**Файл:** `core/background_updater.py:338-343`
+`_merge_schools_data` только добавляет/обновляет: школа с `active=False` живёт до рестарта.
 
-### 🟡 P2 — Улучшения (качество жизни)
+#### 28. Старт без ретрая при недоступном сайте
+**Файл:** `bot.py:205-207`
+Провал начальной загрузки → `schools_data = {}` до первого планового цикла (по умолчанию час).
 
-#### 7. Слой UserRepository
-**Файлы:** `services/user_service.py`, `services/subscription_service.py`  
-**Проблема:** NotificationService лезет в user_service.db напрямую
+#### 29. Спам админам при длительном сбое
+**Файл:** `core/background_updater.py:413-421`
+Все школы недоступны → одно и то же сообщение на каждый плановый цикл.
 
-**Решение:**
-```python
-class UserRepository:
-    def get_users_by_class(self, school_id: str, class_name: str) -> List[int]:
-        ...
-    
-    def get_subscribers(self, subscription_type: str, entity_name: str) -> List[int]:
-        ...
-```
+#### 30. Подписчикам преподавателя приходит текст всех замен класса
+**Файлы:** `core/background_updater.py:614` + `notification_service.py:207`
+Один `text` из всего `class_exchanges` — информационный шум для подписчика конкретного учителя.
 
-**Задачи:**
-- [ ] Создать `database/user_repository.py`
-- [ ] Перенести запросы выбора пользователей
-- [ ] Обновить NotificationService, SubscriptionService
-- [ ] Добавить аннотации типов (TypedDict)
+#### 31. Дедуп замен по md5 всего набора
+**Файл:** `services/notification_service.py:291-295`, `core/background_updater.py:578-596`
+Ключ строится из подписи **всех** замен класса: новая замена → повторное уведомление со всеми старыми заменами класса.
 
----
+#### 32. Тройной троттлинг рассылок
+`notification_service.py:34, 171-177, 233, 322` поверх `AIORateLimiter(max_retries=3)` (`bot.py:81`): массовая рассылка идёт минуты **под `_update_lock`**, блокируя ручные обновления.
 
-#### 8. Конфигурация через dataclass
-**Файлы:** `config/config.py`, `config/schools.py`  
-**Проблема:** Добавление школы требует правки кода
+#### 33. manage.sh: ложный «бот запущен», User=root, restore без бэкапа
+- `manage.sh:263` — `>> logs/bot.log` без `mkdir -p logs`: PID-файл с мёртвым PID, сообщение об успехе;
+- `manage.sh:435` — `User=${USER}` в systemd-юните: при sudo часто root, без подтверждения;
+- `manage.sh:620-622` — restore распаковывает бэкап поверх live-данных без предварительного бэкапа текущего состояния;
+- `manage.sh:963` — bootstrap-install делает `git reset --hard @{upstream}` без проверки локальных изменений (в отличие от `cmd_update:463`);
+- `manage.sh:210-224` — TOCTOU между `kill -0` и `kill` в do_stop.
 
-**Решение:**
-```python
-@dataclass(frozen=True)
-class SchoolConfig:
-    id: str
-    name: str
-    check_url: str
-    display_name: str
-    
-@dataclass
-class AppConfig:
-    telegram_token: str
-    admin_ids: List[int]
-    schools: Dict[str, SchoolConfig]
-    
-    @classmethod
-    def from_env(cls) -> "AppConfig":
-        # Валидация и парсинг .env
-```
+#### 34. Валидация конфига
+- `config/config.py:11` — `TIMEZONE=мусор` → необработанный `ZoneInfoNotFoundError` на импорте (у int-переменных понятные сообщения, у TZ нет);
+- `config/config.py:74,98` — нет диапазонов: `UPDATE_INTERVAL ≤ 0`, `WEBAPP_PORT > 65535` падают только в рантайме;
+- `config/config.py` — нет предупреждения о `WEBAPP_HOST=0.0.0.0`.
 
-**Задачи:**
-- [ ] Создать `config/app_config.py`
-- [ ] Перенести SCHOOLS_CONFIG в JSON/YAML
-- [ ] Добавить валидацию при загрузке
-- [ ] Обновить bot.py для использования
+#### 35. requirements-dev устарел, coverage не измеряется
+- `pytest==7.4.0` (актуальна 9.x), `pytest-asyncio==0.23.0` (актуальна 1.x; в `__pycache__` лежат .pyc от двух разных версий pytest — окружение нестабильно);
+- `tests/test_integration.py:5` — `pytest_plugins = ['anyio']` без явного пина anyio (транзитивная зависимость FastAPI);
+- `pytest-cov` отсутствует: покрытие не измеряется ни локально, ни в CI;
+- `pytest.ini` — нет `filterwarnings`: депрекейшен PTB `retry_after` → `tests/test_notification_retry.py:14` молча сломается при апгрейде PTB.
 
----
+#### 36. Часовой пояс UI ≠ серверный
+**Файл:** `web/static/app.js:32-35, 98` — «сегодня» по TZ устройства, сервер по `TIMEZONE`. Для пользователя в другой TZ подпись даты и данные разойдутся.
 
-#### 9. Форматирование/экранирование в render.py
-**Файлы:** `services/text_utils.py`, `handlers/common/messaging.py`  
-**Проблема:** Экранирование размазано по 4 файлам
+#### 37. Мелочи UX
+- `handlers/callbacks/class_callbacks.py:75` — `query.answer()` не вызывается на успешном пути → спиннер ~15 с;
+- `web/static/app.js:26-27` — 422 (detail-массив) отображается как список словарей;
+- `handlers/callbacks/navigation_callbacks.py:126-137` — невалидируемый `schedule_type` из callback → generic-error вместо понятного сообщения;
+- `bot.py:1` — мусорный заголовок `# File: c:\Users\set\...`;
+- `moscow_tz` содержит `Asia/Yekaterinburg` (`background_updater.py:28`, `status_service.py:25`) — вводящее имя.
 
-**Решение:**
-```python
-# services/render.py
-def escape_markdown_v2(text: str) -> str:
-    ...
+#### 38. Низко-приоритетные технические долги
+- `services/cache_service.py:32-41` — O(n²) вытеснение при заполненном кэше (state_cache TTL 24 ч, лимит 10 000);
+- `core/data_loader.py:145, 168` — `copy.deepcopy` всей расписалки на каждый 304 (2× память в `_http_cache`);
+- `services/state_service.py:39` — `cache.get(key) or default`: сохранённый `0` неотличим от отсутствия записи;
+- `core/background_updater.py:331-334` — после ошибки цикла двойное ожидание (300 с + полный интервал);
+- `core/background_updater.py:434` — f-string с `` ` `` в Markdown-уведомлении админам: исключение с бэктиками → «Can't parse entities»;
+- `services/exchange_detector.py:187-199 vs 216-218` — двойное форматирование всех замен на каждый цикл;
+- `notification_service.py:35` — `_last_sent_at` растёт неограниченно;
+- `mypy.ini:3` — `ignore_missing_imports` глобально;
+- `.gitignore` — кэши инструментов не перечислены (держатся только на внутренних .gitignore).
 
-def format_schedule(lesson: Lesson, show_exchanges: bool = True) -> str:
-    ...
-    
-def parse_mode() -> str:
-    return "HTML"  # или MarkdownV2
-```
+### Проверено и НЕ является проблемой
 
-**Задачи:**
-- [ ] Создать `services/render.py`
-- [ ] Перенести все функции форматирования
-- [ ] Перейти на HTML parse_mode (богаче возможности)
-- [ ] Обновить все вызовы
+- HMAC-валидация `initData` (`web/auth.py:21-40`) — корректна (`compare_digest`, freshness `auth_date`); заметьте: окно 24 ч допускает replay — для GET с публичными данными приемлемо;
+- XSS в `app.js` отсутствует — все 9 innerHTML через `escapeHtml`;
+- `file_db.find_one` возвращает deep-copy — мутации безопасны;
+- httpx.Client в ThreadPoolExecutor потокобезопасен;
+- RetryAfter-ретраи в `_send_message` корректны;
+- CSRF не применим (API только GET, без cookies);
+- `.env` никогда не коммитился (в истории только `.env.example`).
 
 ---
 
-#### 10. Многозначный матчинг подписок
-**Файл:** `services/subscription_service.py`  
-**Проблема:** Подписка по точному имени, нет алиасов
+## 🎯 To-do план
 
-**Решение:**
-```python
-# Добавить нормализацию имён
-TEACHER_ALIASES = {
-    "Иванов И.И.": ["Иванов", "Иванов И.", "Иванов Игорь"],
-    "каб. 301": ["301", "кабинет 301", "ауд. 301"]
-}
-```
+### Фаза 0 — критические исправления (эта неделя)
 
-**Задачи:**
-- [ ] Добавить маппинг алиасов
-- [ ] Нормализация при подписке
-- [ ] Поиск по алиасам при детекте замен
+- [ ] **T1. Починить CI.** Добавить `tests/conftest.py` (пустой) или `conftest.py` в корень; убедиться, что `pytest -q` работает без `PYTHONPATH`. Проверить зелёный раннер на GitHub. *Файл: tests/conftest.py, .github/workflows/ci.yml*
+- [ ] **T2. Починить widget API.** Переписать `web/api.py:153-194` под реальный payload `{num, start, end, items, has_exchange, is_cancelled}`: `lesson_time` из `start/end`, `subject/room` из `items[0]`, `was_subject` — из exchange-данных. Усилять тест `test_widget_api.py` проверками **значений**, не только ключей. *Файлы: web/api.py, tests/test_widget_api.py*
+- [ ] **T3. Закрыть IDOR.** Валидировать `X-Telegram-Init-Data` в `/api/widget/{user_id}` (как в `/api/me`) и сверять `user_id` из подписи с запрошенным; 403 при несовпадении. *Файлы: web/api.py, tests/test_widget_api.py, tests/test_webapp_auth.py*
+- [ ] **T4. Экранировать widget.html.** Добавить `escapeHtml` (как в app.js) для `lesson.num/time/subject/room` в блоке уроков (widget.html:203-209). *Файл: web/static/widget.html*
+- [ ] **T5. Добавить иконки PWA.** Сгенерировать `icon-192.png`, `icon-512.png` (+ favicon/apple-touch-icon) в `web/static/`; проверить установку PWA. *Файлы: web/static/**
+- [ ] **T6. Напоминания: применять замены и переносы.** В `get_due_reminders_detailed` — `apply_exchanges_to_schedule` + `_get_effective_day`/`week_num` по образцу `schedule_service.py:101-120`; тест на отменённый урок и день переноса. *Файлы: services/reminder_service.py, tests/test_reminders.py*
+- [ ] **T7. Экранировать first_name в /start.** `escape_markdown(user.first_name)`. *Файл: handlers/start.py*
 
----
+### Фаза 1 — надёжность данных и рассылок (недели 1-2)
 
-#### 11. Тихие часы с минутной точностью
-**Файл:** `services/user_preferences.py`  
-**Проблема:** Только целые часы (22:00-7:00)
+- [ ] **T8. Атомарная запись notifications_cache.json** — tmp + `os.replace` (по образцу sent_reminders). Тест: крах в момент записи не рвёт кэш. *Файл: services/notification_service.py:112-130*
+- [ ] **T9. Не терять уведомления о заменах при сбое.** Обновлять baseline/`save_cache` только после попытки доставки; либо хранить pending и ретраить. *Файл: core/background_updater.py:525-571*
+- [ ] **T10. Тихие часы не глотают замены.** Не помечать отправленным для тех, кто пропущен по тихим часам (напоминания/дайджесты оставить как есть). *Файл: services/notification_service.py:313-330*
+- [ ] **T11. Дайджест: переносы праздников и weeknum** (`_get_effective_day`), тест на перенесённый день. *Файл: services/digest_service.py:73*
+- [ ] **T12. Мультишкольные пользователи: уважать `current_school`** в напоминаниях/дайджестах. *Файл: services/reminder_service.py:27-35*
+- [ ] **T13. Снять блокирующее I/O с event loop.** Обернуть записи FileDB из async-хэндлеров в `asyncio.to_thread` (или добавить `FileDB.aio`-обёртки); batch-запись `_save_sent_reminders`/`_save_sent_digests` (одна запись на проход, не на получателя). *Файлы: database/file_db.py, handlers/callbacks/*, core/background_updater.py, services/notification_service.py:330*
+- [ ] **T14. Убрать дубль NotificationService** — всегда один экземпляр из bot_data. *Файлы: core/background_updater.py, bot.py*
 
-**Решение:**
-```python
-# Хранить как минуты от начала суток
-quiet_start: int = 22 * 60  # 22:00
-quiet_end: int = 7 * 60    # 07:00
+### Фаза 2 — безопасность и web-функциональность (недели 2-3)
 
-# Или datetime.time
-quiet_start: datetime.time = datetime.time(22, 30)
-```
+- [ ] **T15. Rate limiting на API.** `slowapi` (или простой in-memory token bucket): `/api/*` 100/min, `/api/widget/*` строже. *Файлы: web/api.py, requirements.txt, tests/*
+- [ ] **T16. Service Worker гигиена.** `/api/me` не кэшировать (или TTL); `skipWaiting` в `waitUntil`; для статики — stale-while-revalidate вместо вечного cache-first; bump `CACHE_NAME` при каждом деплое. *Файл: web/static/service-worker.js*
+- [ ] **T17. «Свободные кабинеты» в WebApp без window.prompt** — inline-выбор номера урока (кнопки/селект). *Файл: web/static/app.js*
+- [ ] **T18. Навигация по неделям в WebApp** — передавать `week_offset` в API (сейчас `off = 0` захардкожен). *Файлы: web/static/app.js:110, web/api.py*
+- [ ] **T19. Исправить `.env` живого сервера**: `WEBAPP_HOST=127.0.0.1`, корректный `WEBAPP_PORT`; предупреждающий `doctor`-check для `0.0.0.0`/порта 80/443. *Файлы: .env, manage.sh (doctor), config/config.py*
+- [ ] **T20. Бэкапы с токеном: `chmod 600`** (umask 077 при создании tar). *Файл: manage.sh:599*
+- [ ] **T21. Валидация конфига**: понятная ошибка для TIMEZONE; диапазоны `UPDATE_INTERVAL > 0`, `WEBAPP_PORT ≤ 65535`. *Файл: config/config.py*
 
-**Задачи:**
-- [ ] Изменить формат хранения
-- [ ] Обновить UI настроек
-- [ ] Миграция существующих данных
+### Фаза 3 — качество инфраструктуры (недели 3-4)
 
----
+- [ ] **T22. Обновить requirements-dev и стабилизировать тест-окружение**: pytest 9.x, pytest-asyncio 1.x (проверить семантику `asyncio_mode=auto`), явный пин anyio, добавить `pytest-cov`. *Файл: requirements-dev.txt, pytest.ini*
+- [ ] **T23. Coverage в CI** с порогом (например fail < 60%, цель 80%); badge в README. *Файлы: .github/workflows/ci.yml, pytest.ini*
+- [ ] **T24. Матрица Python 3.11/3.12/3.13 в CI** (manage.sh уже умеет ставить 3.13), pip-cache, шаг shellcheck для manage.sh. *Файл: .github/workflows/ci.yml*
+- [ ] **T25. `filterwarnings`** в pytest.ini (минимум — PTB `retry_after` deprecation как error) + фикс `RetryAfter(0)` → timedelta. *Файлы: pytest.ini, tests/test_notification_retry.py*
+- [ ] **T26. conftest.py**: общие фикстуры (TZ, `_make_db`) вместо дублей в 4+ тест-файлах. *Файл: tests/conftest.py*
+- [ ] **T27. Покрыть тестами**: `web/server.py`, `services/state_service.py`, `services/status_service.py`, `handlers/common/week_command.py`, поведение `room_callbacks.py`/`teacher_callbacks.py` (сейчас только test_dead_code). *Файлы: tests/**
+- [ ] **T28. Управление зависимостями обновления**: откат также переустанавливает старые requirements (или пиннинг версий в venv перед обновлением); при откате предлагать восстановление data/ из созданного бэкапа. *Файл: manage.sh:489-524*
+- [ ] **T29. manage.sh мелкие баги**: `mkdir -p logs` перед стартом; предупреждение о User=root в systemd; restore только после бэкапа текущих данных; bootstrap-install — проверка локальных изменений перед `reset --hard`. *Файл: manage.sh*
 
-### 🟢 P3 — Долгосрочные (архитектурные)
+### Фаза 4 — UX и архитектура (месяц 2)
 
-#### 12. Переход на полноценную БД
-**Текущее:** JSON файлы (`data/database.json`)  
-**Целевое:** SQLite или PostgreSQL
+- [ ] **T30. FSM: TTL и сброс sibling-флагов** в `search_input` (или переход на ConversationHandler — см. roadmap §4.2). *Файлы: handlers/common/entity_menu.py, class_schedule.py*
+- [ ] **T31. callback_data ≤ 64 байт**: для «Обновить» без idx — короткий идентификатор (хэш/индекс в state-кэше). *Файл: handlers/common/entity_menu.py:276-281*
+- [ ] **T32. `query.answer()` на успешных путях** (спиннер не висит 15 с). *Файл: handlers/callbacks/class_callbacks.py*
+- [ ] **T33. Дедуп замен per-замена**, а не md5 всего набора. *Файлы: services/notification_service.py:291-295, core/background_updater.py:578-596*
+- [ ] **T34. Подписчикам entity — только релевантные замены** (фильтрация по учителю/кабинету). *Файл: core/background_updater.py:614*
+- [ ] **T35. O(N×M) напоминаний/дайджестов**: индекс preferences одним проходом, snapshot users без deep-copy каждого документа; вынести из event loop. *Файл: core/background_updater.py:97-105, 209-217*
+- [ ] **T36. Троттлинг рассылок**: убрать дублирующие слои (свой `_min_send_interval` + sleep поверх AIORateLimiter), вынести рассылку из-под `_update_lock`. *Файлы: services/notification_service.py, core/background_updater.py*
+- [ ] **T37. Ретрай начальной загрузки при старте** (например 3 попытки с backoff), чтобы бот не жил час без данных при кратком сбое сайта. *Файл: bot.py:205-207*
+- [ ] **T38. Тихие часы с минутной точностью** (datetime.time, миграция данных, UI). *Файлы: services/user_preferences.py, handlers/common/settings.py*
+- [ ] **T39. Уважать TZ сервера в WebApp** (`today` передавать с сервера или API-параметром). *Файл: web/static/app.js*
 
-**Преимущества:**
-- Транзакции и ACID
-- Индексы для производительности
-- Частичные обновления
-- Конкурентный доступ
+### Фаза 5 — долгосрочные архитектурные (месяцы 2-3, по roadmap §4)
 
-**Задачи:**
-- [ ] Выбрать БД (SQLite для простоты, PostgreSQL для масштаба)
-- [ ] Спроектировать схему данных
-- [ ] Написать миграции
-- [ ] Реализовать ORM/слой доступа
-- [ ] Миграция данных из JSON
-
----
-
-#### 13. Мониторинг и алертинг
-**Отсутствует:** Система мониторинга ошибок
-
-**Решение:**
-- Sentry для отслеживания ошибок
-- Prometheus + Grafana для метрик
-- Health checks с алертами
-
-**Задачи:**
-- [ ] Интегрировать Sentry
-- [ ] Добавить метрики (запросы, ошибки, время ответа)
-- [ ] Настроить дашборды
-- [ ] Алерты в Telegram при критических ошибках
-
----
-
-#### 14. Rate limiting для API
-**Файл:** `web/api.py`  
-**Проблема:** Нет ограничения запросов к API
-
-**Решение:**
-```python
-from slowapi import SlowAPILimiter
-
-limiter = SlowAPILimiter()
-app.state.limiter = limiter
-
-@app.get("/api/schedule")
-@limiter.limit("100/minute")
-async def get_schedule(...):
-    ...
-```
-
-**Задачи:**
-- [ ] Добавить slowapi
-- [ ] Настроить лимиты на эндпоинты
-- [ ] Обработка 429 Too Many Requests
-
----
-
-#### 15. Кэширование на уровне Redis
-**Текущее:** In-memory cache с TTL  
-**Проблема:** Нет кэша между рестартами, нет shared cache для multi-instance
-
-**Решение:**
-```python
-import redis.asyncio as redis
-
-cache = redis.Redis(host='localhost', port=6379)
-await cache.setex(f"schedule:{school_id}:{date}", ttl=3600, value=json_data)
-```
-
-**Задачи:**
-- [ ] Добавить Redis
-- [ ] Миграция cache_service
-- [ ] Настроить TTL для разных типов данных
-- [ ] Pub/Sub для инвалидации кэша
+- [ ] **T40. `JobQueue`** вместо ручных asyncio-циклов (`background_updater`, reminder/digest loops). *Файлы: bot.py, core/background_updater.py*
+- [ ] **T41. Слой `UserRepository`** (закрыть прямой доступ NotificationService к user_service.db) + TypedDict для school_data. *Файлы: services/, database/*
+- [ ] **T42. Отложенная запись FileDB** (dirty-флаг + периодический flush) или миграция на sqlite3 (stdlib) — отдельно, с бэкапом и тестом миграции. *Файл: database/file_db.py*
+- [ ] **T43. Конфигурация через dataclass** (`AppConfig.from_env()`, SCHOOLS_CONFIG → JSON/YAML). *Файлы: config/*
+- [ ] **T44. Sentry** (или минимальный алертинг админам при повторяющихся ошибках), метрики рассылок. *Файлы: bot.py, services/*
+- [ ] **T45. Cache-first рендер расписания в WebApp + офлайн-режим** (SW уже есть — осмысленно использовать после T16).
 
 ---
 
 ## 📈 Метрики качества
 
-### Текущее состояние
-
-| Метрика | Значение | Цель |
-|---------|----------|------|
-| Тесты | 268 | 300+ |
-| ruff | ✅ 0 ошибок | 0 ошибок |
-| mypy | ❌ 10 ошибок | 0 ошибок |
-| Покрытие | Не измеряется | 80%+ |
-| Documentation | Отличная | Актуальная |
-
-### Цели на 3 месяца
-
-1. **Исправить все mypy ошибки** — 0 ошибок
-2. **Добавить 30+ тестов** — 300+ тестов
-3. **Внедрить покрытие тестами** — 80%+
-4. **Миграция на JobQueue** — все фоновые задачи
-5. **SQLite миграция** — опционально
-
----
-
-## 📅 План внедрения
-
-### Неделя 1-2: Критические исправления
-
-- [ ] Исправить mypy ошибки (P0-1)
-- [ ] FileDB atomic write (P0-2A)
-- [ ] Data Loader HTTP кэширование (P0-3)
-
-### Неделя 3-4: Надёжность
-
-- [ ] JobQueue вместо asyncio.create_task (P1-5)
-- [ ] Параллельная загрузка школ (P1-4)
-- [ ] ConversationHandler аудит (P1-6)
-
-### Неделя 5-8: Рефакторинг
-
-- [ ] UserRepository слой (P2-7)
-- [ ] AppConfig dataclass (P2-8)
-- [ ] Render модуль (P2-9)
-
-### Месяц 3+: Долгосрочные улучшения
-
-- [ ] SQLite миграция (P3-12)
-- [ ] Sentry мониторинг (P3-13)
-- [ ] Redis кэширование (P3-15)
-
----
-
-## 🚀 Быстрые победы (можно сделать за 1-2 часа)
-
-1. **Исправить mypy ошибки** — 10 ошибок в 2 файлах
-2. **Добавить explicit session.close()** в data_loader
-3. **Добавить backup .corrupt** в FileDB
-4. **Логирование времени загрузки школ**
-5. **Документировать API эндпоинты**
+| Метрика | Сейчас | Цель (1 мес) |
+|---|---|---|
+| CI | ❌ красный (23/23) | ✅ зелёный, обязательный |
+| Тесты | 288 (локально) | 300+ и реально запускаются в CI |
+| ruff / mypy | ✅ / ✅ | держать |
+| Coverage | не измеряется | измеряется, ≥60% → 80% |
+| Блокирующее I/O в event loop | на каждом клике | устранено (T13) |
+| Widget API | нерабочий | рабочий + тест значений |
+| PWA | сломано (нет иконок) | устанавливается |
 
 ---
 
 ## ⚠️ Риски
 
-### Высокий риск (требует тестирования)
+**Высокие (тестировать тщательно):**
+- T13 (I/O в to_thread) — гонки записи, порядок операций; менять постепенно, под тестами;
+- T42 (FileDB/SQLite) — живая система, только с бэкапом и откатом;
+- T28 (откат зависимостей) — сценарий обновления/отката прогнать на копии.
 
-1. **Миграция на SQLite** — breaking change, нужна обратная совместимость
-2. **ConversationHandler** — изменение поведения FSM, риск «залипаний»
-3. **JobQueue миграция** — изменение управления задачами
+**Средние:** T9-T10 (логика дедупа — риск дублей или повторных потеряний), T30 (FSM — риск новых залипаний), T40 (JobQueue).
 
-### Средний риск
-
-1. **FileDB отложенная запись** — риск потери данных при крахе
-2. **AppConfig dataclass** — изменение конфигурации
-
-### Низкий риск
-
-1. **myty исправления** — только тесты
-2. **HTTP кэширование** — обратно совместимо
-3. **Render модуль** — рефакторинг без изменения API
-
----
-
-## 📝 Рекомендации
-
-### Немедленно (эта неделя)
-
-1. Исправить mypy ошибки — 10 ошибок мешают CI
-2. Добавить atomic write в FileDB — критично для целостности данных
-3. Добавить HTTP кэширование — снизит нагрузку на Nikasoft
-
-### В ближайший месяц
-
-1. JobQueue миграция — улучшит управление задачами
-2. UserRepository — улучшит архитектуру
-3. Параллельная загрузка — ускорит обновление для >5 школ
-
-### Долгосрочно (3-6 месяцев)
-
-1. SQLite миграция — если планируется >10 школ
-2. Monitoring/Sentry — для production мониторинга
-3. Redis кэш — для multi-instance деплоя
+**Низкие:** T4, T5, T7, T21, T26 — локальные фиксы.
 
 ---
 
 ## 🔗 Связанные документы
 
-- [roadmap.md](roadmap.md) — что осталось сделать после Фаз 1-4
+- [roadmap.md](roadmap.md) — исторические фазы и архитектурные рекомендации
 - [CHANGELOG.md](CHANGELOG.md) — история изменений
-- [WIKI.md](WIKI.md) — архитектура проекта
-- [README.md](README.md) — документация пользователя
+- [WIKI.md](WIKI.md) — устройство проекта
+- [docs/WIDGET.md](docs/WIDGET.md) — виджет (в т.ч. рекомендация HMAC, реализуемая в T3)
 
 ---
 
-**Автор:** AI Assistant  
-**Дата создания:** 16 сентября 2026  
-**Статус:** Готов к обсуждению и приоритизации
+**Дата обновления:** 17 сентября 2026
+**Основа:** анализ кода тремя независимыми проходами (services/core, web/handlers, тесты/инфраструктура) + ручная верификация критических находок (CI, widget API, PWA-иконки)
