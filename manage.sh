@@ -601,6 +601,7 @@ cmd_backup() {
 
     tar -czf "$target" -C "$SCRIPT_DIR" "${files[@]}" \
         || die "Не удалось создать бэкап"
+    chmod 600 "$target" || warn "Не удалось ограничить права на бэкап"
     ok "Бэкап: ${target} ($(du -h "$target" | cut -f1))"
 
     # Храним последние 10
@@ -664,6 +665,19 @@ cmd_doctor() {
     else
         fail ".env не найден — cp .env.example .env"
         errors=$((errors + 1))
+    fi
+
+    # Безопасность WEBAPP_HOST / WEBAPP_PORT
+    if [[ -f "$ENV_FILE" ]]; then
+        local wa_host wa_port
+        wa_host=$(grep -E '^WEBAPP_HOST=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
+        wa_port=$(grep -E '^WEBAPP_PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
+        if [[ "$wa_host" == "0.0.0.0" ]]; then
+            warn "WEBAPP_HOST=0.0.0.0 открывает порт бота в интернет; рекомендуется 127.0.0.1 + Caddy"
+        fi
+        if [[ "$wa_port" == "80" || "$wa_port" == "443" ]]; then
+            warn "WEBAPP_PORT=${wa_port} занят Caddy; задайте 8080/8081…"
+        fi
     fi
 
     # Директории

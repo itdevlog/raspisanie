@@ -1,13 +1,31 @@
 import os
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
+def _parse_timezone(name: str = 'TIMEZONE', default: str = 'Asia/Yekaterinburg') -> str:
+    """Красиво разбирает название часового пояса.
+
+    Раньше `ZoneInfo(os.getenv('TIMEZONE', ...))` падал прямо на импорте
+    config с сырым `ZoneInfoNotFoundError`. Здесь — понятное сообщение.
+    """
+    raw = os.getenv(name)
+    value = (raw if raw is not None else default).strip() or default
+    try:
+        ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ValueError(
+            f"Переменная {name!r} = {raw!r} — неизвестный часовой пояс. "
+            f"Пример: {name}=Europe/Moscow. Проверьте .env (см. .env.example)."
+        )
+    return value
+
+
 # Часовой пояс по умолчанию (Екатеринбург = UTC+5). Читается из TIMEZONE (.env),
 # чтобы не дублировать 'Asia/Yekaterinburg' в десятке сервисов.
-_TZ_NAME = os.getenv('TIMEZONE', 'Asia/Yekaterinburg')
+_TZ_NAME = _parse_timezone()
 _TIMEZONE = ZoneInfo(_TZ_NAME)
 
 
@@ -32,6 +50,33 @@ def _parse_int(name: str, default: int) -> int:
             f"Переменная {name!r} = {raw!r} не является числом. "
             f"Пример: {name}=3600. Проверьте .env (см. .env.example)."
         )
+
+
+def _parse_int_positive(name: str, default: int) -> int:
+    """Как `_parse_int`, но требует значение > 0."""
+    value = _parse_int(name, default)
+    if value <= 0:
+        raise ValueError(
+            f"Переменная {name!r} = {value!r} должна быть больше 0. "
+            f"Пример: {name}={default}. Проверьте .env (см. .env.example)."
+        )
+    return value
+
+
+def _parse_int_min(name: str, default: int, minimum: int) -> int:
+    """Как `_parse_int`, но не даёт опуститься ниже `minimum`."""
+    return max(minimum, _parse_int(name, default))
+
+
+def _parse_port(name: str, default: int) -> int:
+    """Разбирает номер порта и проверяет диапазон 0..65535 (0 = выключено)."""
+    value = _parse_int(name, default)
+    if not 0 <= value <= 65535:
+        raise ValueError(
+            f"Переменная {name!r} = {value!r} вне диапазона 0..65535 (0 — веб выключен). "
+            f"Пример: {name}=8080. Проверьте .env (см. .env.example)."
+        )
+    return value
 
 
 def normalize_webapp_url(raw: str) -> str:
@@ -71,8 +116,8 @@ class Config:
     TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 
     # Настройки обновления
-    UPDATE_INTERVAL = _parse_int('UPDATE_INTERVAL', 3600)
-    MAX_RETRIES = _parse_int('MAX_RETRIES', 3)
+    UPDATE_INTERVAL = _parse_int_positive('UPDATE_INTERVAL', 3600)
+    MAX_RETRIES = _parse_int_min('MAX_RETRIES', 3, 1)
     # Параллельная загрузка школ (потоков). 1 — последовательно.
     MAX_PARALLEL_SCHOOLS = max(1, _parse_int('MAX_PARALLEL_SCHOOLS', 4))
 
@@ -89,13 +134,13 @@ class Config:
 
     # Часовой пояс (Екатеринбург = UTC+5). Раньше хардкодился как
     # 'Asia/Yekaterinburg' в 5 местах и ошибочно назывался moscow_tz.
-    TIMEZONE = os.getenv('TIMEZONE', 'Asia/Yekaterinburg')
+    TIMEZONE = _TZ_NAME
 
     # Mini App / веб-сервер
     # 127.0.0.1 по умолчанию: доступ к боту только через reverse proxy (Caddy),
     # чтобы порт не был открыт в интернет. Для нескольких ботов — свой порт каждому.
     WEBAPP_HOST = os.getenv('WEBAPP_HOST', '127.0.0.1')
-    WEBAPP_PORT = _parse_int('WEBAPP_PORT', 8080)
+    WEBAPP_PORT = _parse_port('WEBAPP_PORT', 8080)
     WEBAPP_URL = normalize_webapp_url(os.getenv('WEBAPP_URL', ''))
 
     @staticmethod
