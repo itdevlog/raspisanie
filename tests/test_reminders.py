@@ -67,6 +67,83 @@ def test_reminder_skips_weekend():
     assert out == []
 
 
+def test_reminder_not_produced_for_cancelled_lesson():
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)  # пятница, урок в 08:00
+    school_data = _school_data()
+    school_data['CLASS_EXCHANGE'] = {'c1': {'11.09.2026': {'1': {'s': 'F'}}}}
+    svc = ReminderService()
+    out = svc.get_due_reminders(
+        {'school_133': school_data},
+        {'user_1': ('school_133', '5а')},
+        now=now,
+        window_minutes=10,
+    )
+    assert out == []
+
+
+def test_reminder_uses_exchange_replaced_subject():
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
+    school_data = _school_data()
+    school_data['SUBJECTS']['2'] = 'Биология'
+    school_data['CLASS_EXCHANGE'] = {'c1': {'11.09.2026': {'1': {'s': '2'}}}}
+    svc = ReminderService()
+    out = svc.get_due_reminders(
+        {'school_133': school_data},
+        {'user_1': ('school_133', '5а')},
+        now=now,
+        window_minutes=10,
+    )
+    assert out and 'Биология' in out[0][1]
+    assert 'Математика' not in out[0][1]
+
+
+def test_reminder_on_transfer_day_uses_transferred_weekday():
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)  # пятница
+    school_data = _school_data()
+    school_data['SUBJECTS']['2'] = 'Биология'
+    # пятница переносится на субботу (daynum=6): биология в 08:00
+    school_data['CLASS_SCHEDULE']['p1']['c1']['601'] = {'s': ['2'], 't': [], 'r': []}
+    school_data['HOLIDAY_TRANSFER'] = {'11.09.2026': {'type': 'transfer', 'daynum': 6}}
+    svc = ReminderService()
+    out = svc.get_due_reminders(
+        {'school_133': school_data},
+        {'user_1': ('school_133', '5а')},
+        now=now,
+        window_minutes=10,
+    )
+    assert out and 'Биология' in out[0][1]
+    assert 'Математика' not in out[0][1]
+
+
+def test_reminder_on_transfer_to_day_without_lesson_is_skipped():
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)  # пятница, свой урок в 08:00
+    school_data = _school_data()
+    # перенос на воскресенье (daynum=7) — уроков нет
+    school_data['HOLIDAY_TRANSFER'] = {'11.09.2026': {'type': 'transfer', 'daynum': 7}}
+    svc = ReminderService()
+    out = svc.get_due_reminders(
+        {'school_133': school_data},
+        {'user_1': ('school_133', '5а')},
+        now=now,
+        window_minutes=10,
+    )
+    assert out == []
+
+
+def test_reminder_vacation_day_is_skipped():
+    now = datetime(2026, 9, 11, 7, 55, tzinfo=TZ)
+    school_data = _school_data()
+    school_data['HOLIDAY_TRANSFER'] = {'11.09.2026': {'type': 'vacation'}}
+    svc = ReminderService()
+    out = svc.get_due_reminders(
+        {'school_133': school_data},
+        {'user_1': ('school_133', '5а')},
+        now=now,
+        window_minutes=10,
+    )
+    assert out == []
+
+
 def test_to_user_classes_builds_map():
     users: list[dict[str, Any]] = [
         {'user_id': 1, 'school_classes': {'school_133': '5а'}},
@@ -75,6 +152,41 @@ def test_to_user_classes_builds_map():
     ]
     mapping = ReminderService.to_user_classes(users)
     assert mapping == {1: ('school_133', '5а'), 2: ('school_181', '7б')}
+
+
+def test_to_user_classes_prefers_current_school():
+    users: list[dict[str, Any]] = [
+        {
+            'user_id': 5,
+            'current_school': 'school_181',
+            'school_classes': {'school_181': '7б', 'school_133': '5а'},
+        },
+    ]
+    mapping = ReminderService.to_user_classes(users)
+    assert mapping == {5: ('school_181', '7б')}
+
+
+def test_to_user_classes_falls_back_when_current_school_has_no_class():
+    users: list[dict[str, Any]] = [
+        {
+            'user_id': 6,
+            'current_school': 'school_181',
+            'school_classes': {'school_133': '5а'},
+        },
+    ]
+    mapping = ReminderService.to_user_classes(users)
+    assert mapping == {6: ('school_133', '5а')}
+
+
+def test_to_user_classes_without_current_school_keeps_existing_behavior():
+    users: list[dict[str, Any]] = [
+        {
+            'user_id': 7,
+            'school_classes': {'school_133': '5а', 'school_181': '7б'},
+        },
+    ]
+    mapping = ReminderService.to_user_classes(users)
+    assert mapping == {7: ('school_181', '7б')}
 
 
 def _make_db() -> FileDB:

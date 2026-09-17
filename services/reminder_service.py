@@ -20,8 +20,9 @@ class ReminderService:
         """Строит карту `user_id -> (school_id, class_name)` из записей users.
 
         У пользователя может быть несколько школ. Напоминание — один target на
-        пользователя, поэтому остаётся класс последней школы в порядке обхода
-        `school_classes` (обычно это текущая/последняя выбранная школа).
+        пользователя, поэтому приоритет отдаётся классу текущей школы
+        (`current_school`); если у неё класса нет — берётся класс последней
+        школы в порядке обхода `school_classes` (прежнее поведение).
         Пользователи без user_id или без классов пропускаются.
         """
         mapping: dict[int, tuple[str, str]] = {}
@@ -29,7 +30,13 @@ class ReminderService:
             user_id = user.get('user_id')
             if not user_id:
                 continue
-            for school_id, class_name in (user.get('school_classes') or {}).items():
+            school_classes = user.get('school_classes') or {}
+            current_school = user.get('current_school')
+            current_class = school_classes.get(current_school) if current_school else None
+            if current_school and current_class:
+                mapping[user_id] = (current_school, current_class)
+                continue
+            for school_id, class_name in school_classes.items():
                 if class_name:
                     mapping[user_id] = (school_id, class_name)
         return mapping
@@ -94,8 +101,21 @@ class ReminderService:
                 svc = ScheduleService(school_data, school_id=school_id)
                 period_cache[school_id] = svc
 
-            day_num = now.isoweekday()
-            if day_num > 5:
+            period_id = svc._get_period_for_date(now)
+            if not period_id:
+                continue
+
+            info = svc._get_holiday_info(now) or {}
+            week_num = int(info.get('weeknum') or 0)
+
+            effective = svc._get_effective_day(now, period_id)
+            if effective is None:
+                continue
+            eff_period_id, day_num = effective
+            if not eff_period_id:
+                continue
+
+            if now.isoweekday() > 5 and not svc._get_holiday_info(now):
                 continue
 
             class_key = (school_id, class_name)
@@ -105,11 +125,9 @@ class ReminderService:
                 if not class_id:
                     lessons_by_class[class_key] = []
                     continue
-                period_id = svc._get_period_for_date(now)
-                if not period_id:
-                    lessons_by_class[class_key] = []
-                    continue
-                schedule = svc._get_schedule_data(period_id, class_id, day_num)
+                schedule = svc._get_schedule_data(eff_period_id, class_id, day_num, week_num)
+                schedule = svc.exchange_service.apply_exchanges_to_schedule(
+                    class_name, schedule, now)
                 lessons_by_class[class_key] = schedule
 
             due = self._next_lesson_reminder(school_data, schedule, now, window_minutes)
@@ -133,6 +151,8 @@ class ReminderService:
         window = timedelta(minutes=window_minutes)
 
         for lesson in sorted(schedule, key=lambda item: item['lesson_num']):
+            if lesson.get('is_cancelled'):
+                continue
             lesson_num = lesson['lesson_num']
             times = lesson_times.get(str(lesson_num))
             if not times or len(times) < 2 or times[0] == '?':
