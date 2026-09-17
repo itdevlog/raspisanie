@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
@@ -93,10 +94,10 @@ def normalize_webapp_url(raw: str) -> str:
     return f'https://{url}'
 
 
-def _parse_admin_ids() -> list:
+def _parse_admin_ids() -> list[int]:
     """Разбирает ADMIN_IDS как список id через запятую."""
     raw = os.getenv('ADMIN_IDS', '')
-    result = []
+    result: list[int] = []
     for part in raw.split(','):
         part = part.strip()
         if not part:
@@ -111,37 +112,86 @@ def _parse_admin_ids() -> list:
     return result
 
 
+@dataclass(frozen=True)
+class AppConfig:
+    """Неизменяемый снимок настроек приложения из переменных окружения.
+
+    Единый источник значений. `Config` ниже — обратно-совместимый фасад с
+    прежними UPPER_CASE-именами, которые ожидает существующий код.
+    """
+
+    telegram_token: str | None
+    update_interval: int
+    max_retries: int
+    max_parallel_schools: int
+    admin_ids: list[int]
+    db_path: str
+    cache_path: str
+    log_level: str
+    log_file: str
+    admin_log_file: str
+    timezone: str
+    webapp_host: str
+    webapp_port: int
+    webapp_url: str
+
+    @classmethod
+    def from_env(cls) -> "AppConfig":
+        """Собирает конфиг из окружения через существующие хелперы валидации."""
+        return cls(
+            telegram_token=os.getenv('TELEGRAM_TOKEN'),
+            update_interval=_parse_int_positive('UPDATE_INTERVAL', 3600),
+            max_retries=_parse_int_min('MAX_RETRIES', 3, 1),
+            # Параллельная загрузка школ (потоков). 1 — последовательно.
+            max_parallel_schools=max(1, _parse_int('MAX_PARALLEL_SCHOOLS', 4)),
+            admin_ids=_parse_admin_ids(),
+            db_path=os.getenv('DB_PATH', './data/database.json'),
+            cache_path=os.getenv('CACHE_PATH', './data/cache.json'),
+            log_level=os.getenv('LOG_LEVEL', 'INFO'),
+            log_file=os.getenv('LOG_FILE', './logs/bot.log'),
+            admin_log_file=os.getenv('ADMIN_LOG_FILE', './logs/admin.log'),
+            timezone=_parse_timezone(),
+            webapp_host=os.getenv('WEBAPP_HOST', '127.0.0.1'),
+            webapp_port=_parse_port('WEBAPP_PORT', 8080),
+            webapp_url=normalize_webapp_url(os.getenv('WEBAPP_URL', '')),
+        )
+
+
+# Единый снимок настроек на импорте. Config — тонкая обёртка над ним.
+_APP_CONFIG = AppConfig.from_env()
+
+
 class Config:
     # Telegram
-    TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+    TELEGRAM_TOKEN = _APP_CONFIG.telegram_token
 
     # Настройки обновления
-    UPDATE_INTERVAL = _parse_int_positive('UPDATE_INTERVAL', 3600)
-    MAX_RETRIES = _parse_int_min('MAX_RETRIES', 3, 1)
+    UPDATE_INTERVAL = _APP_CONFIG.update_interval
+    MAX_RETRIES = _APP_CONFIG.max_retries
     # Параллельная загрузка школ (потоков). 1 — последовательно.
-    MAX_PARALLEL_SCHOOLS = max(1, _parse_int('MAX_PARALLEL_SCHOOLS', 4))
+    MAX_PARALLEL_SCHOOLS = _APP_CONFIG.max_parallel_schools
 
     # Администраторы
-    ADMIN_IDS = _parse_admin_ids()
+    ADMIN_IDS = _APP_CONFIG.admin_ids
 
     # База данных
-    DB_PATH = os.getenv('DB_PATH', './data/database.json')
-    CACHE_PATH = os.getenv('CACHE_PATH', './data/cache.json')
+    DB_PATH = _APP_CONFIG.db_path
+    CACHE_PATH = _APP_CONFIG.cache_path
 
     # Логирование
-    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-    LOG_FILE = os.getenv('LOG_FILE', './logs/bot.log')
+    LOG_LEVEL = _APP_CONFIG.log_level
+    LOG_FILE = _APP_CONFIG.log_file
 
     # Часовой пояс (Екатеринбург = UTC+5). Раньше хардкодился как
     # 'Asia/Yekaterinburg' в 5 местах и ошибочно назывался moscow_tz.
-    TIMEZONE = _TZ_NAME
+    TIMEZONE = _APP_CONFIG.timezone
 
     # Mini App / веб-сервер
     # 127.0.0.1 по умолчанию: доступ к боту только через reverse proxy (Caddy),
     # чтобы порт не был открыт в интернет. Для нескольких ботов — свой порт каждому.
-    WEBAPP_HOST = os.getenv('WEBAPP_HOST', '127.0.0.1')
-    WEBAPP_PORT = _parse_port('WEBAPP_PORT', 8080)
-    WEBAPP_URL = normalize_webapp_url(os.getenv('WEBAPP_URL', ''))
+    WEBAPP_HOST = _APP_CONFIG.webapp_host
+    WEBAPP_PORT = _APP_CONFIG.webapp_port
+    WEBAPP_URL = _APP_CONFIG.webapp_url
 
     @staticmethod
     def is_admin(config, user_id: int) -> bool:
@@ -156,7 +206,7 @@ class Config:
         return user_id in ids
 
     # Логирование админ-панели
-    ADMIN_LOG_FILE = os.getenv('ADMIN_LOG_FILE', './logs/admin.log')
+    ADMIN_LOG_FILE = _APP_CONFIG.admin_log_file
 
     # Создаем необходимые директории
     @staticmethod
