@@ -3,7 +3,8 @@
 import os
 from datetime import datetime
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
@@ -15,6 +16,7 @@ from services.schedule_service import ScheduleService
 from services.teacher_service import TeacherService
 
 from .auth import get_user_from_init_data, validate_widget_token
+from .rate_limit import RateLimiter
 
 
 def _school_or_404(services: dict, school_id: str) -> dict:
@@ -57,8 +59,27 @@ def _parse_date_or_none(date_str: str | None) -> datetime:
         raise HTTPException(422, "Некорректная дата; ожидается dd.mm.YYYY") from None
 
 
-def create_app(services: dict) -> FastAPI:
+def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 30,
+               window_seconds: float = 60.0) -> FastAPI:
     app = FastAPI(title="Schedule Bot Mini App API", docs_url=None, redoc_url=None)
+
+    limiter = RateLimiter(max_requests=rate_limit, window_seconds=window_seconds)
+    widget_limiter = RateLimiter(max_requests=widget_rate_limit, window_seconds=window_seconds)
+
+    @app.middleware('http')
+    async def rate_limit_middleware(request: Request, call_next):
+        path = request.url.path
+        if path.startswith('/api/'):
+            client = request.client.host if request.client else 'unknown'
+            if path.startswith('/api/widget/'):
+                key = f'widget:{client}'
+                allowed = widget_limiter.allow(key)
+            else:
+                key = f'api:{client}'
+                allowed = limiter.allow(key)
+            if not allowed:
+                return JSONResponse(status_code=429, content={'detail': 'Слишком много запросов'})
+        return await call_next(request)
 
     @app.get('/healthz')
     async def healthz():
