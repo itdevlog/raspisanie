@@ -135,10 +135,37 @@ class UserPreferencesService:
         settings['daily_digest'] = not settings.get('daily_digest', False)
         return self.set_notification_settings(user_id, settings)
 
-    def enable_quiet_hours(self, user_id: int, start: int = 22, end: int = 7) -> bool:
-        """Включает тихие часы (интервал может пересекать полночь)."""
+    @staticmethod
+    def _clamp_minute(value: int) -> int:
+        """Приводит минуту к диапазону 0-59."""
+        return max(0, min(59, int(value)))
+
+    def enable_quiet_hours(self, user_id: int, start: int = 22, end: int = 7,
+                           start_minute: int = 0, end_minute: int = 0) -> bool:
+        """Включает тихие часы (интервал может пересекать полночь).
+
+        Минуты опциональны: при нулевых значениях ключи не пишутся, чтобы
+        старые записи оставались в прежнем формате.
+        """
         settings = self.get_notification_settings(user_id)
-        settings['quiet_hours'] = {'enabled': True, 'start': start, 'end': end}
+        quiet = {'enabled': True, 'start': start, 'end': end}
+        if start_minute:
+            quiet['start_minute'] = self._clamp_minute(start_minute)
+        if end_minute:
+            quiet['end_minute'] = self._clamp_minute(end_minute)
+        settings['quiet_hours'] = quiet
+        return self.set_notification_settings(user_id, settings)
+
+    def set_quiet_hours(self, user_id: int, start: int, end: int,
+                        start_minute: int = 0, end_minute: int = 0) -> bool:
+        """Меняет границы тихих часов, сохраняя текущий флаг `enabled`."""
+        settings = self.get_notification_settings(user_id)
+        quiet = dict(settings.get('quiet_hours') or {})
+        quiet['start'] = start
+        quiet['end'] = end
+        quiet['start_minute'] = self._clamp_minute(start_minute)
+        quiet['end_minute'] = self._clamp_minute(end_minute)
+        settings['quiet_hours'] = quiet
         return self.set_notification_settings(user_id, settings)
 
     def disable_quiet_hours(self, user_id: int) -> bool:

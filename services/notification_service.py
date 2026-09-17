@@ -141,7 +141,9 @@ class NotificationService:
         """Включены ли сейчас тихие часы по настройкам пользователя.
 
         Поддерживает интервал через полночь (start > end), например 22–7.
-        Некорректные/отсутствующие настройки считаются «не тихими».
+        Опциональные `start_minute`/`end_minute` (0-59) дают минутную точность;
+        старые записи без них трактуются как `:00`. Некорректные/отсутствующие
+        настройки считаются «не тихими».
         """
         if not isinstance(settings, dict):
             return False
@@ -151,15 +153,23 @@ class NotificationService:
         try:
             start = int(quiet['start'])
             end = int(quiet['end'])
+            start_minute = int(quiet.get('start_minute', 0) or 0)
+            end_minute = int(quiet.get('end_minute', 0) or 0)
         except (KeyError, TypeError, ValueError):
             return False
-        hour = now.hour
-        if start == end:
+        if not (0 <= start <= 23 and 0 <= end <= 23):
+            return False
+        if not (0 <= start_minute <= 59 and 0 <= end_minute <= 59):
+            return False
+        start_total = start * 60 + start_minute
+        end_total = end * 60 + end_minute
+        if start_total == end_total:
             # Пустое окно (start == end) считается выключенным, а не «тихим весь день»
             return False
-        if start < end:
-            return start <= hour < end
-        return hour >= start or hour < end
+        now_minutes = now.hour * 60 + now.minute
+        if start_total < end_total:
+            return start_total <= now_minutes < end_total
+        return now_minutes >= start_total or now_minutes < end_total
 
     async def _send_message(self, bot, chat_id: int, text: str, parse_mode: str | None = 'Markdown',
                             max_attempts: int = 3) -> bool:

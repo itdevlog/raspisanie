@@ -37,6 +37,10 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     daily_digest_enabled = user_notification_settings.get('daily_digest', False)
     quiet_hours = user_notification_settings.get('quiet_hours') or {}
     quiet_hours_enabled = bool(quiet_hours.get('enabled'))
+    quiet_start = int(quiet_hours.get('start', 22) or 0)
+    quiet_end = int(quiet_hours.get('end', 7) or 0)
+    quiet_start_minute = int(quiet_hours.get('start_minute', 0) or 0)
+    quiet_end_minute = int(quiet_hours.get('end_minute', 0) or 0)
 
     # Создаем клавиатуру с настройками
     keyboard = [
@@ -60,10 +64,27 @@ async def settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
         [
             InlineKeyboardButton(
-                f"🌙 Тихие часы ({quiet_hours.get('start', 22)}:00-{quiet_hours.get('end', 7)}:00): "
+                f"🌙 Тихие часы ({quiet_start}:{quiet_start_minute:02d}-"
+                f"{quiet_end}:{quiet_end_minute:02d}): "
                 f"{'✅ Вкл' if quiet_hours_enabled else '❌ Выкл'}",
                 callback_data=f"toggle_quiet_hours_{'off' if quiet_hours_enabled else 'on'}"
             )
+        ],
+        [
+            InlineKeyboardButton(
+                f"🌙 Начало: {quiet_start}:{quiet_start_minute:02d}",
+                callback_data="quiet_noop"
+            ),
+            InlineKeyboardButton("−30м", callback_data="quiet_start_dec"),
+            InlineKeyboardButton("+30м", callback_data="quiet_start_inc")
+        ],
+        [
+            InlineKeyboardButton(
+                f"🌙 Конец: {quiet_end}:{quiet_end_minute:02d}",
+                callback_data="quiet_noop"
+            ),
+            InlineKeyboardButton("−30м", callback_data="quiet_end_dec"),
+            InlineKeyboardButton("+30м", callback_data="quiet_end_inc")
         ]
     ]
 
@@ -219,6 +240,61 @@ async def toggle_quiet_hours(update: Update, context: ContextTypes.DEFAULT_TYPE,
         status_text = "отключены"
 
     await query.answer(f"🌙 Тихие часы {status_text}")
+    await settings_handler(update, context)
+
+
+_SHIFT_STEP = 30
+
+
+def _shift_boundary(start: int, start_minute: int, end: int, end_minute: int,
+                    action: str) -> tuple[int, int, int, int]:
+    """Сдвигает одну из границ тихих часов на ±30 минут с переходом через час/сутки.
+
+    `action`: `quiet_start_dec|quiet_start_inc|quiet_end_dec|quiet_end_inc`.
+    Возвращает (start, start_minute, end, end_minute).
+    """
+    start_total = start * 60 + start_minute
+    end_total = end * 60 + end_minute
+    delta = -_SHIFT_STEP if action.endswith('_dec') else _SHIFT_STEP
+    if action.startswith('quiet_start'):
+        start_total = (start_total + delta) % (24 * 60)
+    else:
+        end_total = (end_total + delta) % (24 * 60)
+    return start_total // 60, start_total % 60, end_total // 60, end_total % 60
+
+
+async def shift_quiet_hours(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str):
+    """Сдвигает границы тихих часов на ±30 минут и перерисовывает меню."""
+    query = require_query(update)
+
+    if action == 'quiet_noop':
+        await query.answer()
+        return
+
+    user_id = require_user(update).id
+    user_service = context.bot_data.get('user_service')
+    if not user_service:
+        await query.answer("❌ Сервис не доступен")
+        return
+
+    preferences_service = UserPreferencesService(user_service.db)
+    quiet = preferences_service.get_notification_settings(user_id).get('quiet_hours') or {}
+    start = int(quiet.get('start', 22) or 0)
+    end = int(quiet.get('end', 7) or 0)
+    start_minute = int(quiet.get('start_minute', 0) or 0)
+    end_minute = int(quiet.get('end_minute', 0) or 0)
+
+    new_start, new_start_minute, new_end, new_end_minute = _shift_boundary(
+        start, start_minute, end, end_minute, action
+    )
+    await asyncio.to_thread(
+        preferences_service.set_quiet_hours,
+        user_id, new_start, new_end, new_start_minute, new_end_minute,
+    )
+
+    await query.answer(
+        f"🌙 Тихие часы: {new_start}:{new_start_minute:02d}-{new_end}:{new_end_minute:02d}"
+    )
     await settings_handler(update, context)
 
 

@@ -3,6 +3,7 @@ import asyncio
 import logging
 import logging.handlers
 import socket
+import time
 
 from telegram import LinkPreviewOptions, Update
 from telegram.ext import (
@@ -188,12 +189,30 @@ class ScheduleBot:
         self.application.bot_data['webapp_url'] = self.config.WEBAPP_URL or None
 
     def load_schools_data(self):
-        """Загружает данные для всех активных школ"""
+        """Загружает данные для всех активных школ с ретраями начальной загрузки.
+
+        Пустой результат не оставляем до планового цикла обновления (по умолчанию
+        час): до 3 попыток с нарастающей паузой (1с, 2с). Частичный результат
+        (хотя бы одна школа) считается успехом и не ретраится. Вызывается
+        синхронно до старта event loop, поэтому паузы — `time.sleep`; на
+        успешном первом проходе задержки нет.
+        """
         self.logger.info("Загрузка данных расписания для всех школ...")
         loader = DataLoader()
 
-        # Загружаем данные для всех активных школ
-        schools_data = loader.load_all_schools_data()
+        max_attempts = 3
+        schools_data: dict = {}
+        for attempt in range(max_attempts):
+            schools_data = loader.load_all_schools_data()
+            if schools_data:
+                break
+            if attempt < max_attempts - 1:
+                pause = 2 ** attempt
+                self.logger.warning(
+                    f"⚠️ Данные расписания не загружены (попытка {attempt + 1}/"
+                    f"{max_attempts}), повтор через {pause}с..."
+                )
+                time.sleep(pause)
 
         if schools_data:
             self.application.bot_data['schools_data'] = schools_data
