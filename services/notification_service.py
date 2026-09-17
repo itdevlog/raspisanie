@@ -332,10 +332,14 @@ class NotificationService:
                 self._exchange_user_key(school_id, class_name, date, ex) for ex in exchanges
             ]
 
+            # TTL-очистка один раз за проход: далее membership-проверки идут
+            # прямым lookup-ом (cleanup=False), не сканируя кэш на каждую пару.
+            self._cleanup_old_notifications()
+
             # Быстрый путь: каждая замена уже доставлена всем получателям.
             # Групповой ключ не может привести к повторной отправке старых замен.
             all_delivered = all(
-                all(self._is_user_notified(key, uid) for uid in users)
+                all(self._is_user_notified(key, uid, cleanup=False) for uid in users)
                 for key in exchange_keys
             )
             if all_delivered:
@@ -357,7 +361,7 @@ class NotificationService:
                 # Только те замены, которые пользователь ещё не получал
                 new_for_user = [
                     ex for ex, key in zip(exchanges, exchange_keys)
-                    if not self._is_user_notified(key, user_id)
+                    if not self._is_user_notified(key, user_id, cleanup=False)
                 ]
                 if not new_for_user:
                     continue
@@ -492,10 +496,16 @@ class NotificationService:
         day_names = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
         return day_names[date.weekday()]
 
-    def _is_notification_sent(self, notification_key: str) -> bool:
-        """Проверяет, было ли уведомление уже отправлено"""
+    def _is_notification_sent(self, notification_key: str, cleanup: bool = True) -> bool:
+        """Проверяет, было ли уведомление уже отправлено.
+
+        `cleanup=False` — прямой lookup без прогона TTL-очистки. Нужен для
+        массовых проверок (per-замена × получатель), где очистка за проход
+        делается один раз: иначе получается O(E×U×N) по размеру кэша.
+        """
         # Очищаем старые уведомления (старше 24 часов)
-        self._cleanup_old_notifications()
+        if cleanup:
+            self._cleanup_old_notifications()
 
         # Проверяем наличие ключа в любом месте словаря (set — старый формат, dict — новый с timestamp)
         for entries in self.sent_notifications.values():
@@ -510,9 +520,9 @@ class NotificationService:
             self.sent_notifications['exchanges'] = {}
         self.sent_notifications['exchanges'][notification_key] = time.time()
 
-    def _is_user_notified(self, notification_key: str, user_id: int) -> bool:
+    def _is_user_notified(self, notification_key: str, user_id: int, cleanup: bool = True) -> bool:
         """Была ли конкретному пользователю доставлена эта замена."""
-        return self._is_notification_sent(f"{notification_key}:u{user_id}")
+        return self._is_notification_sent(f"{notification_key}:u{user_id}", cleanup=cleanup)
 
     def _mark_user_notified(self, notification_key: str, user_id: int):
         """Помечает доставку замены конкретному пользователю (та же категория,
