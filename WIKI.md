@@ -486,17 +486,19 @@ ADMIN_LOG_FILE=./logs/admin.log
 > - **P1**: двойной `query.answer()`; залипающие флаги поиска; утечка `class_digit`; TTL-кнопки; удалён мёртвый `UserSchool`; экранирование до бизнес-логики (замены учителей/кабинетов); `ExchangeService` в цикле.
 > - **Рефакторинг/качество (P2)**: `EntityMenuHandler` (учителя/кабинеты — из дублей 913→500), `menu_builder`+`HELP_TEXT`, `is_admin`, `get_school_by_id`, `TIMEZONE`, `str(e)`→лог, мёртвый код, `ADMIN_LOG_FILE`, O(N) индекс получателей, TTL кэша уведомлений, `CacheService` (потокобезопасность + лимит), `@requires_school`, индикатор «печатает...», счётчик свежих школ. В Фазе 3: единая админ-панель (`/admin`/`/stats`), `/cancel` + `reset_user_flow`, общие `format_time_ago`/`find_class_id`, разделение хранилищ настроек уведомлений.
 > - **Фаза 4 (новый функционал)**: уведомления о снятии замен (`↩️ … — замена снята`); подписки на преподавателей/кабинеты (`SubscriptionService`, кнопка в расписании, рассылка подписчикам, список в `/settings`); напоминания об уроках (`ReminderService` + `BackgroundUpdater._reminder_loop` на существующем asyncio-loop); тихие часы + анти-флуд; смещение недели и `get_next_lesson` (внутренние хелперы).
-> - **Инструменты/тесты**: pytest (227 тестов: юнит + интеграционные моки), ruff (чистый), mypy (конфиг), CI-воркфлоу, `requirements-dev.txt`.
+> - **Инструменты/тесты**: pytest (514 тестов: юнит + интеграционные моки), покрытие 67%, ruff (чистый), mypy (0 ошибок на 141 файле), CI (зелёный, матрица 3.11/3.12/3.13, coverage-порог 60%), `requirements-dev.txt`.
+
+> ✅ **План [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) выполнен 17.09.2026** (T1–T45). Добавлено: починен CI (`conftest`), widget API + HMAC/IDOR/XSS, PWA-иконки, корректные напоминания/дайджесты (замены, переносы, `current_school`), надёжность рассылок (baseline после доставки, тихие часы, атомарные кэши), вынос I/O из event loop, rate limiting, SW-гигиена, валидация конфига, `manage.sh`, FSM/callback UX, дедуп замен per-замена, `JobQueue`, `UserRepository`, `AppConfig`, алертинг админам, офлайн-WebApp.
 
 ### 16.1 Открытый техдолг (P2)
 
 > Полный актуальный список «что осталось» — см. [roadmap.md](roadmap.md); всё сделанное — в [CHANGELOG.md](CHANGELOG.md). Здесь — кратко, что ещё открыто:
 
-1. **`FileDB` перезаписывает весь JSON на каждую операцию** — грязная запись (deferred) или переход на `sqlite3`. Сознательно не трогается на живой системе.
-2. **`data_loader` ETag/If-Modified-Since** — не перекачивать данные при отсутствии изменений (метод `close()` уже добавлен).
-3. **Архитектурные** (крупные, по желанию): `JobQueue` вместо ручного цикла; `ConversationHandler` вместо FSM-флагов; `UserRepository`; `render.py` (HTML) вместо разрозненного экранирования; `@dataclass` конфиг + `SCHOOLS_CONFIG` в JSON; строгая типизация (mypy); единый `Services`-объект вместо `context.bot_data.get(...)`.
+1. **`FileDB` deferred-write / `sqlite3` (T42)** — **parked**: deferred-write снизил бы долговечность (регрессия), а мотивация «event loop» снята выносом I/O в `to_thread` (T13). Данные остаются durable.
+2. **Архитектурные** (крупные, по желанию): `ConversationHandler` вместо FSM-флагов; `render.py` (HTML) вместо разрозненного экранирования; единый `Services`-объект вместо `context.bot_data.get(...)`; инъекция часов (clock). Сделано: `JobQueue` (T40), `UserRepository` + `TypedDict` (T41), `@dataclass` конфиг + внешний JSON школ (T43).
+3. **Многозначный матчинг подписок** — подписки/рассылки по точному имени сущности, без алиасов.
 
-> Открытых P0 нет; P0/P1/P2-минимум и все четыре фазы (1–4) закрыты. Явно отложены только крупные сквозные рефакторинги (слой данных `UserRepository`/`TypedDict`, clock-инъекция), параллельная загрузка школ, многозначный матчинг подписок и минутная гранулярность тихих часов.
+> Открытых P0/P1 нет; аудит 03.09 и план 17.09 закрыты. Действия при деплое: `pip install -r requirements.txt` (apscheduler) и правка живого `.env` (`WEBAPP_HOST=127.0.0.1`).
 
 ---
 

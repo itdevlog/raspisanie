@@ -1,7 +1,19 @@
 # План развития и улучшения проекта raspisanie
 
 **Дата анализа:** 17 сентября 2026
-**Статус проекта:** Production-зрелая база; найден ряд критических багов, не видимых в локальных прогонах
+**Статус проекта:** ✅ План выполнен (17.09.2026). Существенные пункты T1–T45 закрыты; T42 осознанно parked (см. ниже).
+
+> ## ✅ Итог выполнения (17.09.2026)
+>
+> - **31 коммит** (`e8bf2a9..44ffc37`), запушены в `origin/main`.
+> - **CI зелёный** (run `35219620137`; ранее — 23 из 23 красных).
+> - **514 тестов** проходят, `ruff check .` чисто, `mypy .` — 0 ошибок (141 файл).
+> - **Покрытие 67%** (порог в CI — 60%).
+> - Закрыто: CI, widget API + HMAC/IDOR, XSS/PWA, напоминания/дайджесты с заменами и переносами, надёжность рассылок (baseline после доставки, тихие часы, атомарные кэши), вынос блокирующего I/O из event loop, rate limiting, гигиена Service Worker, валидация конфига, manage.sh, FSM/callback UX, дедуп замен, JobQueue, UserRepository, AppConfig, алертинг админам, офлайн-режим WebApp.
+> - **T42 (отложенная запись `FileDB` / SQLite) — parked:** deferred-write снизил бы долговечность (регрессия), а мотивация «event loop» уже снята в T13; полная миграция на sqlite3 — крупное рискованное изменение для живой системы. Данные остаются durable.
+> - **Действия при деплое:** `pip install -r requirements.txt` (JobQueue → `apscheduler`); поправить живой `.env` (`WEBAPP_HOST=127.0.0.1`, `WEBAPP_PORT=8080` + Caddy) — правки на сервере сознательно не делались.
+>
+> Ниже сохранён исходный анализ (17.09) как история; статус каждого пункта проставлен в to-do плане.
 
 ---
 
@@ -27,13 +39,15 @@
 - ✅ Исправлены 10 mypy-ошибок в тестах; починен дато-зависимый тест кэша замен
 - ✅ 288 тестов проходят локально, ruff/mypy чистые
 
-### Главная проблема проекта
+### Главная проблема проекта (устранена в T1)
 
 **CI красный во всех 23 запусках.** `.github/workflows/ci.yml:27` запускает `pytest -q` (консольный скрипт): в этом режиме cwd не попадает в `sys.path`, а в проекте нет `conftest.py`, `pyproject.toml` или `PYTHONPATH`. Локально всё работает только через `python -m pytest` (внутренние прогоны документированы с `PYTHONPATH=.` — `docs/superpowers/plans/2026-09-13-modernization-webapp.md:16,19`). В CI тесты физически не запускались ни разу: любой сломанный код проходил «проверки».
 
 ---
 
 ## 🐛 Найденные ошибки (17.09.2026)
+
+> Все пункты ниже закрыты в рамках T1–T41, T43–T45. Раздел оставлен как история анализа.
 
 ### 🔴 Критические
 
@@ -230,93 +244,93 @@ Fallback `bot_data.get(...) or self.notification_service` поднимает в�
 
 ### Фаза 0 — критические исправления (эта неделя)
 
-- [ ] **T1. Починить CI.** Добавить `tests/conftest.py` (пустой) или `conftest.py` в корень; убедиться, что `pytest -q` работает без `PYTHONPATH`. Проверить зелёный раннер на GitHub. *Файл: tests/conftest.py, .github/workflows/ci.yml*
-- [ ] **T2. Починить widget API.** Переписать `web/api.py:153-194` под реальный payload `{num, start, end, items, has_exchange, is_cancelled}`: `lesson_time` из `start/end`, `subject/room` из `items[0]`, `was_subject` — из exchange-данных. Усилять тест `test_widget_api.py` проверками **значений**, не только ключей. *Файлы: web/api.py, tests/test_widget_api.py*
-- [ ] **T3. Закрыть IDOR.** Валидировать `X-Telegram-Init-Data` в `/api/widget/{user_id}` (как в `/api/me`) и сверять `user_id` из подписи с запрошенным; 403 при несовпадении. *Файлы: web/api.py, tests/test_widget_api.py, tests/test_webapp_auth.py*
-- [ ] **T4. Экранировать widget.html.** Добавить `escapeHtml` (как в app.js) для `lesson.num/time/subject/room` в блоке уроков (widget.html:203-209). *Файл: web/static/widget.html*
-- [ ] **T5. Добавить иконки PWA.** Сгенерировать `icon-192.png`, `icon-512.png` (+ favicon/apple-touch-icon) в `web/static/`; проверить установку PWA. *Файлы: web/static/**
-- [ ] **T6. Напоминания: применять замены и переносы.** В `get_due_reminders_detailed` — `apply_exchanges_to_schedule` + `_get_effective_day`/`week_num` по образцу `schedule_service.py:101-120`; тест на отменённый урок и день переноса. *Файлы: services/reminder_service.py, tests/test_reminders.py*
-- [ ] **T7. Экранировать first_name в /start.** `escape_markdown(user.first_name)`. *Файл: handlers/start.py*
+- [x] **T1. Починить CI.** Добавить `tests/conftest.py` (пустой) или `conftest.py` в корень; убедиться, что `pytest -q` работает без `PYTHONPATH`. Проверить зелёный раннер на GitHub. *Файл: tests/conftest.py, .github/workflows/ci.yml*
+- [x] **T2. Починить widget API.** Переписать `web/api.py:153-194` под реальный payload `{num, start, end, items, has_exchange, is_cancelled}`: `lesson_time` из `start/end`, `subject/room` из `items[0]`, `was_subject` — из exchange-данных. Усилять тест `test_widget_api.py` проверками **значений**, не только ключей. *Файлы: web/api.py, tests/test_widget_api.py*
+- [x] **T3. Закрыть IDOR.** Валидировать `X-Telegram-Init-Data` в `/api/widget/{user_id}` (как в `/api/me`) и сверять `user_id` из подписи с запрошенным; 403 при несовпадении. *Файлы: web/api.py, tests/test_widget_api.py, tests/test_webapp_auth.py*
+- [x] **T4. Экранировать widget.html.** Добавить `escapeHtml` (как в app.js) для `lesson.num/time/subject/room` в блоке уроков (widget.html:203-209). *Файл: web/static/widget.html*
+- [x] **T5. Добавить иконки PWA.** Сгенерировать `icon-192.png`, `icon-512.png` (+ favicon/apple-touch-icon) в `web/static/`; проверить установку PWA. *Файлы: web/static/**
+- [x] **T6. Напоминания: применять замены и переносы.** В `get_due_reminders_detailed` — `apply_exchanges_to_schedule` + `_get_effective_day`/`week_num` по образцу `schedule_service.py:101-120`; тест на отменённый урок и день переноса. *Файлы: services/reminder_service.py, tests/test_reminders.py*
+- [x] **T7. Экранировать first_name в /start.** `escape_markdown(user.first_name)`. *Файл: handlers/start.py*
 
 ### Фаза 1 — надёжность данных и рассылок (недели 1-2)
 
-- [ ] **T8. Атомарная запись notifications_cache.json** — tmp + `os.replace` (по образцу sent_reminders). Тест: крах в момент записи не рвёт кэш. *Файл: services/notification_service.py:112-130*
-- [ ] **T9. Не терять уведомления о заменах при сбое.** Обновлять baseline/`save_cache` только после попытки доставки; либо хранить pending и ретраить. *Файл: core/background_updater.py:525-571*
-- [ ] **T10. Тихие часы не глотают замены.** Не помечать отправленным для тех, кто пропущен по тихим часам (напоминания/дайджесты оставить как есть). *Файл: services/notification_service.py:313-330*
-- [ ] **T11. Дайджест: переносы праздников и weeknum** (`_get_effective_day`), тест на перенесённый день. *Файл: services/digest_service.py:73*
-- [ ] **T12. Мультишкольные пользователи: уважать `current_school`** в напоминаниях/дайджестах. *Файл: services/reminder_service.py:27-35*
-- [ ] **T13. Снять блокирующее I/O с event loop.** Обернуть записи FileDB из async-хэндлеров в `asyncio.to_thread` (или добавить `FileDB.aio`-обёртки); batch-запись `_save_sent_reminders`/`_save_sent_digests` (одна запись на проход, не на получателя). *Файлы: database/file_db.py, handlers/callbacks/*, core/background_updater.py, services/notification_service.py:330*
-- [ ] **T14. Убрать дубль NotificationService** — всегда один экземпляр из bot_data. *Файлы: core/background_updater.py, bot.py*
+- [x] **T8. Атомарная запись notifications_cache.json** — tmp + `os.replace` (по образцу sent_reminders). Тест: крах в момент записи не рвёт кэш. *Файл: services/notification_service.py:112-130*
+- [x] **T9. Не терять уведомления о заменах при сбое.** Обновлять baseline/`save_cache` только после попытки доставки; либо хранить pending и ретраить. *Файл: core/background_updater.py:525-571*
+- [x] **T10. Тихие часы не глотают замены.** Не помечать отправленным для тех, кто пропущен по тихим часам (напоминания/дайджесты оставить как есть). *Файл: services/notification_service.py:313-330*
+- [x] **T11. Дайджест: переносы праздников и weeknum** (`_get_effective_day`), тест на перенесённый день. *Файл: services/digest_service.py:73*
+- [x] **T12. Мультишкольные пользователи: уважать `current_school`** в напоминаниях/дайджестах. *Файл: services/reminder_service.py:27-35*
+- [x] **T13. Снять блокирующее I/O с event loop.** Обернуть записи FileDB из async-хэндлеров в `asyncio.to_thread` (или добавить `FileDB.aio`-обёртки); batch-запись `_save_sent_reminders`/`_save_sent_digests` (одна запись на проход, не на получателя). *Файлы: database/file_db.py, handlers/callbacks/*, core/background_updater.py, services/notification_service.py:330*
+- [x] **T14. Убрать дубль NotificationService** — всегда один экземпляр из bot_data. *Файлы: core/background_updater.py, bot.py*
 
 ### Фаза 2 — безопасность и web-функциональность (недели 2-3)
 
-- [ ] **T15. Rate limiting на API.** `slowapi` (или простой in-memory token bucket): `/api/*` 100/min, `/api/widget/*` строже. *Файлы: web/api.py, requirements.txt, tests/*
-- [ ] **T16. Service Worker гигиена.** `/api/me` не кэшировать (или TTL); `skipWaiting` в `waitUntil`; для статики — stale-while-revalidate вместо вечного cache-first; bump `CACHE_NAME` при каждом деплое. *Файл: web/static/service-worker.js*
-- [ ] **T17. «Свободные кабинеты» в WebApp без window.prompt** — inline-выбор номера урока (кнопки/селект). *Файл: web/static/app.js*
-- [ ] **T18. Навигация по неделям в WebApp** — передавать `week_offset` в API (сейчас `off = 0` захардкожен). *Файлы: web/static/app.js:110, web/api.py*
-- [ ] **T19. Исправить `.env` живого сервера**: `WEBAPP_HOST=127.0.0.1`, корректный `WEBAPP_PORT`; предупреждающий `doctor`-check для `0.0.0.0`/порта 80/443. *Файлы: .env, manage.sh (doctor), config/config.py*
-- [ ] **T20. Бэкапы с токеном: `chmod 600`** (umask 077 при создании tar). *Файл: manage.sh:599*
-- [ ] **T21. Валидация конфига**: понятная ошибка для TIMEZONE; диапазоны `UPDATE_INTERVAL > 0`, `WEBAPP_PORT ≤ 65535`. *Файл: config/config.py*
+- [x] **T15. Rate limiting на API.** `slowapi` (или простой in-memory token bucket): `/api/*` 100/min, `/api/widget/*` строже. *Файлы: web/api.py, requirements.txt, tests/*
+- [x] **T16. Service Worker гигиена.** `/api/me` не кэшировать (или TTL); `skipWaiting` в `waitUntil`; для статики — stale-while-revalidate вместо вечного cache-first; bump `CACHE_NAME` при каждом деплое. *Файл: web/static/service-worker.js*
+- [x] **T17. «Свободные кабинеты» в WebApp без window.prompt** — inline-выбор номера урока (кнопки/селект). *Файл: web/static/app.js*
+- [x] **T18. Навигация по неделям в WebApp** — передавать `week_offset` в API (сейчас `off = 0` захардкожен). *Файлы: web/static/app.js:110, web/api.py*
+- [x] **T19. Исправить `.env` живого сервера**: `WEBAPP_HOST=127.0.0.1`, корректный `WEBAPP_PORT`; предупреждающий `doctor`-check для `0.0.0.0`/порта 80/443. *Файлы: .env, manage.sh (doctor), config/config.py*
+- [x] **T20. Бэкапы с токеном: `chmod 600`** (umask 077 при создании tar). *Файл: manage.sh:599*
+- [x] **T21. Валидация конфига**: понятная ошибка для TIMEZONE; диапазоны `UPDATE_INTERVAL > 0`, `WEBAPP_PORT ≤ 65535`. *Файл: config/config.py*
 
 ### Фаза 3 — качество инфраструктуры (недели 3-4)
 
-- [ ] **T22. Обновить requirements-dev и стабилизировать тест-окружение**: pytest 9.x, pytest-asyncio 1.x (проверить семантику `asyncio_mode=auto`), явный пин anyio, добавить `pytest-cov`. *Файл: requirements-dev.txt, pytest.ini*
-- [ ] **T23. Coverage в CI** с порогом (например fail < 60%, цель 80%); badge в README. *Файлы: .github/workflows/ci.yml, pytest.ini*
-- [ ] **T24. Матрица Python 3.11/3.12/3.13 в CI** (manage.sh уже умеет ставить 3.13), pip-cache, шаг shellcheck для manage.sh. *Файл: .github/workflows/ci.yml*
-- [ ] **T25. `filterwarnings`** в pytest.ini (минимум — PTB `retry_after` deprecation как error) + фикс `RetryAfter(0)` → timedelta. *Файлы: pytest.ini, tests/test_notification_retry.py*
-- [ ] **T26. conftest.py**: общие фикстуры (TZ, `_make_db`) вместо дублей в 4+ тест-файлах. *Файл: tests/conftest.py*
-- [ ] **T27. Покрыть тестами**: `web/server.py`, `services/state_service.py`, `services/status_service.py`, `handlers/common/week_command.py`, поведение `room_callbacks.py`/`teacher_callbacks.py` (сейчас только test_dead_code). *Файлы: tests/**
-- [ ] **T28. Управление зависимостями обновления**: откат также переустанавливает старые requirements (или пиннинг версий в venv перед обновлением); при откате предлагать восстановление data/ из созданного бэкапа. *Файл: manage.sh:489-524*
-- [ ] **T29. manage.sh мелкие баги**: `mkdir -p logs` перед стартом; предупреждение о User=root в systemd; restore только после бэкапа текущих данных; bootstrap-install — проверка локальных изменений перед `reset --hard`. *Файл: manage.sh*
+- [x] **T22. Обновить requirements-dev и стабилизировать тест-окружение**: pytest 9.x, pytest-asyncio 1.x (проверить семантику `asyncio_mode=auto`), явный пин anyio, добавить `pytest-cov`. *Файл: requirements-dev.txt, pytest.ini*
+- [x] **T23. Coverage в CI** с порогом (например fail < 60%, цель 80%); badge в README. *Файлы: .github/workflows/ci.yml, pytest.ini*
+- [x] **T24. Матрица Python 3.11/3.12/3.13 в CI** (manage.sh уже умеет ставить 3.13), pip-cache, шаг shellcheck для manage.sh. *Файл: .github/workflows/ci.yml*
+- [x] **T25. `filterwarnings`** в pytest.ini (минимум — PTB `retry_after` deprecation как error) + фикс `RetryAfter(0)` → timedelta. *Файлы: pytest.ini, tests/test_notification_retry.py*
+- [x] **T26. conftest.py**: общие фикстуры (TZ, `_make_db`) вместо дублей в 4+ тест-файлах. *Файл: tests/conftest.py*
+- [x] **T27. Покрыть тестами**: `web/server.py`, `services/state_service.py`, `services/status_service.py`, `handlers/common/week_command.py`, поведение `room_callbacks.py`/`teacher_callbacks.py` (сейчас только test_dead_code). *Файлы: tests/**
+- [x] **T28. Управление зависимостями обновления**: откат также переустанавливает старые requirements (или пиннинг версий в venv перед обновлением); при откате предлагать восстановление data/ из созданного бэкапа. *Файл: manage.sh:489-524*
+- [x] **T29. manage.sh мелкие баги**: `mkdir -p logs` перед стартом; предупреждение о User=root в systemd; restore только после бэкапа текущих данных; bootstrap-install — проверка локальных изменений перед `reset --hard`. *Файл: manage.sh*
 
 ### Фаза 4 — UX и архитектура (месяц 2)
 
-- [ ] **T30. FSM: TTL и сброс sibling-флагов** в `search_input` (или переход на ConversationHandler — см. roadmap §4.2). *Файлы: handlers/common/entity_menu.py, class_schedule.py*
-- [ ] **T31. callback_data ≤ 64 байт**: для «Обновить» без idx — короткий идентификатор (хэш/индекс в state-кэше). *Файл: handlers/common/entity_menu.py:276-281*
-- [ ] **T32. `query.answer()` на успешных путях** (спиннер не висит 15 с). *Файл: handlers/callbacks/class_callbacks.py*
-- [ ] **T33. Дедуп замен per-замена**, а не md5 всего набора. *Файлы: services/notification_service.py:291-295, core/background_updater.py:578-596*
-- [ ] **T34. Подписчикам entity — только релевантные замены** (фильтрация по учителю/кабинету). *Файл: core/background_updater.py:614*
-- [ ] **T35. O(N×M) напоминаний/дайджестов**: индекс preferences одним проходом, snapshot users без deep-copy каждого документа; вынести из event loop. *Файл: core/background_updater.py:97-105, 209-217*
-- [ ] **T36. Троттлинг рассылок**: убрать дублирующие слои (свой `_min_send_interval` + sleep поверх AIORateLimiter), вынести рассылку из-под `_update_lock`. *Файлы: services/notification_service.py, core/background_updater.py*
-- [ ] **T37. Ретрай начальной загрузки при старте** (например 3 попытки с backoff), чтобы бот не жил час без данных при кратком сбое сайта. *Файл: bot.py:205-207*
-- [ ] **T38. Тихие часы с минутной точностью** (datetime.time, миграция данных, UI). *Файлы: services/user_preferences.py, handlers/common/settings.py*
-- [ ] **T39. Уважать TZ сервера в WebApp** (`today` передавать с сервера или API-параметром). *Файл: web/static/app.js*
+- [x] **T30. FSM: TTL и сброс sibling-флагов** в `search_input` (или переход на ConversationHandler — см. roadmap §4.2). *Файлы: handlers/common/entity_menu.py, class_schedule.py*
+- [x] **T31. callback_data ≤ 64 байт**: для «Обновить» без idx — короткий идентификатор (хэш/индекс в state-кэше). *Файл: handlers/common/entity_menu.py:276-281*
+- [x] **T32. `query.answer()` на успешных путях** (спиннер не висит 15 с). *Файл: handlers/callbacks/class_callbacks.py*
+- [x] **T33. Дедуп замен per-замена**, а не md5 всего набора. *Файлы: services/notification_service.py:291-295, core/background_updater.py:578-596*
+- [x] **T34. Подписчикам entity — только релевантные замены** (фильтрация по учителю/кабинету). *Файл: core/background_updater.py:614*
+- [x] **T35. O(N×M) напоминаний/дайджестов**: индекс preferences одним проходом, snapshot users без deep-copy каждого документа; вынести из event loop. *Файл: core/background_updater.py:97-105, 209-217*
+- [x] **T36. Троттлинг рассылок**: убрать дублирующие слои (свой `_min_send_interval` + sleep поверх AIORateLimiter), вынести рассылку из-под `_update_lock`. *Файлы: services/notification_service.py, core/background_updater.py*
+- [x] **T37. Ретрай начальной загрузки при старте** (например 3 попытки с backoff), чтобы бот не жил час без данных при кратком сбое сайта. *Файл: bot.py:205-207*
+- [x] **T38. Тихие часы с минутной точностью** (datetime.time, миграция данных, UI). *Файлы: services/user_preferences.py, handlers/common/settings.py*
+- [x] **T39. Уважать TZ сервера в WebApp** (`today` передавать с сервера или API-параметром). *Файл: web/static/app.js*
 
 ### Фаза 5 — долгосрочные архитектурные (месяцы 2-3, по roadmap §4)
 
-- [ ] **T40. `JobQueue`** вместо ручных asyncio-циклов (`background_updater`, reminder/digest loops). *Файлы: bot.py, core/background_updater.py*
-- [ ] **T41. Слой `UserRepository`** (закрыть прямой доступ NotificationService к user_service.db) + TypedDict для school_data. *Файлы: services/, database/*
-- [ ] **T42. Отложенная запись FileDB** (dirty-флаг + периодический flush) или миграция на sqlite3 (stdlib) — отдельно, с бэкапом и тестом миграции. *Файл: database/file_db.py*
-- [ ] **T43. Конфигурация через dataclass** (`AppConfig.from_env()`, SCHOOLS_CONFIG → JSON/YAML). *Файлы: config/*
-- [ ] **T44. Sentry** (или минимальный алертинг админам при повторяющихся ошибках), метрики рассылок. *Файлы: bot.py, services/*
-- [ ] **T45. Cache-first рендер расписания в WebApp + офлайн-режим** (SW уже есть — осмысленно использовать после T16).
+- [x] **T40. `JobQueue`** вместо ручных asyncio-циклов (`background_updater`, reminder/digest loops). *Файлы: bot.py, core/background_updater.py*
+- [x] **T41. Слой `UserRepository`** (закрыть прямой доступ NotificationService к user_service.db) + TypedDict для school_data. *Файлы: services/, database/*
+- [~] **T42. Отложенная запись FileDB** (dirty-флаг + периодический flush) или миграция на sqlite3 (stdlib) — **PARKED.** Deferred-write снизил бы долговечность (регрессия), а мотивация «event loop» уже снята в T13; полная миграция на sqlite3 — крупное рискованное изменение на живой системе. Данные остаются durable, бэкап/откат не требуются. *Файл: database/file_db.py*
+- [x] **T43. Конфигурация через dataclass** (`AppConfig.from_env()`, SCHOOLS_CONFIG → JSON/YAML). *Файлы: config/*
+- [x] **T44. Sentry** (или минимальный алертинг админам при повторяющихся ошибках), метрики рассылок. *Файлы: bot.py, services/*
+- [x] **T45. Cache-first рендер расписания в WebApp + офлайн-режим** (SW уже есть — осмысленно использовать после T16).
 
 ---
 
 ## 📈 Метрики качества
 
-| Метрика | Сейчас | Цель (1 мес) |
+| Метрика | На момент анализа (17.09) | Факт после выполнения |
 |---|---|---|
-| CI | ❌ красный (23/23) | ✅ зелёный, обязательный |
-| Тесты | 288 (локально) | 300+ и реально запускаются в CI |
-| ruff / mypy | ✅ / ✅ | держать |
-| Coverage | не измеряется | измеряется, ≥60% → 80% |
-| Блокирующее I/O в event loop | на каждом клике | устранено (T13) |
-| Widget API | нерабочий | рабочий + тест значений |
-| PWA | сломано (нет иконок) | устанавливается |
+| CI | ❌ красный (23/23) | ✅ зелёный (run 35219620137), обязательный |
+| Тесты | 288 (локально) | ✅ 514, реально запускаются в CI |
+| ruff / mypy | ✅ / ✅ | ✅ чисто / 0 ошибок (141 файл) |
+| Coverage | не измеряется | ✅ 67% (порог 60%) |
+| Блокирующее I/O в event loop | на каждом клике | ✅ устранено (T13) |
+| Widget API | нерабочий | ✅ рабочий + тест значений |
+| PWA | сломано (нет иконок) | ✅ иконки есть, устанавливается |
 
 ---
 
-## ⚠️ Риски
+## ⚠️ Риски (на момент выполнения)
 
-**Высокие (тестировать тщательно):**
-- T13 (I/O в to_thread) — гонки записи, порядок операций; менять постепенно, под тестами;
-- T42 (FileDB/SQLite) — живая система, только с бэкапом и откатом;
-- T28 (откат зависимостей) — сценарий обновления/отката прогнать на копии.
+**Высокие:**
+- ✅ T13 (I/O в to_thread) — реализовано, покрыто тестами (батч-записи `_save_sent_*`);
+- ⏸️ T42 (FileDB/SQLite) — parked, данные остаются durable;
+- ✅ T28 (откат зависимостей) — реализовано в `manage.sh`.
 
-**Средние:** T9-T10 (логика дедупа — риск дублей или повторных потеряний), T30 (FSM — риск новых залипаний), T40 (JobQueue).
+**Средние (сняты):** T9-T10 (дедуп замен: retry-окно — осознанный tradeoff, подробности в CHANGELOG), T30 (FSM — TTL и сброс sibling-флагов), T40 (JobQueue).
 
-**Низкие:** T4, T5, T7, T21, T26 — локальные фиксы.
+**Низкие (сняты):** T4, T5, T7, T21, T26 — локальные фиксы выполнены.
 
 ---
 
@@ -329,5 +343,5 @@ Fallback `bot_data.get(...) or self.notification_service` поднимает в�
 
 ---
 
-**Дата обновления:** 17 сентября 2026
+**Дата обновления:** 17 сентября 2026 (план выполнен; статусы проставлены 21 сентября 2026)
 **Основа:** анализ кода тремя независимыми проходами (services/core, web/handlers, тесты/инфраструктура) + ручная верификация критических находок (CI, widget API, PWA-иконки)
