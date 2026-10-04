@@ -4,6 +4,7 @@ import os
 from collections.abc import Callable, Iterable
 from datetime import datetime
 from ipaddress import ip_address
+from typing import Any
 
 from fastapi import APIRouter, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -95,7 +96,10 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
                enable_telegram_routes: bool = True,
                trusted_proxies: Iterable[str] | None = None,
                health_provider: Callable[[], dict] | None = None,
-               extra_router: APIRouter | None = None) -> FastAPI:
+               extra_router: APIRouter | None = None,
+               push_store: Any = None,
+               push_subscribe_rate_limit: int = 30,
+               push_window_seconds: float = 60.0) -> FastAPI:
     app = FastAPI(title="Schedule Bot Mini App API", docs_url=None, redoc_url=None)
 
     # Приоритет: явный параметр → services['schools_config'] (edge) →
@@ -299,6 +303,21 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
                 'is_vacation': day_data.get('vacation', False),
                 'is_weekend': day_data.get('weekend', False)
             }
+
+    # Публичное push-API origin (W15): включается только при заданных VAPID-
+    # ключах и EDGE_AUTH_SECRET (иначе create_push_router вернёт None — маршрутов
+    # нет). Регистрируется до статики: mount `/` перехватывает любой путь.
+    if push_store is not None:
+        from web.push_api import create_push_router
+
+        push_router = create_push_router(
+            push_store,
+            subscribe_rate_limit=push_subscribe_rate_limit,
+            window_seconds=push_window_seconds,
+            trusted_proxies=trusted_proxy_hosts,
+        )
+        if push_router is not None:
+            app.include_router(push_router)
 
     # Дополнительный роутер (например, ingest edge) включается ДО статики:
     # mount `/` перехватывает любой путь, поэтому зарегистрированный после него
