@@ -27,12 +27,13 @@ from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 
 from config.config import Config
 from services.snapshot_store import SnapshotStore
 from web.api import create_app
 from web.edge_ingest import create_ingest_router
+from web.edge_push import create_edge_push_router
 from web.server import _defer_shutdown_signals
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,10 @@ def create_edge_app(store: SnapshotStore, *, static_dir: str | None = None,
     умолчанию — `frontend/dist`; ingest-роутер включается до mount `/`.
     `/healthz` отдаёт возраст/версию/число школ снапшота (W11) — origin этого
     не видит, у него `/healthz` остаётся `{status: ok}`.
+
+    Push-прокси (W17) регистрируется тем же `extra_router`: ingest плюс
+    push-роутер (последний включается только при заданных `EDGE_ORIGIN_URL` и
+    `EDGE_AUTH_SECRET`).
     """
     services = {
         'bot_data': _LiveBotData(store),
@@ -127,13 +132,20 @@ def create_edge_app(store: SnapshotStore, *, static_dir: str | None = None,
     }
     if static_dir is None:
         static_dir = _built_frontend_dir()
+
+    extra = APIRouter()
+    extra.include_router(create_ingest_router(store))
+    push_router = create_edge_push_router()
+    if push_router is not None:
+        extra.include_router(push_router)
+
     return create_app(
         services,
         static_dir=static_dir,
         enable_telegram_routes=False,
         trusted_proxies=trusted_proxies,
         health_provider=_health_provider(store),
-        extra_router=create_ingest_router(store),
+        extra_router=extra,
     )
 
 
