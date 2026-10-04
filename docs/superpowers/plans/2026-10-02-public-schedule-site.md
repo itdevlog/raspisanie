@@ -4,7 +4,8 @@
 **Статус:** ⏳ запланировано (ни одна задача не начата)
 **Спека:** [docs/superpowers/specs/2026-09-24-public-schedule-site-design.md](../specs/2026-09-24-public-schedule-site-design.md)
 **Стиль:** как T1–T45 в [DEVELOPMENT_PLAN.md](../../../DEVELOPMENT_PLAN.md) — фазы, сквозные ID, файлы и критерии готовности.
-**Нумерация:** `W1…W31` (Website), чтобы не путаться с закрытыми `T1–T45`.
+**Нумерация:** `W1…W41` (Website), чтобы не путаться с закрытыми `T1–T45`:
+`W1–W31` — базовый публичный сайт (MVP), `W32–W41` — паритет с оригиналом Nikasoft.
 **Как исполнять:** REQUIRED SUB-SKILL: `superpowers:subagent-driven-development` (задача на субагента + ревью) или `superpowers:executing-plans` (самому по шагам); закрытые задачи отмечать `- [x]`.
 
 ---
@@ -16,6 +17,7 @@
 - **Бомба в теле снапшота.** Oversized/битый JSON не должен ронять edge или писать на диск: лимит размера + проверка `version` (W2/W3/W9/W30).
 - **Спам на публичный subscribe.** `POST /api/push/subscribe` на edge открыт; без валидации и лимита FileDB забивается мусором (W12/W15/W17).
 - **Мёртвые подписки.** `404/410` удаляем; прочие (transient) ошибки не должны стирать живую подписку (W13).
+- **Паритет на реальных данных.** Новые поля (`shift`, `groups`, `period`, метод-час, календарь, Пн–Сб) обязаны строиться из фактической выгрузки Nikasoft, а не из предположений о формате (W33/W34/W41).
 
 ---
 
@@ -272,6 +274,76 @@
   `roadmap.md`; проставить статус спеки и плана; отметить сотрудника/дату деплоя.
   *Файлы: WIKI.md, README.md, CHANGELOG.md, roadmap.md.*
 
+## Фаза 9 — Паритет с оригиналом Nikasoft (W32–W41)
+
+> Источник — оригинальный сайт `raspisanie.nikasoft.ru/55812556.html`. Данные уже
+> есть: `DataLoader.download_schedule_data` (`core/data_loader.py:161`) сохраняет
+> **весь** словарь `NIKA`, поэтому `CLASS_SHIFT`, `CLASSGROUPS`, `CLASS_COURSES`,
+> `TEACH_SCHEDULE`, `WEEKDAYNUM`, флаги `SHOW_*` попадают и в снапшот. Не хватает
+> только типов, API-полей и фронтенда. Telegram-формат сообщений не меняется.
+
+- [ ] **W32. Типы и метаданные школы.** Дополнить `SchoolData` (`services/school_types.py`):
+  `WEEKDAYNUM: int`, `FIRSTLESSONNUM: int`, `CLASS_COURSES: dict[str, int]`,
+  `CLASSGROUPS: dict[str, dict[str, str]]`, `CLASS_SHIFT: dict`,
+  `TEACH_SCHEDULE: dict[str, dict[str, LessonData]]` и флаги
+  `SHOW_TEACHERS/SHOW_CLASSROOMS/USEROOMS/HOMEPAGE_BTN/SECOND_RELATIVE/SHOW_EXCHANGES_TERM: bool`.
+  В `/api/schools` (`web/api.py`) на каждую школу добавить `city` (из `SCHOOLS_CONFIG`,
+  fallback `CITY_NAME`), `updated` (`EXPORT_DATE` + `EXPORT_TIME`), `homepage_url`
+  (`HOMEPAGE_URL`) и `features` `{teachers, classrooms, rooms, homepage}` из флагов
+  (default `True`). *Файлы: services/school_types.py, web/api.py, tests/test_webapp_api.py.*
+
+- [ ] **W33. День: смена, период, группы, метод-час.** В `BaseScheduleService`:
+  `get_period_info(date) -> dict | None` (b/e/name из `PERIODS`); `_day_payload`
+  добавляет `period` (name + b/e) и `shift` (номер второй смены из `CLASS_SHIFT`
+  для класса, иначе `None`); в `_lessons_payload` каждый item получает `groups`
+  (названия групп из `CLASSGROUPS` по division-ключу урока, выровненные с
+  параллельными списками; иначе `None`) и `is_method_hour` (предмет урока —
+  метод-час `'M'`). Влияет только на payload `get_day` (Telegram-формат не трогаем).
+  *Файлы: services/base_schedule_service.py, tests/test_schedule_payload_parity.py.*
+
+- [ ] **W34. Неделя Пн–Сб по `WEEKDAYNUM`.** `_week_dates` берёт число учебных дней из
+  `school_data['WEEKDAYNUM']` (default 5, clamp 1..6) вместо жёсткого `range(5)`;
+  свойство `weekday_num`; route `/week` возвращает `{days: [...], weekday_num: n}`.
+  Telegram-кэш `_get_week_schedule` **не трогаем** — поведение бота прежнее.
+  *Файлы: services/base_schedule_service.py, web/api.py, tests/test_week_payload.py.*
+
+- [ ] **W35. Календарь месяца (API).** `BaseScheduleService.get_month(entity, year, month)
+  -> list[dict]`: по каждому дню месяца `{date, day_name, weekend, vacation, no_period,
+  has_exchange, has_cancelled, lesson_count}` на основе `self.get_day`. Route
+  `GET /api/{school_id}/schedule/{kind}/{name}/calendar?year=&month=`
+  (`year>=2020`, `month 1..12`). *Файлы: services/base_schedule_service.py,
+  web/api.py, tests/test_schedule_calendar.py.*
+
+- [ ] **W36. Текущий/следующий урок (публичный API).** Вынести выбор в
+  `BaseScheduleService.select_current_and_next(lessons, date, now=None)` и
+  переиспользовать в `/api/widget/{user_id}` вместо inline-кода (поведение виджета
+  не меняется). Route `GET /api/{school_id}/schedule/{kind}/{name}/now?date=` →
+  `{server_time, current, next}`. *Файлы: services/base_schedule_service.py,
+  web/api.py, tests/test_schedule_now.py, tests/test_webapp_api.py.*
+
+- [ ] **W37. Поиск классов.** `ScheduleService.search_classes(q) -> list[str]` (по
+  `CLASSES`, как `search_teachers`/`search_rooms`); route `/search` добавляет
+  `'classes'`. *Файлы: services/schedule_service.py, web/api.py, tests/test_webapp_api.py.*
+
+- [ ] **W38. Фронтенд: календарь месяца.** Экран месяца для класса/учителя с
+  API-клиентом `getCalendar`, маркерами замен/каникул и переходом в день;
+  навигация по неделям/месяцам. *Файлы: frontend/src/**, tests (vitest).*
+
+- [ ] **W39. Фронтенд: главная и избранное.** Главная: город + «Обновлено» + ссылка
+  на сайт школы (`features.homepage`); виджет «идёт урок / до начала» из `/now`;
+  избранное для класса/учителя/кабинета (обобщить store `localStorage` из W19);
+  кнопка «Свободные кабинеты». *Файлы: frontend/src/**, tests.*
+
+- [ ] **W40. Фронтенд: смена/группы/метод-час/период.** Показывать учебный период
+  («на период»), вторую смену, названия групп, «Метод. час» и зачёркивание
+  свободных уроков (`STRIKEOUT_FREE_LSN`). *Файлы: frontend/src/**, tests.*
+
+- [ ] **W41. Паритет: e2e и документация.** Проверить новые поля на реальном
+  снапшоте `school_133` (метаданные, `shift`, `groups`, `period`, календарь, `/now`,
+  поиск классов); обновить спеку, `WIKI.md`, `CHANGELOG.md`, `roadmap.md`.
+  *Файлы: tests/test_parity_e2e.py, WIKI.md, CHANGELOG.md, roadmap.md,
+  docs/superpowers/specs/2026-09-24-public-schedule-site-design.md.*
+
 ---
 
 ## Порядок работ (соответствие спеке §12)
@@ -285,6 +357,7 @@
 7. W18–W25 — фронтенд Svelte PWA.
 8. W26–W28 — деплой `deploy/edge/`.
 9. W29–W31 — CI и документация.
+10. W32–W41 — паритет с оригиналом Nikasoft (опционально, после MVP).
 
 ## Границы работы
 
@@ -309,6 +382,9 @@
 | Расхождение часов Germany/Moscow > ±300 с | Средний | NTP на обоих хостах; допуск задаётся константой (W9/W28) |
 | Спам-подписки через публичный subscribe | Средний | Валидация + rate-limit на origin/edge, `cleanup_stale` (W12/W15/W17) |
 | Установка Node на чистом edge-хосте | Средний | install.sh ставит Node 20 LTS или принимает prebuilt dist (W26) |
+| Школы с 6-дневной неделей обрезаются до Пн–Пт | Средний | `_week_dates` по `WEEKDAYNUM`; Telegram-формат не трогаем (W34) |
+| Формат `CLASSGROUPS`/метод-часа `'M'` в выгрузке непроверен | Низкий | e2e на реальной выгрузке `school_133` (W33/W41) |
+| Паритет расширяет публичный API/фронтенд | Низкий | отдельная фаза после MVP, тесты полей на снапшоте (W32–W41) |
 
 ## Открытые вопросы (из спеки)
 
@@ -317,6 +393,8 @@
 - Оставлять ли старую Mini App-статику на origin как fallback.
 - Провайдер/сервер в Москве и порядок DNS-переключения.
 - Собирать `frontend/dist` на edge (`install.sh` ставит Node) или в CI артефактом.
+- Какие паритетные пункты (W32–W41) обязательны для запуска, а какие — после MVP.
+- Точный формат `CLASSGROUPS`/поля `d` и признака метод-часа `'M'` в выгрузке Nikasoft (уточнить на `school_133`).
 
 ---
 
