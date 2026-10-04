@@ -42,6 +42,8 @@ from services.alert_service import AlertService
 from services.cache_service import CacheService
 from services.metrics import MetricsService
 from services.notification_service import NotificationService
+from services.snapshot import build_snapshot
+from services.snapshot_exporter import SnapshotExporter
 from services.state_service import UserStateService
 from services.user_service import UserService
 from web.server import run_webapp, wait_forever
@@ -221,6 +223,11 @@ class ScheduleBot:
         self.application.bot_data['exchange_detector'] = exchange_detector
         self.application.bot_data['webapp_url'] = self.config.WEBAPP_URL or None
 
+        # Экспортёр снапшота на edge (W6): W5 читает его из `snapshot_exporter`
+        # в цикле обновления. При пустом EDGE_INGEST_URL сервис выключен.
+        snapshot_exporter = SnapshotExporter(self.config, metrics=metrics_service)
+        self.application.bot_data['snapshot_exporter'] = snapshot_exporter
+
     def load_schools_data(self):
         """Загружает данные для всех активных школ с ретраями начальной загрузки.
 
@@ -387,6 +394,25 @@ class ScheduleBot:
                 )
             except Exception as e:
                 self.logger.error(f"Ошибка установки MenuButtonWebApp: {e}")
+
+        # Публикуем стартовый снапшот на edge после первичной загрузки
+        # schools_data (она синхронна и уже прошла до event loop). Синхронный
+        # publish уходит в to_thread, чтобы не блокировать loop; ошибки/пустой
+        # URL не должны мешать старту.
+        try:
+            exporter = self.application.bot_data.get('snapshot_exporter')
+            if exporter is not None and not exporter.enabled:
+                self.logger.info(
+                    "Публикация снапшота при старте выключена: EDGE_INGEST_URL не задан"
+                )
+            elif exporter is not None:
+                snapshot = build_snapshot(
+                    self.application.bot_data.get('schools_data', {}),
+                    self.application.bot_data.get('schools_config', {}),
+                )
+                await asyncio.to_thread(exporter.publish, snapshot)
+        except Exception as e:
+            self.logger.error(f"Ошибка публикации стартового снапшота: {e}")
 
         self.background_updater.start_periodic_updates()
 
