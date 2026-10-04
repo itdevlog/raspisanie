@@ -79,6 +79,9 @@ def test_setup_services_registers_snapshot_exporter(monkeypatch, tmp_path):
         DB_PATH=str(tmp_path / 'database.json'),
         WEBAPP_URL='',
         EDGE_INGEST_URL='https://edge.example/ingest',
+        VAPID_PUBLIC_KEY='',
+        VAPID_PRIVATE_KEY='',
+        VAPID_SUBJECT='mailto:admin@example.ru',
     )
     b.application = SimpleNamespace(bot_data={})  # type: ignore[assignment]
 

@@ -42,6 +42,8 @@ from services.alert_service import AlertService
 from services.cache_service import CacheService
 from services.metrics import MetricsService
 from services.notification_service import NotificationService
+from services.push_service import PushService
+from services.push_store import PushSubscriptionStore
 from services.snapshot import build_snapshot
 from services.snapshot_exporter import SnapshotExporter
 from services.state_service import UserStateService
@@ -227,6 +229,13 @@ class ScheduleBot:
         # в цикле обновления. При пустом EDGE_INGEST_URL сервис выключен.
         snapshot_exporter = SnapshotExporter(self.config, metrics=metrics_service)
         self.application.bot_data['snapshot_exporter'] = snapshot_exporter
+
+        # Web Push (W16): хранилище подписок над тем же FileDB и сервис рассылки.
+        # W16 читает их из `push_store`/`push_service` при обнаружении замен.
+        # При пустых VAPID-ключах `PushService.enabled` False — рассылка no-op.
+        push_store = PushSubscriptionStore(db)
+        self.application.bot_data['push_store'] = push_store
+        self.application.bot_data['push_service'] = PushService(self.config, store=push_store)
 
     def load_schools_data(self):
         """Загружает данные для всех активных школ с ретраями начальной загрузки.

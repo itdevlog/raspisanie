@@ -7,6 +7,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+from urllib.parse import quote
 
 from config.config import Config, get_timezone
 from config.schools import get_display_name
@@ -16,6 +17,25 @@ from services.metrics import MetricsService
 from services.notification_service import NotificationService
 from services.reminder_service import ReminderService
 from services.snapshot import build_snapshot
+
+
+def build_class_share_url(base_url: str, school_id: str, class_name: str,
+                          date: datetime) -> str:
+    """Share-ссылка класса на публичном сайте (W16).
+
+    Схема из спеки (раздел «Фронтенд»): ``/s/{school}/{kind}/{name}?date=…``.
+    База — публичный `WEBAPP_URL` (origin отдаёт его в `bot_data['webapp_url']`).
+    Название класса URL-энкодим (кириллица/пробелы); дата — в формате API
+    `dd.mm.YYYY`. Пустая база вернёт пустую строку: push без рабочей ссылки
+    не шлём.
+    """
+    base = (base_url or '').rstrip('/')
+    if not base:
+        return ''
+    return (
+        f"{base}/s/{quote(str(school_id), safe='')}/class/"
+        f"{quote(str(class_name), safe='')}?date={date.strftime('%d.%m.%Y')}"
+    )
 
 
 class BackgroundUpdater:
@@ -116,6 +136,25 @@ class BackgroundUpdater:
         """
         if self.application and hasattr(self.application, 'bot_data'):
             return self.application.bot_data.get('snapshot_exporter')
+        return None
+
+    def _push_store(self):
+        """Хранилище Web Push-подписок из bot_data (создаётся в `setup_services`).
+
+        Отсутствие сервиса — норма (push не сконфигурирован): рассылка просто
+        не выполняется, цикл обновления работает как раньше.
+        """
+        if self.application and hasattr(self.application, 'bot_data'):
+            return self.application.bot_data.get('push_store')
+        return None
+
+    def _push_service(self):
+        """Сервис отправки Web Push из bot_data (создаётся в `setup_services`).
+
+        Отсутствие/выключенность (нет VAPID-ключей) — норма: push не шлём.
+        """
+        if self.application and hasattr(self.application, 'bot_data'):
+            return self.application.bot_data.get('push_service')
         return None
 
     def _claim_admin_alert(self, error, source: str) -> bool:
@@ -731,6 +770,13 @@ class BackgroundUpdater:
                                     class_exchanges, today
                                 )
 
+                                # Best-effort Web Push подписчикам класса (W16).
+                                # Ошибки push не влияют на Telegram-доставку и
+                                # на решение о коммите baseline (all_handled).
+                                await self._notify_push_subscribers(
+                                    school_id, class_name, class_exchanges, today
+                                )
+
                                 # Логируем активность обновления
                                 await asyncio.to_thread(
                                     self.log_update_activity,
@@ -847,6 +893,69 @@ class BackgroundUpdater:
                         self.logger.error(f"Ошибка уведомления подписчиков {kind} {name}: {e}")
         except Exception as e:
             self.logger.error(f"Ошибка в _notify_entity_subscribers: {e}", exc_info=True)
+
+    async def _notify_push_subscribers(self, school_id: str, class_name: str,
+                                        class_exchanges: list, date) -> None:
+        """Best-effort Web Push подписчикам класса-источника замен (W16).
+
+        После Telegram-рассылки ищем подписки класса
+        (`find_matching(school_id, 'class', class_name)`) и шлём им push со
+        ссылкой на share-страницу класса. Entity-подписки (teacher/room) в MVP
+        не рассылаются — фронтенд их не создаёт (см. W12).
+
+        Полностью best-effort: отсутствие store/service, выключенный сервис
+        (нет VAPID-ключей), ошибка поиска или отправки — no-op/лог, наружу не
+        выходит. На Telegram-доставку и baseline замен не влияет.
+        """
+        try:
+            push_service = self._push_service()
+            if push_service is None or not getattr(push_service, 'enabled', False):
+                return
+            push_store = self._push_store()
+            if push_store is None:
+                return
+
+            # Поиск подписок — блокирующее чтение FileDB: оффлоадим в поток.
+            subscriptions = await asyncio.to_thread(
+                push_store.find_matching, school_id, 'class', class_name
+            )
+            if not subscriptions:
+                return
+
+            base_url = self.application.bot_data.get('webapp_url') or ''
+            url = build_class_share_url(base_url, school_id, class_name, date)
+            if not url:
+                return
+
+            body = self._format_exchange_body(class_name, class_exchanges, date)
+            title = f"🔄 Замены: {class_name}"
+            # Сам webpush внутри сервиса уходит в to_thread; отправка никогда
+            # не бросает, но на всякий случай страхуемся.
+            await push_service.send_exchange_notifications(
+                subscriptions, title, body, url
+            )
+        except Exception as e:
+            self.logger.error(
+                f"Ошибка Web Push для класса {class_name} в школе {school_id}: {e}"
+            )
+
+    @staticmethod
+    def _format_exchange_body(class_name: str, class_exchanges: list, date) -> str:
+        """Короткий текст push-уведомления о заменах (без Markdown)."""
+        date_str = date.strftime('%d.%m.%Y') if hasattr(date, 'strftime') else ''
+        lines = [f"{class_name} — {date_str}".strip(' —')]
+        for exchange in class_exchanges:
+            lesson = exchange.get('lesson_num', '?')
+            subject = (exchange.get('new_subject') or '').strip()
+            cancelled = exchange.get('is_cancelled')
+            if cancelled:
+                detail = 'отмена'
+            elif subject:
+                detail = subject
+            else:
+                detail = 'замена'
+            lines.append(f"{lesson} урок: {detail}")
+        return '\n'.join(lines)
 
     def _make_context(self):
         """Создает минимальный контекст для использования вне handler-ов"""
