@@ -15,6 +15,7 @@ from services.digest_service import DigestService
 from services.metrics import MetricsService
 from services.notification_service import NotificationService
 from services.reminder_service import ReminderService
+from services.snapshot import build_snapshot
 
 
 class BackgroundUpdater:
@@ -105,6 +106,16 @@ class BackgroundUpdater:
         """Метрики рассылок из bot_data (best-effort)."""
         if self.application and hasattr(self.application, 'bot_data'):
             return self.application.bot_data.get('metrics')
+        return None
+
+    def _snapshot_exporter(self):
+        """Экспортёр снапшота на edge из bot_data (создаётся в `setup_services`, W6).
+
+        Отсутствие сервиса — норма (снапшот выключен): публикация просто не
+        выполняется, цикл обновления работает как раньше.
+        """
+        if self.application and hasattr(self.application, 'bot_data'):
+            return self.application.bot_data.get('snapshot_exporter')
         return None
 
     def _claim_admin_alert(self, error, source: str) -> bool:
@@ -465,24 +476,63 @@ class BackgroundUpdater:
 
         Возвращает True, если обновление реально выполнялось, и False, если
         был пропуск из-за уже идущего обновления.
+
+        Публикация снапшота — здесь, **после** выхода из `_update_lock`: у
+        `_perform_update_locked` нет возвращаемого признака успеха, а фазу с
+        блокировкой покидать нужно до сетевой публикации.
         """
         if self._update_lock.locked():
             self.logger.warning("Обновление уже выполняется — пропуск повторного запуска")
             return False
         async with self._update_lock:
             await self._perform_update_locked()
+        # `_perform_update_locked` — без возвращаемого значения, поэтому факт
+        # непустой свежей выгрузки он оставляет в этом атрибуте.
+        if getattr(self, '_last_load_had_data', False):
+            await self._publish_snapshot()
         return True
+
+    async def _publish_snapshot(self) -> None:
+        """Best-effort публикует свежий снапшот на edge (W5).
+
+        Синхронный `publish` уходит в `asyncio.to_thread`, чтобы не блокировать
+        event loop. Ошибка публикации не ломает цикл обновления: логируется и
+        (антиспамом) алертит админов; при выключенном сервисе не алертим.
+        """
+        try:
+            exporter = self._snapshot_exporter()
+            if not exporter:
+                return
+            bot_data = self.application.bot_data
+            snapshot = build_snapshot(
+                bot_data.get('schools_data', {}),
+                bot_data.get('schools_config', {}),
+            )
+            published = await asyncio.to_thread(exporter.publish, snapshot)
+            if not published and getattr(exporter, 'enabled', True):
+                # Провал публикации при включённом сервисе — событие для админов.
+                await self._alert_repeated_error(
+                    RuntimeError("snapshot publish failed"), "snapshot_publish"
+                )
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка публикации снапшота: {e}", exc_info=True)
+            await self._alert_repeated_error(e, "snapshot_publish")
 
     async def _perform_update_locked(self):
         """Выполняет обновление данных и проверяет замены"""
         try:
             self.logger.info("🔄 Начало фонового обновления данных...")
 
+            # Сбрасываем до загрузки: пустая выгрузка не должна публиковать
+            # данные предыдущего цикла (признак читает `_perform_update`).
+            self._last_load_had_data = False
             old_schools_data = self.application.bot_data.get('schools_data', {})
             # Оффлоадим синхронные HTTP-запросы в отдельный поток
             new_schools_data = await asyncio.to_thread(self.data_loader.load_all_schools_data)
 
             if new_schools_data:
+                # Признак для публикации в `_perform_update` после снятия блокировки.
+                self._last_load_had_data = True
                 # Мержим свежие данные поверх last-known-good, чтобы школы,
                 # чья загрузка не удалась, не исчезали до следующего цикла
                 merged = self._merge_schools_data(old_schools_data, new_schools_data)
