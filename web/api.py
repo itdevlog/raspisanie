@@ -1,7 +1,9 @@
 # web/api.py
 """REST API Mini App: читает живые bot_data (один процесс с ботом)."""
 import os
+from collections.abc import Callable, Iterable
 from datetime import datetime
+from ipaddress import ip_address
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -59,18 +61,59 @@ def _parse_date_or_none(date_str: str | None) -> datetime:
         raise HTTPException(422, "Некорректная дата; ожидается dd.mm.YYYY") from None
 
 
+def _client_ip(request: Request, trusted_proxies: Iterable[str]) -> str:
+    """Реальный IP клиента за доверенным reverse-proxy.
+
+    За Caddy ``request.client.host`` — это ``127.0.0.1``, поэтому лимит без этого
+    хелпера схлопывается в один bucket на весь сайт. Если непосредственный peer
+    (``request.client.host``) входит в белый список доверенных прокси, берём
+    первый IP из ``X-Forwarded-For`` (исходный клиент). Иначе — fallback на
+    ``request.client.host``, как было на origin.
+    """
+    peer = request.client.host if request.client else 'unknown'
+    trusted = set(trusted_proxies)
+    if peer not in trusted:
+        return peer
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    for entry in forwarded.split(','):
+        candidate = entry.strip()
+        if not candidate:
+            continue
+        try:
+            # Нормализуем представление (IPv6 формы, ведущие нули), чтобы
+            # семантически один и тот же клиент не создавал ложных bucket-ов.
+            return str(ip_address(candidate))
+        except ValueError:
+            continue
+    return peer
+
+
 def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 30,
-               window_seconds: float = 60.0) -> FastAPI:
+               window_seconds: float = 60.0, *,
+               schools_config: dict | None = None,
+               static_dir: str | None = None,
+               enable_telegram_routes: bool = True,
+               trusted_proxies: Iterable[str] | None = None,
+               health_provider: Callable[[], dict] | None = None) -> FastAPI:
     app = FastAPI(title="Schedule Bot Mini App API", docs_url=None, redoc_url=None)
+
+    # Приоритет: явный параметр → services['schools_config'] (edge) →
+    # модульный SCHOOLS_CONFIG (origin, обратная совместимость).
+    schools = schools_config if schools_config is not None else services.get('schools_config')
+    if schools is None:
+        schools = SCHOOLS_CONFIG
+    if static_dir is None:
+        static_dir = os.path.join(os.path.dirname(__file__), 'static')
 
     limiter = RateLimiter(max_requests=rate_limit, window_seconds=window_seconds)
     widget_limiter = RateLimiter(max_requests=widget_rate_limit, window_seconds=window_seconds)
+    trusted_proxy_hosts = set(trusted_proxies or ())
 
     @app.middleware('http')
     async def rate_limit_middleware(request: Request, call_next):
         path = request.url.path
         if path.startswith('/api/'):
-            client = request.client.host if request.client else 'unknown'
+            client = _client_ip(request, trusted_proxy_hosts)
             if path.startswith('/api/widget/'):
                 key = f'widget:{client}'
                 allowed = widget_limiter.allow(key)
@@ -83,16 +126,19 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
 
     @app.get('/healthz')
     async def healthz():
-        return {'status': 'ok'}
+        payload: dict = {'status': 'ok'}
+        if health_provider is not None:
+            payload.update(health_provider())
+        return payload
 
     @app.get('/api/schools')
-    async def schools():
+    async def schools_list():
         schools_data = services['bot_data'].get('schools_data', {})
         return {
             'today': _now().strftime('%d.%m.%Y'),
             'schools': [
                 {'id': sid, 'name': cfg.get('name'), 'loaded': sid in schools_data}
-                for sid, cfg in SCHOOLS_CONFIG.items() if cfg.get('active', True)
+                for sid, cfg in schools.items() if cfg.get('active', True)
             ],
         }
 
@@ -144,114 +190,115 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
         svc = RoomService(school_data)
         return {'free_rooms': await run_in_threadpool(svc.get_free_rooms, _parse_date_or_none(date), lesson)}
 
-    @app.get('/api/me')
-    async def me(x_telegram_init_data: str | None = Header(None)):
-        token = (services.get('config') or Config()).TELEGRAM_TOKEN or ''
-        user = get_user_from_init_data(x_telegram_init_data, token) if x_telegram_init_data else None
-        user_service = services['bot_data'].get('user_service')
-        school_id = user_service.get_user_school(user['id']) if user and user_service else None
-        class_name = user_service.get_user_class(user['id'], school_id) if user and user_service else None
-        return {'user': user, 'school_id': school_id, 'class_name': class_name}
+    if enable_telegram_routes:
 
-    @app.get('/api/widget/{user_id}')
-    async def widget_data(user_id: int, date: str | None = None, token: str | None = None,
-                          x_telegram_init_data: str | None = Header(None),
-                          x_widget_token: str | None = Header(None)):
-        """Данные для виджета PWA: расписание на сегодня + следующий урок.
+        @app.get('/api/me')
+        async def me(x_telegram_init_data: str | None = Header(None)):
+            token = (services.get('config') or Config()).TELEGRAM_TOKEN or ''
+            user = get_user_from_init_data(x_telegram_init_data, token) if x_telegram_init_data else None
+            user_service = services['bot_data'].get('user_service')
+            school_id = user_service.get_user_school(user['id']) if user and user_service else None
+            class_name = user_service.get_user_class(user['id'], school_id) if user and user_service else None
+            return {'user': user, 'school_id': school_id, 'class_name': class_name}
 
-        Формат для iOS Shortcuts / Android виджетов / PWA widget.
+        @app.get('/api/widget/{user_id}')
+        async def widget_data(user_id: int, date: str | None = None, token: str | None = None,
+                              x_telegram_init_data: str | None = Header(None),
+                              x_widget_token: str | None = Header(None)):
+            """Данные для виджета PWA: расписание на сегодня + следующий урок.
 
-        Доступ: валидный initData (Telegram) ИЛИ подписанный widget-токен
-        (X-Widget-Token / query `token`) для standalone-виджетов.
-        """
-        token_cfg = (services.get('config') or Config()).TELEGRAM_TOKEN or ''
-        user = get_user_from_init_data(x_telegram_init_data, token_cfg) if x_telegram_init_data else None
-        authorized = bool(user and user.get('id') == user_id)
-        if not authorized:
-            # Проверяем источники независимо: битый заголовок не должен
-            # перекрывать валидный query-параметр (и наоборот).
-            authorized = (
-                validate_widget_token(x_widget_token or '', user_id, token_cfg)
-                or validate_widget_token(token or '', user_id, token_cfg)
-            )
-        if not authorized:
-            raise HTTPException(403, 'Недействительная подпись Telegram')
+            Формат для iOS Shortcuts / Android виджетов / PWA widget.
 
-        user_service = services['bot_data'].get('user_service')
-        if not user_service:
-            raise HTTPException(503, 'Сервис пользователей недоступен')
+            Доступ: валидный initData (Telegram) ИЛИ подписанный widget-токен
+            (X-Widget-Token / query `token`) для standalone-виджетов.
+            """
+            token_cfg = (services.get('config') or Config()).TELEGRAM_TOKEN or ''
+            user = get_user_from_init_data(x_telegram_init_data, token_cfg) if x_telegram_init_data else None
+            authorized = bool(user and user.get('id') == user_id)
+            if not authorized:
+                # Проверяем источники независимо: битый заголовок не должен
+                # перекрывать валидный query-параметр (и наоборот).
+                authorized = (
+                    validate_widget_token(x_widget_token or '', user_id, token_cfg)
+                    or validate_widget_token(token or '', user_id, token_cfg)
+                )
+            if not authorized:
+                raise HTTPException(403, 'Недействительная подпись Telegram')
 
-        school_id = user_service.get_user_school(user_id)
-        class_name = user_service.get_user_class(user_id, school_id)
+            user_service = services['bot_data'].get('user_service')
+            if not user_service:
+                raise HTTPException(503, 'Сервис пользователей недоступен')
 
-        if not school_id or not class_name:
-            raise HTTPException(404, 'Пользователь не найден или не привязан к классу')
+            school_id = user_service.get_user_school(user_id)
+            class_name = user_service.get_user_class(user_id, school_id)
 
-        school_data = _school_or_404(services, school_id)
-        svc = ScheduleService(school_data)
-        current_date = _parse_date_or_none(date)
+            if not school_id or not class_name:
+                raise HTTPException(404, 'Пользователь не найден или не привязан к классу')
 
-        try:
-            day_data = await run_in_threadpool(svc.get_day, class_name, current_date)
-        except (EntityNotFoundError, PeriodNotFoundError) as e:
-            raise HTTPException(404, str(e)) from e
+            school_data = _school_or_404(services, school_id)
+            svc = ScheduleService(school_data)
+            current_date = _parse_date_or_none(date)
 
-        # Определяем следующий урок
-        now = _now()
-        next_lesson = None
-        lessons = day_data.get('lessons', [])
-
-        for lesson in lessons:
-            start = lesson.get('start', '')
-            if not start:
-                continue
             try:
-                lesson_start = datetime.strptime(
-                    f"{current_date.strftime('%Y-%m-%d')} {start}",
-                    '%Y-%m-%d %H:%M'
-                ).replace(tzinfo=get_timezone())
-            except ValueError:
-                continue
-            if lesson_start > now and not lesson.get('is_cancelled'):
-                items = lesson.get('items') or [{}]
-                first_item = items[0]
-                minutes_until = int((lesson_start - now).total_seconds() / 60)
-                next_lesson = {
-                    'num': lesson.get('num'),
-                    'time': _lesson_time(lesson),
-                    'subject': first_item.get('subject') or '',
-                    'room': first_item.get('room') or '',
-                    'in_minutes': minutes_until
-                }
-                break
+                day_data = await run_in_threadpool(svc.get_day, class_name, current_date)
+            except (EntityNotFoundError, PeriodNotFoundError) as e:
+                raise HTTPException(404, str(e)) from e
 
-        # Считаем замены
-        exchanges_count = sum(1 for lesson in lessons if lesson.get('has_exchange'))
+            # Определяем следующий урок
+            now = _now()
+            next_lesson = None
+            lessons = day_data.get('lessons', [])
 
-        return {
-            'class': class_name,
-            'school_id': school_id,
-            'date': current_date.strftime('%Y-%m-%d'),
-            'date_display': current_date.strftime('%d.%m.%Y'),
-            'day_name': current_date.strftime('%A'),
-            'lessons': [
-                {
-                    'num': lesson.get('num'),
-                    'time': _lesson_time(lesson),
-                    'subject': (lesson.get('items') or [{}])[0].get('subject') or '',
-                    'room': (lesson.get('items') or [{}])[0].get('room') or '',
-                    'exchange': lesson.get('has_exchange', False),
-                    'cancelled': lesson.get('is_cancelled', False)
-                }
-                for lesson in lessons
-            ],
-            'next_lesson': next_lesson,
-            'exchanges_count': exchanges_count,
-            'is_vacation': day_data.get('vacation', False),
-            'is_weekend': day_data.get('weekend', False)
-        }
+            for lesson in lessons:
+                start = lesson.get('start', '')
+                if not start:
+                    continue
+                try:
+                    lesson_start = datetime.strptime(
+                        f"{current_date.strftime('%Y-%m-%d')} {start}",
+                        '%Y-%m-%d %H:%M'
+                    ).replace(tzinfo=get_timezone())
+                except ValueError:
+                    continue
+                if lesson_start > now and not lesson.get('is_cancelled'):
+                    items = lesson.get('items') or [{}]
+                    first_item = items[0]
+                    minutes_until = int((lesson_start - now).total_seconds() / 60)
+                    next_lesson = {
+                        'num': lesson.get('num'),
+                        'time': _lesson_time(lesson),
+                        'subject': first_item.get('subject') or '',
+                        'room': first_item.get('room') or '',
+                        'in_minutes': minutes_until
+                    }
+                    break
 
-    static_dir = os.path.join(os.path.dirname(__file__), 'static')
+            # Считаем замены
+            exchanges_count = sum(1 for lesson in lessons if lesson.get('has_exchange'))
+
+            return {
+                'class': class_name,
+                'school_id': school_id,
+                'date': current_date.strftime('%Y-%m-%d'),
+                'date_display': current_date.strftime('%d.%m.%Y'),
+                'day_name': current_date.strftime('%A'),
+                'lessons': [
+                    {
+                        'num': lesson.get('num'),
+                        'time': _lesson_time(lesson),
+                        'subject': (lesson.get('items') or [{}])[0].get('subject') or '',
+                        'room': (lesson.get('items') or [{}])[0].get('room') or '',
+                        'exchange': lesson.get('has_exchange', False),
+                        'cancelled': lesson.get('is_cancelled', False)
+                    }
+                    for lesson in lessons
+                ],
+                'next_lesson': next_lesson,
+                'exchanges_count': exchanges_count,
+                'is_vacation': day_data.get('vacation', False),
+                'is_weekend': day_data.get('weekend', False)
+            }
+
     if os.path.isdir(static_dir):
         app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')
 

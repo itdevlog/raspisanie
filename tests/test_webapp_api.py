@@ -36,6 +36,11 @@ def _client(monkeypatch):
     return TestClient(app)
 
 
+def _client_with(**kwargs):
+    bot_data = {'schools_data': {'school_133': _school()}, 'user_service': _FakeUserService()}
+    return TestClient(create_app({'bot_data': bot_data}, **kwargs))
+
+
 def test_healthz():
     client = _client(None)
     assert client.get('/healthz').status_code == 200
@@ -128,3 +133,60 @@ def test_me_anonymous():
     assert body['user'] is None
     assert body['school_id'] is None
     assert body['class_name'] is None
+
+
+def test_schools_config_from_services_overrides_default():
+    """schools_config из services переопределяет модульный SCHOOLS_CONFIG."""
+    custom = {'school_133': {'name': 'Своя школа', 'active': True}}
+    bot_data = {'schools_data': {'school_133': _school()}, 'user_service': _FakeUserService()}
+    services = {'bot_data': bot_data, 'schools_config': custom}
+    r = TestClient(create_app(services)).get('/api/schools')
+    assert r.status_code == 200
+    assert r.json()['schools'] == [{'id': 'school_133', 'name': 'Своя школа', 'loaded': True}]
+
+
+def test_schools_config_falls_back_to_module_default():
+    """Без services['schools_config'] используется модульный SCHOOLS_CONFIG."""
+    bot_data = {'schools_data': {'school_133': _school()}, 'user_service': _FakeUserService()}
+    r = TestClient(create_app({'bot_data': bot_data})).get('/api/schools')
+    schools = {s['id']: s for s in r.json()['schools']}
+    assert schools['school_133'] == {'id': 'school_133', 'name': 'МАОУ СОШ №133', 'loaded': True}
+
+
+def test_static_dir_override(tmp_path):
+    """static_dir монтирует статику из переданного каталога."""
+    (tmp_path / 'index.html').write_text('<html>edge</html>', encoding='utf-8')
+    client = _client_with(static_dir=str(tmp_path))
+    r = client.get('/')
+    assert r.status_code == 200
+    assert 'edge' in r.text
+
+
+def test_telegram_routes_enabled_by_default():
+    """По умолчанию /api/me и /api/widget зарегистрированы (origin)."""
+    client = _client(None)
+    assert client.get('/api/me').status_code == 200
+    assert client.get('/api/widget/1').status_code in (403, 200)
+
+
+def test_telegram_routes_absent_when_disabled():
+    """enable_telegram_routes=False убирает /api/me и /api/widget (edge)."""
+    client = _client_with(enable_telegram_routes=False)
+    assert client.get('/api/me').status_code == 404
+    assert client.get('/api/widget/1').status_code == 404
+    # Публичные маршруты остаются доступны.
+    assert client.get('/api/schools').status_code == 200
+
+
+def test_health_provider_adds_fields():
+    """health_provider добавляет поля в /healthz."""
+    client = _client_with(health_provider=lambda: {'snapshot_age_seconds': 42})
+    body = client.get('/healthz').json()
+    assert body == {'status': 'ok', 'snapshot_age_seconds': 42}
+
+
+def test_health_provider_overrides_status():
+    """health_provider может переопределить status."""
+    client = _client_with(health_provider=lambda: {'status': 'stale', 'grade': 1})
+    body = client.get('/healthz').json()
+    assert body == {'status': 'stale', 'grade': 1}
