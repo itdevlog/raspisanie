@@ -2,6 +2,8 @@
 
 > Всё исправленное убрано отсюда и перенесено в [CHANGELOG.md](CHANGELOG.md).
 
+> 🌐 **Публичный сайт расписания (основная оставшаяся работа).** Спека — [docs/superpowers/specs/2026-09-24-public-schedule-site-design.md](docs/superpowers/specs/2026-09-24-public-schedule-site-design.md); план реализации из 31 задачи (W1–W31) — [docs/superpowers/plans/2026-10-02-public-schedule-site.md](docs/superpowers/plans/2026-10-02-public-schedule-site.md). Ни одна задача ещё не начата.
+
 > ✅ **17.09 (полное выполнение [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md), 31 коммит `e8bf2a9..44ffc37`):** закрыты все существенные пункты T1–T45. CI впервые зелёный (ранее 23/23 красных); 514 тестов, покрытие 67%, ruff/mypy чистые. Ключевое: CI (`conftest`), widget API + HMAC/IDOR + XSS, PWA-иконки, напоминания/дайджесты с заменами и переносами, надёжность рассылок (baseline после доставки, тихие часы, атомарные кэши), вынос I/O из event loop, rate limiting, SW-гигиена, валидация конфига, `manage.sh`, FSM/callback UX, дедуп замен per-замена, `JobQueue`, `UserRepository`, `AppConfig`, алертинг админам, офлайн-WebApp. **Единственный parked — T42** (`FileDB` deferred-write/SQLite). Действия при деплое: `pip install -r requirements.txt` (apscheduler) и правка живого `.env`. Подробности — в [CHANGELOG.md](CHANGELOG.md).
 
 > ✅ 16.09 (по [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md)): `FileDB` — долговечная запись (`fsync` файла + директории, `.bak`); `data_loader` — условные запросы `ETag`/`If-Modified-Since` (304 из кэша) и закрытие сессии; параллельная загрузка школ (`ThreadPoolExecutor` + `MAX_PARALLEL_SCHOOLS`); устранены 10 ошибок mypy в тестах; починен дато-зависимый тест кэша замен (`ExchangeDetector._now`). Подробности — в [CHANGELOG.md](CHANGELOG.md).

@@ -2,6 +2,9 @@
 
 Дата: 2026-09-24
 Статус: утверждён (вариант A — гео-разделение, снапшот-реплика A1)
+Обновлено: 2026-10-04 — уточнения после ревью плана (проверка версии/размера
+снапшота; алерт по сбою публикации вместо «устаревания на origin»; push MVP —
+только подписки классов).
 
 ## Цель
 
@@ -70,8 +73,9 @@
 - Передаётся `POST` на `EDGE_INGEST_URL` (HTTPS) с телом JSON.
 - Заголовки: `X-Snapshot-Signature` (HMAC-SHA256 от сырого тела, hex) и
   `X-Snapshot-Timestamp` (unix seconds).
-- Edge отклоняет снапшот при неверной подписи или расхождении timestamp
-  более ±300 с (защита от replay). Ответ — 401/409 без деталей.
+- Edge отклоняет снапшот при неверной подписи, расхождении timestamp более
+  ±300 с (защита от replay), неподдерживаемом `version` или теле сверх
+  `SNAPSHOT_MAX_BYTES`. Ответ — 401/409/413/422 без деталей.
 - Запись на edge атомарна (`tempfile` + `os.replace` + `fsync`), по образцу
   `database/file_db.py`.
 
@@ -86,8 +90,9 @@
    `schools_data` в памяти.
 4. Edge FastAPI обслуживает публичные маршруты расписания из памяти; PWA
    кэширует ответы (TTL) для офлайна.
-5. `GET /healthz` на edge отдаёт возраст снапшота; при устаревании сверх
-   порога — алерт админам на origin.
+5. `GET /healthz` на edge отдаёт возраст снапшота и `version`; `status` =
+   `ok`/`stale` по порогу. Origin возраст edge не видит, поэтому алертит
+   админов при **провале публикации** снапшота; edge-порог — информативный.
 
 ## 5. Публичный API
 
@@ -123,7 +128,9 @@
 - Origin хранит подписки в `FileDB` (коллекция `web_push_subscriptions`:
   `endpoint`, `keys`, `school_id`, `kind`, `name`, `created_at`).
 - При обнаружении замены `BackgroundUpdater._check_exchange_updates` после
-  Telegram-рассылки вызывает push-сервис для совпавших подписок.
+  Telegram-рассылки вызывает push-сервис для подписок класса-источника
+  (`kind='class'`). Entity-подписки (учитель/кабинет) — задел на будущее,
+  фронтенд таких подписок в MVP не создаёт.
 - Ответы 404/410 при отправке удаляют мёртвую подписку; есть очистка
   устаревших.
 - Payload: `{title, body, url}`; `url` ведёт на share-страницу класса.
@@ -156,7 +163,7 @@ VAPID_SUBJECT=mailto:admin@example.ru
 EDGE_INGEST_URL=https://rasp.example.ru/internal/snapshot
 EDGE_INGEST_SECRET=
 EDGE_AUTH_SECRET=
-EDGE_ORIGIN_URL=https://origin.example.com
+SNAPSHOT_MAX_RETRIES=3
 ```
 
 Edge `.env` (тот же `AppConfig`, edge-специфичные поля):
@@ -165,9 +172,11 @@ Edge `.env` (тот же `AppConfig`, edge-специфичные поля):
 EDGE_HOST=127.0.0.1
 EDGE_PORT=8090
 SNAPSHOT_PATH=./data/snapshot.json
+SNAPSHOT_MAX_AGE=7200
+SNAPSHOT_MAX_BYTES=20971520
 EDGE_INGEST_SECRET=
 EDGE_AUTH_SECRET=
-EDGE_ORIGIN_URL=https://origin.example.com
+EDGE_ORIGIN_URL=https://origin.example.com   # edge-only: прокси push на origin
 VAPID_PUBLIC_KEY=
 ```
 
@@ -180,12 +189,13 @@ VAPID_PUBLIC_KEY=
   VAPID и edge-секреты; `WEBAPP_URL` указывает на `.ru` домен (Mini App
   открывается из РФ через edge).
 - **Edge (Москва)**: `deploy/edge/` — `Caddyfile`, systemd-юнит,
-  `install.sh` (Caddy, venv, сборка фронтенда, каталог снапшота, сервис).
+  `install.sh` (Caddy, venv, установка Node 20 LTS либо prebuilt `frontend/dist`,
+  сборка фронтенда, каталог снапшота, сервис).
   Сервис слушает `127.0.0.1:EDGE_PORT`; наружу — только Caddy с TLS.
 - **DNS**: A-запись `.ru` домена → московский сервер; Caddy выпускает
   Let's Encrypt.
-- **Мониторинг**: `/healthz` на edge с возрастом снапшота; алерт админам при
-  устаревании.
+- **Мониторинг**: `/healthz` на edge с возрастом снапшота; алерт админам на
+  origin при провале публикации (возраст edge origin-у недоступен).
 - `manage.sh` — опциональная команда `edge`, делегирующая в `install.sh`.
 
 ## 10. Безопасность
@@ -194,14 +204,16 @@ VAPID_PUBLIC_KEY=
   снапшота.
 - `/api/push/subscribe|unsubscribe` на origin защищены `X-Edge-Auth`;
   `/api/push/vapid-public-key` публичен по природе.
-- Валидация входных данных push-подписок; существующий rate-limit API.
+- Валидация входных данных push-подписок; rate-limit API с группировкой по
+  реальному клиентскому IP за прокси. Публичный subscribe на edge лимитируется,
+  чтобы не забить FileDB мусором.
 - Секреты только в `.env`, в репозиторий не коммитятся.
 
 ## 11. Тестирование
 
 - `tests/test_snapshot_export.py` — формат, HMAC, ретраи, изоляция сбоя.
-- `tests/test_snapshot_ingest.py` — приём/отклонение (подпись, timestamp),
-  атомарность.
+- `tests/test_edge_ingest.py` — приём/отклонение (подпись, timestamp, версия,
+  размер), атомарность.
 - `tests/test_edge_app.py` — отдача расписания без бота, `/api/schools` из
   снапшота, `/healthz`.
 - `tests/test_push_service.py` — подписка/отписка, отправка, удаление
