@@ -961,6 +961,19 @@ cmd_caddy() {
     return 1
 }
 
+# --- vapid (Web Push ключи) ----------------------------------------------------
+cmd_vapid() {
+    # Печатает свежую VAPID-пару для Web Push. .env НЕ трогает — только выводит
+    # готовые строки и подсказку вписать их вручную.
+    local py_bin="$VENV_DIR/bin/python"
+    if [[ ! -x "$py_bin" ]]; then
+        py_bin="$(command -v python3 || true)"
+    fi
+    [[ -n "$py_bin" ]] || die "Python не найден — запустите: ./manage.sh install"
+    ( cd "$SCRIPT_DIR" && "$py_bin" -m services.push_keys ) \
+        || die "Не удалось сгенерировать VAPID-пару"
+}
+
 # --- uninstall -----------------------------------------------------------------
 cmd_uninstall() {
     echo "${C_WARN}Внимание: это остановит бота${C_OFF}"
@@ -1028,6 +1041,7 @@ cmd_help() {
   doctor      Диагностика: venv, зависимости, .env, сервис, /healthz
   caddy       HTTPS для Mini App: ставит Caddy, берёт домен из WEBAPP_URL,
               выпускает Let's Encrypt сертификат и проксирует на бота
+  vapid       Печать VAPID-пары для Web Push (впишите значения в .env)
   uninstall   Остановка + удаление сервиса и Caddy-фрагмента (с вопросами)
   help        Эта справка
 
@@ -1132,6 +1146,7 @@ main() {
         restore)   cmd_restore ;;
         doctor)    cmd_doctor ;;
         caddy)     cmd_caddy ;;
+        vapid)     cmd_vapid ;;
         uninstall) cmd_uninstall ;;
         help|-h|--help|"") cmd_help ;;
         *) die "Неизвестная команда: '${cmd}'. Смотрите: ./manage.sh help" ;;
