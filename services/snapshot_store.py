@@ -12,10 +12,12 @@
 """
 from __future__ import annotations
 
+import copy
 import logging
 import threading
 from datetime import datetime
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Mapping
 
 from config.config import get_timezone
 from services.snapshot import (
@@ -71,9 +73,15 @@ class SnapshotStore:
             return True
 
     def _set(self, snapshot: dict[str, Any]) -> None:
-        """Разбирает снапшот в поля. Вызывается только под `_lock`."""
-        self._schools_data = snapshot.get('schools') or {}
-        self._schools_config = snapshot.get('schools_config') or {}
+        """Разбирает снапшот в поля. Вызывается только под `_lock`.
+
+        Копирует вложенные словари (`deepcopy`), чтобы хранилище не было
+        завязано на вызывающего: ingest может мутировать свой `payload` после
+        `apply`, и это не должно менять состояние. Копия делается один раз на
+        применение — снапшоты пишутся редко, а не на каждый запрос.
+        """
+        self._schools_data = copy.deepcopy(snapshot.get('schools') or {})
+        self._schools_config = copy.deepcopy(snapshot.get('schools_config') or {})
         self._version = snapshot.get('version')
         raw = snapshot.get('generated_at')
         try:
@@ -83,14 +91,16 @@ class SnapshotStore:
             self._generated_at = None
 
     @property
-    def schools_data(self) -> dict[str, Any]:
+    def schools_data(self) -> Mapping[str, Any]:
+        """Только для чтения: мутация невозможна, вложенные данные не алиасятся."""
         with self._lock:
-            return self._schools_data
+            return MappingProxyType(self._schools_data)
 
     @property
-    def schools_config(self) -> dict[str, Any]:
+    def schools_config(self) -> Mapping[str, Any]:
+        """Только для чтения: мутация невозможна, вложенные данные не алиасятся."""
         with self._lock:
-            return self._schools_config
+            return MappingProxyType(self._schools_config)
 
     @property
     def generated_at(self) -> str | None:

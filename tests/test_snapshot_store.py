@@ -12,6 +12,8 @@ import threading
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from services.snapshot import SNAPSHOT_VERSION, build_snapshot, write_snapshot_atomic
 from services.snapshot_store import SnapshotStore
 
@@ -178,3 +180,34 @@ def test_apply_is_thread_safe():
         # состояние согласовано: одна из записанных школ, ровно одна
         assert len(store.schools_data) == 1
         assert list(store.schools_data)[0] in {f's{n}' for n in range(8)}
+
+
+def test_schools_data_is_read_only():
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, 'snapshot.json')
+        _write(path)
+        store = SnapshotStore(path, max_age=7200)
+
+        with pytest.raises(TypeError):
+            store.schools_data['new'] = {}  # type: ignore[index]
+        with pytest.raises(TypeError):
+            store.schools_config['new'] = {}  # type: ignore[index]
+        # попытка мутации не изменила состояние
+        assert 'new' not in store.schools_data
+
+
+def test_apply_payload_mutation_does_not_affect_store():
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, 'snapshot.json')
+        store = SnapshotStore(path, max_age=7200)
+        payload = build_snapshot(
+            {'s1': {'SCHOOL_NAME': 'Школа'}}, {'s1': {'name': 'Школа'}})
+
+        assert store.apply(payload) is True
+        # ingest мутирует свой payload ПОСЛЕ применения — хранилище не должно это видеть
+        payload['schools']['s1']['SCHOOL_NAME'] = 'Подменено'
+        payload['schools']['s2'] = {'SCHOOL_NAME': 'Лишняя'}
+        payload['schools_config'].clear()
+
+        assert store.schools_data == {'s1': {'SCHOOL_NAME': 'Школа'}}
+        assert store.schools_config == {'s1': {'name': 'Школа'}}
