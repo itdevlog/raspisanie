@@ -281,17 +281,27 @@ def test_routes_are_under_api_rate_limit():
 def test_upstream_call_does_not_block_event_loop():
     """Синхронный httpx-вызов уходит в threadpool — loop остаётся отзывчивым.
 
-    Upstream-транспорт здесь реально спит в своём потоке; параллельно
-    запущенная корутина должна успеть отработать, пока эндпоинт ждёт ответ.
+    Доказательство честное: heartbeat-корутина тикает, пока upstream-хендлер
+    ещё ВЫПОЛНЯЕТСЯ. Хендлер блокирует свой поток `time.sleep` и перед
+    возвратом фиксирует, сколько тиков успело накопиться. При корректном
+    `run_in_threadpool` event loop свободен и heartbeat тикает во время сна;
+    при блокирующем вызове прямо в эндпоинте loop замерзает — до возврата
+    хендлера не набирается ни одного тика.
     """
-    import threading
+    import time
 
-    def slow_handler(request: httpx.Request) -> httpx.Response:
-        # Блокирующий сон в воркере httpx (вызывается через to_thread/threadpool).
-        threading.Event().wait(0.05)
-        return httpx.Response(200, content=b'{"ok": true}')
+    HEARTBEAT_INTERVAL = 0.005
+    UPSTREAM_SLEEP = 0.15  # ~30 потенциальных тиков heartbeat
 
     ticks = {'n': 0}
+    ticks_at_handler_time = {'n': -1}
+
+    def slow_handler(request: httpx.Request) -> httpx.Response:
+        # Блокируем именно ЭТОТ (воркерный) поток, не event loop.
+        time.sleep(UPSTREAM_SLEEP)
+        # Фиксируем прогресс heartbeat ЗА ВРЕМЯ запроса, до возврата.
+        ticks_at_handler_time['n'] = ticks['n']
+        return httpx.Response(200, content=b'{"ok": true}')
 
     async def main():
         sync_client = httpx.Client(transport=httpx.MockTransport(slow_handler))
@@ -306,28 +316,37 @@ def test_upstream_call_does_not_block_event_loop():
         )
         app.include_router(router)
 
-        # Меряем, что во время медленного upstream цикл выполнял другие задачи.
         from httpx import ASGITransport
 
         asgi = httpx.AsyncClient(transport=ASGITransport(app=app),
                                  base_url='http://test')
 
-        async def busy():
-            for _ in range(100):
+        async def heartbeat():
+            while True:
                 ticks['n'] += 1
-                await asyncio.sleep(0.001)
+                await asyncio.sleep(HEARTBEAT_INTERVAL)
 
-        busy_task = asyncio.create_task(busy())
+        hb_task = asyncio.create_task(heartbeat())
         r = await asgi.post('/api/push/subscribe', json=_sub())
-        await busy_task
+        hb_task.cancel()
+        try:
+            await hb_task
+        except asyncio.CancelledError:
+            pass
         await asgi.aclose()
         sync_client.close()
         return r
 
     r = asyncio.run(main())
     assert r.status_code == 200
-    # Цикл успел прокрутить заметное число итераций, пока ждал upstream.
-    assert ticks['n'] > 0
+    # Хендлер успел отработать только если loop был свободен во время запроса.
+    assert ticks_at_handler_time['n'] >= 0, "handler never ran"
+    # За ~0.15 с сна при интервале 0.005 с ожидается ~30 тиков; требуем скромный
+    # минимум, недостижимый при заблокированном loop (там было бы 0).
+    assert ticks_at_handler_time['n'] >= 5, (
+        f"event loop was blocked during upstream call "
+        f"(ticks while in flight: {ticks_at_handler_time['n']})"
+    )
 
 
 def test_timeout_constant_is_bounded():
