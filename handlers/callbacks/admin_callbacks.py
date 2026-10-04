@@ -10,6 +10,7 @@ from config.schools import SCHOOLS_CONFIG
 from core.data_loader import DataLoader
 from handlers.common.messaging import log_user_error
 from handlers.common.typing import require_message, require_query, require_user
+from services.snapshot import build_snapshot
 from services.status_service import StatusService, status_icon
 from services.text_utils import escape_markdown
 
@@ -40,6 +41,25 @@ class AdminCallbackHandler:
             notification_service = context.bot_data.get('notification_service')
             if notification_service and hasattr(notification_service, 'reset_user_class_index'):
                 notification_service.reset_user_class_index()
+
+    async def _publish_snapshot(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Best-effort публикует свежий снапшот на edge после ручного refresh (W7).
+
+        Синхронный `publish` уходит в `asyncio.to_thread`, чтобы не блокировать
+        event loop. Любая ошибка (нет экспортёра, сеть, неожиданный сбой) не
+        должна ломать сам flow обновления: логируем и продолжаем.
+        """
+        try:
+            exporter = context.bot_data.get('snapshot_exporter')
+            if not exporter or not getattr(exporter, 'enabled', True):
+                return
+            snapshot = build_snapshot(
+                context.bot_data.get('schools_data', {}),
+                context.bot_data.get('schools_config', {}),
+            )
+            await asyncio.to_thread(exporter.publish, snapshot)
+        except Exception as e:
+            admin_logger.error(f"Ошибка публикации снапшота после admin-refresh: {e}")
 
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE, callback_data: str):
         """Обрабатывает admin_* callback'ы"""
@@ -228,6 +248,7 @@ class AdminCallbackHandler:
                     merged.update(schools_data)
                 context.bot_data['schools_data'] = merged
                 self._invalidate_data(context)
+                await self._publish_snapshot(context)
                 admin_logger.info(f"Admin {user_id} manually refreshed all schools data")
 
                 total_count = len([s for s in SCHOOLS_CONFIG.values() if s.get('active', True)])
@@ -272,6 +293,7 @@ class AdminCallbackHandler:
                     context.bot_data['schools_data'] = {}
                 context.bot_data['schools_data'][school_id] = school_data
                 self._invalidate_data(context)
+                await self._publish_snapshot(context)
 
                 admin_logger.info(f"Admin {user_id} manually refreshed school {school_id}")
                 await self._show_admin_panel(update, context, f"✅ {school_name} обновлена")

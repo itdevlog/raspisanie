@@ -1,4 +1,5 @@
-"""Регрессия: ручной refresh вызывает _on_data_replaced()."""
+"""Регрессия: ручной refresh вызывает _on_data_replaced() и публикует снапшот (W7)."""
+import threading
 from types import SimpleNamespace
 from typing import Any
 
@@ -22,6 +23,24 @@ class _Loader:
 
     def load_all_schools_data(self):
         return {'school_133': {'CLASSES': {}}}
+
+
+class _RecordingExporter:
+    """Best-effort экспортёр-заглушка: пишет снапшоты и id потока вызова."""
+
+    def __init__(self, result: bool = True, error: Exception | None = None):
+        self.result = result
+        self.error = error
+        self.enabled = True
+        self.calls: list[dict] = []
+        self.thread_idents: list[int] = []
+
+    def publish(self, snapshot: dict) -> bool:
+        self.calls.append(snapshot)
+        self.thread_idents.append(threading.get_ident())
+        if self.error is not None:
+            raise self.error
+        return self.result
 
 
 async def test_refresh_school_invalidates(monkeypatch):
@@ -127,3 +146,185 @@ async def test_force_update_reports_skip_when_locked(monkeypatch):
 
     await h._force_update(update, context)
     assert "⏳ Обновление уже выполняется" in messages[-1]
+
+
+def _refresh_all_context(exporter):
+    updater = SimpleNamespace(_on_data_replaced=lambda: None)
+    return SimpleNamespace(
+        bot_data={
+            'background_updater': updater,
+            'schools_data': {'school_133': {'CLASSES': {}}},
+            'schools_config': {'school_133': {'name': 'Школа'}},
+            'snapshot_exporter': exporter,
+            'config': SimpleNamespace(ADMIN_IDS=[1]),
+        },
+        bot=SimpleNamespace(),
+    )
+
+
+async def test_refresh_all_publishes_snapshot(monkeypatch):
+    """Успешный admin-refresh всех школ публикует снапшот (W7)."""
+    monkeypatch.setattr(ac, 'DataLoader', lambda: _Loader())
+    exporter = _RecordingExporter()
+
+    h = ac.AdminCallbackHandler()
+    query = _Query()
+    update: Any = SimpleNamespace(
+        callback_query=query,
+        effective_user=SimpleNamespace(id=1),
+        effective_chat=None,
+    )
+    context = _refresh_all_context(exporter)
+
+    async def _show(*a, **k):
+        pass
+
+    monkeypatch.setattr(h, '_show_admin_panel', _show)
+
+    await h._refresh_all_schools(update, context)
+
+    assert len(exporter.calls) == 1
+    snapshot = exporter.calls[0]
+    assert snapshot['version'] == 1
+    # Свежий schools_data/schools_config — из bot_data.
+    assert snapshot['schools'] == context.bot_data['schools_data']
+    assert snapshot['schools_config'] == {'school_133': {'name': 'Школа'}}
+    # Синхронный publish уходит в worker-поток, loop не блокируется.
+    assert exporter.thread_idents[0] != threading.get_ident()
+
+
+async def test_refresh_school_publishes_snapshot(monkeypatch):
+    """Успешный admin-refresh одной школы тоже публикует снапшот (W7)."""
+    monkeypatch.setattr(ac, 'DataLoader', lambda: _Loader())
+    exporter = _RecordingExporter()
+
+    h = ac.AdminCallbackHandler()
+    query = _Query()
+    update: Any = SimpleNamespace(
+        callback_query=query,
+        effective_user=SimpleNamespace(id=1),
+        effective_chat=None,
+    )
+    context = _refresh_all_context(exporter)
+
+    async def _show(*a, **k):
+        pass
+
+    monkeypatch.setattr(h, '_show_admin_panel', _show)
+
+    await h._refresh_school(update, context, 'school_133')
+
+    assert len(exporter.calls) == 1
+    assert exporter.calls[0]['schools']['school_133'] == {'CLASSES': {}}
+    assert exporter.thread_idents[0] != threading.get_ident()
+
+
+async def test_refresh_all_without_exporter_is_safe(monkeypatch):
+    """Без экспортёра в bot_data refresh работает как раньше, без ошибок."""
+    monkeypatch.setattr(ac, 'DataLoader', lambda: _Loader())
+
+    h = ac.AdminCallbackHandler()
+    query = _Query()
+    update: Any = SimpleNamespace(
+        callback_query=query,
+        effective_user=SimpleNamespace(id=1),
+        effective_chat=None,
+    )
+    context = _refresh_all_context(None)
+    context.bot_data['snapshot_exporter'] = None
+
+    async def _show(*a, **k):
+        pass
+
+    monkeypatch.setattr(h, '_show_admin_panel', _show)
+
+    await h._refresh_all_schools(update, context)
+    assert context.bot_data['schools_data']['school_133'] == {'CLASSES': {}}
+
+
+async def test_refresh_all_disabled_exporter_is_safe(monkeypatch):
+    """Выключенный экспортёр (нет EDGE_INGEST_URL) не ломает refresh."""
+    monkeypatch.setattr(ac, 'DataLoader', lambda: _Loader())
+    exporter = _RecordingExporter(result=False)
+    exporter.enabled = False
+
+    h = ac.AdminCallbackHandler()
+    query = _Query()
+    update: Any = SimpleNamespace(
+        callback_query=query,
+        effective_user=SimpleNamespace(id=1),
+        effective_chat=None,
+    )
+    context = _refresh_all_context(exporter)
+
+    async def _show(*a, **k):
+        pass
+
+    monkeypatch.setattr(h, '_show_admin_panel', _show)
+
+    await h._refresh_all_schools(update, context)
+    assert context.bot_data['schools_data']['school_133'] == {'CLASSES': {}}
+
+
+async def test_refresh_all_publish_error_does_not_break(monkeypatch):
+    """Ошибка publish не всплывает и не отменяет успешный refresh."""
+    monkeypatch.setattr(ac, 'DataLoader', lambda: _Loader())
+    exporter = _RecordingExporter(error=RuntimeError('edge down'))
+
+    h = ac.AdminCallbackHandler()
+    query = _Query()
+    update: Any = SimpleNamespace(
+        callback_query=query,
+        effective_user=SimpleNamespace(id=1),
+        effective_chat=None,
+    )
+    context = _refresh_all_context(exporter)
+
+    async def _show(*a, **k):
+        pass
+
+    monkeypatch.setattr(h, '_show_admin_panel', _show)
+
+    await h._refresh_all_schools(update, context)
+
+    assert len(exporter.calls) == 1  # публикация реально вызывалась
+    assert context.bot_data['schools_data']['school_133'] == {'CLASSES': {}}
+
+
+async def test_force_update_does_not_publish_itself(monkeypatch):
+    """_force_update не публикует сам: это покрывает W5 в _perform_update."""
+    exporter = _RecordingExporter()
+
+    async def _performed():
+        return True
+
+    updater = SimpleNamespace(
+        _perform_update=_performed,
+        _on_data_replaced=lambda: None,
+    )
+    h = ac.AdminCallbackHandler()
+    query = _Query()
+    update: Any = SimpleNamespace(
+        callback_query=query,
+        effective_user=SimpleNamespace(id=1),
+        effective_chat=None,
+    )
+    context: Any = SimpleNamespace(
+        bot_data={
+            'background_updater': updater,
+            'schools_data': {},
+            'schools_config': {},
+            'snapshot_exporter': exporter,
+            'config': SimpleNamespace(ADMIN_IDS=[1]),
+        },
+        bot=SimpleNamespace(),
+    )
+
+    async def _show(*a, **k):
+        pass
+
+    monkeypatch.setattr(h, '_show_admin_panel', _show)
+
+    await h._force_update(update, context)
+
+    assert exporter.calls == []
