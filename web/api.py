@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterable
 from datetime import datetime
 from ipaddress import ip_address
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import APIRouter, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
@@ -94,7 +94,8 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
                static_dir: str | None = None,
                enable_telegram_routes: bool = True,
                trusted_proxies: Iterable[str] | None = None,
-               health_provider: Callable[[], dict] | None = None) -> FastAPI:
+               health_provider: Callable[[], dict] | None = None,
+               extra_router: APIRouter | None = None) -> FastAPI:
     app = FastAPI(title="Schedule Bot Mini App API", docs_url=None, redoc_url=None)
 
     # Приоритет: явный параметр → services['schools_config'] (edge) →
@@ -298,6 +299,12 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
                 'is_vacation': day_data.get('vacation', False),
                 'is_weekend': day_data.get('weekend', False)
             }
+
+    # Дополнительный роутер (например, ingest edge) включается ДО статики:
+    # mount `/` перехватывает любой путь, поэтому зарегистрированный после него
+    # `/internal/snapshot` был бы недостижим (405 от StaticFiles).
+    if extra_router is not None:
+        app.include_router(extra_router)
 
     if os.path.isdir(static_dir):
         app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')
