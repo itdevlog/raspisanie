@@ -20,7 +20,16 @@ def _reload(monkeypatch, **env):
 @pytest.fixture(autouse=True)
 def _restore_config(monkeypatch):
     yield
-    for key in ('TIMEZONE', 'UPDATE_INTERVAL', 'MAX_RETRIES', 'WEBAPP_PORT'):
+    for key in (
+        'TIMEZONE',
+        'UPDATE_INTERVAL',
+        'MAX_RETRIES',
+        'WEBAPP_PORT',
+        'EDGE_PORT',
+        'SNAPSHOT_MAX_AGE',
+        'SNAPSHOT_MAX_BYTES',
+        'SNAPSHOT_MAX_RETRIES',
+    ):
         monkeypatch.delenv(key, raising=False)
     importlib.reload(config_module)
 
@@ -69,3 +78,30 @@ def test_webapp_port_negative_raises(monkeypatch):
 def test_webapp_port_zero_and_valid_pass(monkeypatch):
     assert _reload(monkeypatch, WEBAPP_PORT='0').Config.WEBAPP_PORT == 0
     assert _reload(monkeypatch, WEBAPP_PORT='8081').Config.WEBAPP_PORT == 8081
+
+
+def test_edge_port_above_range_raises(monkeypatch):
+    with pytest.raises(ValueError, match='EDGE_PORT'):
+        _reload(monkeypatch, EDGE_PORT='70000')
+
+
+def test_edge_port_valid_passes(monkeypatch):
+    assert _reload(monkeypatch, EDGE_PORT='8090').Config.EDGE_PORT == 8090
+
+
+def test_snapshot_max_age_zero_raises(monkeypatch):
+    with pytest.raises(ValueError, match='SNAPSHOT_MAX_AGE'):
+        _reload(monkeypatch, SNAPSHOT_MAX_AGE='0')
+
+
+def test_snapshot_max_bytes_zero_raises(monkeypatch):
+    with pytest.raises(ValueError, match='SNAPSHOT_MAX_BYTES'):
+        _reload(monkeypatch, SNAPSHOT_MAX_BYTES='0')
+
+
+def test_snapshot_max_retries_floor_is_one(monkeypatch):
+    assert _reload(monkeypatch, SNAPSHOT_MAX_RETRIES='0').Config.SNAPSHOT_MAX_RETRIES == 1
+
+
+def test_snapshot_max_retries_valid_passes(monkeypatch):
+    assert _reload(monkeypatch, SNAPSHOT_MAX_RETRIES='5').Config.SNAPSHOT_MAX_RETRIES == 5

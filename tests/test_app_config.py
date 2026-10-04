@@ -26,6 +26,19 @@ _ENV_KEYS = (
     'WEBAPP_HOST',
     'WEBAPP_PORT',
     'WEBAPP_URL',
+    'EDGE_HOST',
+    'EDGE_PORT',
+    'SNAPSHOT_PATH',
+    'SNAPSHOT_MAX_AGE',
+    'SNAPSHOT_MAX_BYTES',
+    'SNAPSHOT_MAX_RETRIES',
+    'EDGE_INGEST_URL',
+    'EDGE_INGEST_SECRET',
+    'EDGE_AUTH_SECRET',
+    'EDGE_ORIGIN_URL',
+    'VAPID_PUBLIC_KEY',
+    'VAPID_PRIVATE_KEY',
+    'VAPID_SUBJECT',
 )
 
 
@@ -54,6 +67,19 @@ def test_from_env_reads_all_fields(monkeypatch):
     monkeypatch.setenv('WEBAPP_HOST', '0.0.0.0')
     monkeypatch.setenv('WEBAPP_PORT', '9090')
     monkeypatch.setenv('WEBAPP_URL', 'example.com')
+    monkeypatch.setenv('EDGE_HOST', '0.0.0.0')
+    monkeypatch.setenv('EDGE_PORT', '9091')
+    monkeypatch.setenv('SNAPSHOT_PATH', '/tmp/snapshot.json')
+    monkeypatch.setenv('SNAPSHOT_MAX_AGE', '3600')
+    monkeypatch.setenv('SNAPSHOT_MAX_BYTES', '1048576')
+    monkeypatch.setenv('SNAPSHOT_MAX_RETRIES', '7')
+    monkeypatch.setenv('EDGE_INGEST_URL', 'https://origin.example.com/api/snapshot')
+    monkeypatch.setenv('EDGE_INGEST_SECRET', 'ingest-secret')
+    monkeypatch.setenv('EDGE_AUTH_SECRET', 'auth-secret')
+    monkeypatch.setenv('EDGE_ORIGIN_URL', 'https://origin.example.com')
+    monkeypatch.setenv('VAPID_PUBLIC_KEY', 'pub-key')
+    monkeypatch.setenv('VAPID_PRIVATE_KEY', 'priv-key')
+    monkeypatch.setenv('VAPID_SUBJECT', 'mailto:ops@example.ru')
 
     cfg = AppConfig.from_env()
 
@@ -71,6 +97,19 @@ def test_from_env_reads_all_fields(monkeypatch):
     assert cfg.webapp_host == '0.0.0.0'
     assert cfg.webapp_port == 9090
     assert cfg.webapp_url == 'https://example.com'
+    assert cfg.edge_host == '0.0.0.0'
+    assert cfg.edge_port == 9091
+    assert cfg.snapshot_path == '/tmp/snapshot.json'
+    assert cfg.snapshot_max_age == 3600
+    assert cfg.snapshot_max_bytes == 1048576
+    assert cfg.snapshot_max_retries == 7
+    assert cfg.edge_ingest_url == 'https://origin.example.com/api/snapshot'
+    assert cfg.edge_ingest_secret == 'ingest-secret'
+    assert cfg.edge_auth_secret == 'auth-secret'
+    assert cfg.edge_origin_url == 'https://origin.example.com'
+    assert cfg.vapid_public_key == 'pub-key'
+    assert cfg.vapid_private_key == 'priv-key'
+    assert cfg.vapid_subject == 'mailto:ops@example.ru'
 
 
 def test_from_env_defaults():
@@ -90,6 +129,26 @@ def test_from_env_defaults():
     assert cfg.webapp_host == '127.0.0.1'
     assert cfg.webapp_port == 8080
     assert cfg.webapp_url == ''
+    assert cfg.edge_host == '127.0.0.1'
+    assert cfg.edge_port == 8090
+    assert cfg.snapshot_path == './data/snapshot.json'
+    assert cfg.snapshot_max_age == 7200
+    assert cfg.snapshot_max_bytes == 20 * 1024 * 1024
+    assert cfg.snapshot_max_retries == 3
+    assert cfg.edge_ingest_url == ''
+    assert cfg.edge_ingest_secret == ''
+    assert cfg.edge_auth_secret == ''
+    assert cfg.edge_origin_url == ''
+    assert cfg.vapid_public_key == ''
+    assert cfg.vapid_private_key == ''
+    assert cfg.vapid_subject == 'mailto:admin@example.ru'
+
+
+def test_snapshot_max_retries_separate_from_max_retries(monkeypatch):
+    monkeypatch.setenv('MAX_RETRIES', '9')
+    cfg = AppConfig.from_env()
+    assert cfg.max_retries == 9
+    assert cfg.snapshot_max_retries == 3
 
 
 def test_from_env_max_parallel_floor_one(monkeypatch):
@@ -139,6 +198,19 @@ def test_config_facade_keeps_public_attrs():
         'WEBAPP_HOST',
         'WEBAPP_PORT',
         'WEBAPP_URL',
+        'EDGE_HOST',
+        'EDGE_PORT',
+        'SNAPSHOT_PATH',
+        'SNAPSHOT_MAX_AGE',
+        'SNAPSHOT_MAX_BYTES',
+        'SNAPSHOT_MAX_RETRIES',
+        'EDGE_INGEST_URL',
+        'EDGE_INGEST_SECRET',
+        'EDGE_AUTH_SECRET',
+        'EDGE_ORIGIN_URL',
+        'VAPID_PUBLIC_KEY',
+        'VAPID_PRIVATE_KEY',
+        'VAPID_SUBJECT',
     ):
         assert hasattr(config_module.Config, name)
     assert callable(config_module.Config.is_admin)

@@ -134,6 +134,19 @@ class AppConfig:
     webapp_host: str
     webapp_port: int
     webapp_url: str
+    edge_host: str
+    edge_port: int
+    snapshot_path: str
+    snapshot_max_age: int
+    snapshot_max_bytes: int
+    snapshot_max_retries: int
+    edge_ingest_url: str
+    edge_ingest_secret: str
+    edge_auth_secret: str
+    edge_origin_url: str
+    vapid_public_key: str
+    vapid_private_key: str
+    vapid_subject: str
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -154,6 +167,25 @@ class AppConfig:
             webapp_host=os.getenv('WEBAPP_HOST', '127.0.0.1'),
             webapp_port=_parse_port('WEBAPP_PORT', 8080),
             webapp_url=normalize_webapp_url(os.getenv('WEBAPP_URL', '')),
+            # Edge-хост/порт публичного сайта (отдельно от WEBAPP мини-аппа).
+            edge_host=os.getenv('EDGE_HOST', '127.0.0.1'),
+            edge_port=_parse_port('EDGE_PORT', 8090),
+            # Снапшот расписания: путь и лимиты (возраст/размер/ретраи).
+            snapshot_path=os.getenv('SNAPSHOT_PATH', './data/snapshot.json'),
+            snapshot_max_age=_parse_int_positive('SNAPSHOT_MAX_AGE', 7200),
+            snapshot_max_bytes=_parse_int_positive('SNAPSHOT_MAX_BYTES', 20 * 1024 * 1024),
+            # Отдельно от MAX_RETRIES (ретраи DataLoader) — свои ретраи публикации.
+            snapshot_max_retries=_parse_int_min('SNAPSHOT_MAX_RETRIES', 3, 1),
+            # Публикация снапшота на edge (нужна только origin).
+            edge_ingest_url=os.getenv('EDGE_INGEST_URL', ''),
+            edge_ingest_secret=os.getenv('EDGE_INGEST_SECRET', ''),
+            edge_auth_secret=os.getenv('EDGE_AUTH_SECRET', ''),
+            # Прокси push на origin — нужен только edge; на origin может быть пустым.
+            edge_origin_url=os.getenv('EDGE_ORIGIN_URL', ''),
+            # Web Push (VAPID).
+            vapid_public_key=os.getenv('VAPID_PUBLIC_KEY', ''),
+            vapid_private_key=os.getenv('VAPID_PRIVATE_KEY', ''),
+            vapid_subject=os.getenv('VAPID_SUBJECT', 'mailto:admin@example.ru'),
         )
 
 
@@ -192,6 +224,26 @@ class Config:
     WEBAPP_HOST = _APP_CONFIG.webapp_host
     WEBAPP_PORT = _APP_CONFIG.webapp_port
     WEBAPP_URL = _APP_CONFIG.webapp_url
+
+    # Публичный сайт: edge-сервер, снапшот, push (W1+).
+    EDGE_HOST = _APP_CONFIG.edge_host
+    EDGE_PORT = _APP_CONFIG.edge_port
+    SNAPSHOT_PATH = _APP_CONFIG.snapshot_path
+    SNAPSHOT_MAX_AGE = _APP_CONFIG.snapshot_max_age
+    SNAPSHOT_MAX_BYTES = _APP_CONFIG.snapshot_max_bytes
+    # Свои ретраи публикации снапшота, отдельно от MAX_RETRIES (DataLoader).
+    SNAPSHOT_MAX_RETRIES = _APP_CONFIG.snapshot_max_retries
+    # Origin публикует снапшот на edge по EDGE_INGEST_URL (HMAC-подпись).
+    EDGE_INGEST_URL = _APP_CONFIG.edge_ingest_url
+    EDGE_INGEST_SECRET = _APP_CONFIG.edge_ingest_secret
+    # Общий секрет origin↔edge (edge проксирует push на origin).
+    EDGE_AUTH_SECRET = _APP_CONFIG.edge_auth_secret
+    # Нужен только edge; на origin может быть пустым.
+    EDGE_ORIGIN_URL = _APP_CONFIG.edge_origin_url
+    # Web Push (VAPID).
+    VAPID_PUBLIC_KEY = _APP_CONFIG.vapid_public_key
+    VAPID_PRIVATE_KEY = _APP_CONFIG.vapid_private_key
+    VAPID_SUBJECT = _APP_CONFIG.vapid_subject
 
     @staticmethod
     def is_admin(config, user_id: int) -> bool:
