@@ -86,6 +86,29 @@ def _built_frontend_dir() -> str:
     return os.path.join(repo_root, 'frontend', 'dist')
 
 
+def _health_provider(store: SnapshotStore) -> Callable[[], dict[str, Any]]:
+    """Живой `/healthz`-провайдер edge по текущему снапшоту (W11).
+
+    `status` — `ok`/`stale` по `SNAPSHOT_MAX_AGE` (информативный порог для
+    мониторинга/UI; алерт при провале публикации — забота origin, W4/W5).
+    Поля читаются из store на каждом запросе, поэтому ingest виден сразу.
+
+    Пустой store (снапшот не получен): `age_seconds`/`generated_at`/`version`
+    — `None`, `schools_count` — 0, `status` — `stale` (`is_stale` для
+    отсутствующих данных `True`). Формат ответа стабилен.
+    """
+    def provider() -> dict[str, Any]:
+        return {
+            'status': 'stale' if store.is_stale else 'ok',
+            'snapshot_age_seconds': store.age_seconds(),
+            'generated_at': store.generated_at,
+            'version': store.version,
+            'schools_count': len(store.schools_data),
+        }
+
+    return provider
+
+
 def create_edge_app(store: SnapshotStore, *, static_dir: str | None = None,
                     trusted_proxies: tuple[str, ...] = (DEFAULT_TRUSTED_PROXY,)
                     ) -> FastAPI:
@@ -94,6 +117,8 @@ def create_edge_app(store: SnapshotStore, *, static_dir: str | None = None,
     `store` — `SnapshotStore`; `schools_config`/`schools_data` отдаются живыми
     видами, чтобы `store.apply` из ingest был виден маршрутам сразу. Статика по
     умолчанию — `frontend/dist`; ingest-роутер включается до mount `/`.
+    `/healthz` отдаёт возраст/версию/число школ снапшота (W11) — origin этого
+    не видит, у него `/healthz` остаётся `{status: ok}`.
     """
     services = {
         'bot_data': _LiveBotData(store),
@@ -107,6 +132,7 @@ def create_edge_app(store: SnapshotStore, *, static_dir: str | None = None,
         static_dir=static_dir,
         enable_telegram_routes=False,
         trusted_proxies=trusted_proxies,
+        health_provider=_health_provider(store),
         extra_router=create_ingest_router(store),
     )
 

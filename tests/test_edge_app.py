@@ -9,12 +9,19 @@
 """
 import asyncio
 import time
+from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from services.snapshot import build_snapshot, serialize_snapshot, sign_payload
+from config.config import get_timezone
+from services.snapshot import (
+    SNAPSHOT_VERSION,
+    build_snapshot,
+    serialize_snapshot,
+    sign_payload,
+)
 from services.snapshot_store import SnapshotStore
 from web import edge_server
 from web.edge_server import create_edge_app
@@ -266,6 +273,96 @@ def test_python_module_runner_wires_uvicorn(tmp_path, monkeypatch):
 def test_module_is_importable():
     assert callable(edge_server.create_edge_app)
     assert callable(edge_server.main)
+
+
+# --- W11: /healthz с возрастом снапшота -----------------------------------
+
+
+def _aged_store(tmp_path, *, age_seconds: float, max_age: int = 7200) -> SnapshotStore:
+    """Store с `generated_at` ровно `age_seconds` назад (без ожидания)."""
+    store = SnapshotStore(str(tmp_path / 'snapshot.json'), max_age=max_age)
+    now = datetime.now(get_timezone())
+    snapshot = _snapshot(
+        schools={'s1': {'SCHOOL_NAME': 'Школа 1'}, 's2': {'SCHOOL_NAME': 'Школа 2'}},
+    )
+    # build_snapshot проставляет `now`; переписываем generated_at на нужный возраст.
+    snapshot['generated_at'] = (now - timedelta(seconds=age_seconds)).isoformat()
+    store.apply(snapshot)
+    return store
+
+
+def test_healthz_fresh_snapshot(tmp_path):
+    """Свежий снапшот → `ok` со всеми полями, schools_count из schools_data."""
+    store = _aged_store(tmp_path, age_seconds=1.0, max_age=7200)
+    body = _client(store).get('/healthz').json()
+
+    assert body['status'] == 'ok'
+    assert body['version'] == SNAPSHOT_VERSION
+    assert body['schools_count'] == 2
+    assert body['generated_at'] == store.generated_at
+    assert body['snapshot_age_seconds'] >= 1.0
+    assert set(body) == {
+        'status', 'snapshot_age_seconds', 'generated_at', 'version', 'schools_count',
+    }
+
+
+def test_healthz_stale_snapshot(tmp_path):
+    """Возраст > SNAPSHOT_MAX_AGE → `stale`, но поля отдаются."""
+    store = _aged_store(tmp_path, age_seconds=100.0, max_age=50)
+    body = _client(store).get('/healthz').json()
+
+    assert body['status'] == 'stale'
+    assert body['snapshot_age_seconds'] >= 100.0
+    assert body['schools_count'] == 2
+
+
+def test_healthz_no_snapshot_is_stale(tmp_path):
+    """Пустой store (снапшот не получен) → `stale` с null/0 полями."""
+    store = _store(tmp_path)
+    body = _client(store).get('/healthz').json()
+
+    assert body == {
+        'status': 'stale',
+        'snapshot_age_seconds': None,
+        'generated_at': None,
+        'version': None,
+        'schools_count': 0,
+    }
+
+
+def test_healthz_reflects_live_update_after_apply(tmp_path):
+    """Порог/поля считаются по ТЕКУЩЕМУ store, а не на старте."""
+    store = _store(tmp_path)
+    client = _client(store)
+    assert client.get('/healthz').json()['status'] == 'stale'
+
+    store.apply(_snapshot(
+        schools={'s1': {'SCHOOL_NAME': 'Школа'}},
+        schools_config={'s1': {'name': 'Школа', 'active': True}},
+    ))
+
+    body = client.get('/healthz').json()
+    assert body['status'] == 'ok'
+    assert body['version'] == SNAPSHOT_VERSION
+    assert body['schools_count'] == 1
+    assert body['generated_at'] == store.generated_at
+
+
+def test_healthz_max_age_threshold_is_store_value(tmp_path):
+    """Граница ok/stale берётся из max_age конкретного store (не константы)."""
+    fresh = _aged_store(tmp_path / 'fresh', age_seconds=10.0, max_age=100)
+    assert _client(fresh).get('/healthz').json()['status'] == 'ok'
+
+    stale = _aged_store(tmp_path / 'stale', age_seconds=10.0, max_age=5)
+    assert _client(stale).get('/healthz').json()['status'] == 'stale'
+
+
+def test_origin_healthz_unchanged(tmp_path):
+    """Origin (create_app без health_provider) отдаёт ровно `{status: ok}`."""
+    from web.api import create_app
+
+    app = create_app({'bot_data': {'schools_data': {}}})
+    assert TestClient(app).get('/healthz').json() == {'status': 'ok'}
 
 
 class _FakeConfig:
