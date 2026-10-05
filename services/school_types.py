@@ -66,8 +66,25 @@ class SchoolData(TypedDict, total=False):
     LESSON_TIMES: dict[str, list[str]]
     # period_id -> class_id -> "day*100 + lesson" -> LessonData
     CLASS_SCHEDULE: dict[str, dict[str, dict[str, LessonData]]]
+    # teacher_id -> "day*100 + lesson" -> LessonData
+    TEACH_SCHEDULE: dict[str, dict[str, LessonData]]
     # class_id -> date_str -> lesson_num -> ExchangeData
     CLASS_EXCHANGE: dict[str, dict[str, dict[str, ExchangeData]]]
     # teacher_id -> date_str -> lesson_num -> ExchangeData
     TEACH_EXCHANGE: dict[str, dict[str, dict[str, ExchangeData]]]
     HOLIDAY_TRANSFER: dict[str, HolidayInfo]
+    # Число учебных дней в неделе и номер первого урока.
+    WEEKDAYNUM: int
+    FIRSTLESSONNUM: int
+    # class_id -> номер курса; class_id -> division -> название группы.
+    CLASS_COURSES: dict[str, int]
+    CLASSGROUPS: dict[str, dict[str, str]]
+    # class_id -> номер второй смены (структура выгрузки Nikasoft).
+    CLASS_SHIFT: dict
+    # Флаги отображения разделов (паритет с оригинальным сайтом).
+    SHOW_TEACHERS: bool
+    SHOW_CLASSROOMS: bool
+    USEROOMS: bool
+    HOMEPAGE_BTN: bool
+    SECOND_RELATIVE: bool
+    SHOW_EXCHANGES_TERM: bool

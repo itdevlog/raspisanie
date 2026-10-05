@@ -119,7 +119,9 @@ def test_schools_from_snapshot_config(tmp_path):
 
     body = _client(store).get('/api/schools').json()
 
-    assert body['schools'] == [{'id': 's1', 'name': 'Школа 1', 'loaded': True}]
+    assert [(s['id'], s['name'], s['loaded']) for s in body['schools']] == [
+        ('s1', 'Школа 1', True)
+    ]
 
 
 def test_schools_reflect_new_snapshot_after_apply(tmp_path):
@@ -130,8 +132,9 @@ def test_schools_reflect_new_snapshot_after_apply(tmp_path):
         schools_config={'s1': {'name': 'Старая школа', 'active': True}},
     ))
     client = _client(store)
-    assert client.get('/api/schools').json()['schools'] == [
-        {'id': 's1', 'name': 'Старая школа', 'loaded': True}
+    assert [(s['id'], s['name'], s['loaded'])
+            for s in client.get('/api/schools').json()['schools']] == [
+        ('s1', 'Старая школа', True)
     ]
 
     # Новый снапшот: другая школа и другое имя/набор активных.
@@ -140,8 +143,9 @@ def test_schools_reflect_new_snapshot_after_apply(tmp_path):
         schools_config={'s9': {'name': 'Новая школа', 'active': True}},
     ))
 
-    assert client.get('/api/schools').json()['schools'] == [
-        {'id': 's9', 'name': 'Новая школа', 'loaded': True}
+    assert [(s['id'], s['name'], s['loaded'])
+            for s in client.get('/api/schools').json()['schools']] == [
+        ('s9', 'Новая школа', True)
     ]
 
 
@@ -153,16 +157,18 @@ def test_schools_loaded_flag_uses_live_schools_data(tmp_path):
 
     # Конфиг есть, но данных ещё нет → loaded=False.
     store.apply(_snapshot(schools={}, schools_config={'s1': {'name': 'Школа', 'active': True}}))
-    assert client.get('/api/schools').json()['schools'] == [
-        {'id': 's1', 'name': 'Школа', 'loaded': False}
+    assert [(s['id'], s['name'], s['loaded'])
+            for s in client.get('/api/schools').json()['schools']] == [
+        ('s1', 'Школа', False)
     ]
 
     store.apply(_snapshot(
         schools={'s1': {'SCHOOL_NAME': 'Школа'}},
         schools_config={'s1': {'name': 'Школа', 'active': True}},
     ))
-    assert client.get('/api/schools').json()['schools'] == [
-        {'id': 's1', 'name': 'Школа', 'loaded': True}
+    assert [(s['id'], s['name'], s['loaded'])
+            for s in client.get('/api/schools').json()['schools']] == [
+        ('s1', 'Школа', True)
     ]
 
 

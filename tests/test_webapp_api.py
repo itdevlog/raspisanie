@@ -22,6 +22,19 @@ def _school():
     }
 
 
+def _school_with_metadata(**overrides):
+    """Школа с полями метаданных (W32) для `/api/schools`."""
+    school = _school()
+    school.update({
+        'CITY_NAME': 'Пермь',
+        'EXPORT_DATE': '04.10.2026',
+        'EXPORT_TIME': '20:45:13',
+        'HOMEPAGE_URL': 'https://school.example/',
+    })
+    school.update(overrides)
+    return school
+
+
 class _FakeUserService:
     def get_user_school(self, uid):
         return 'school_133'
@@ -61,6 +74,81 @@ def test_schools_today_format():
     r = _client(None).get('/api/schools')
     assert r.status_code == 200
     assert re.fullmatch(r'\d{2}\.\d{2}\.\d{4}', r.json()['today'])
+
+
+def _entry_for(school, schools_config=None):
+    """Возвращает запись `/api/schools` для school_133."""
+    bot_data = {'schools_data': {'school_133': school}, 'user_service': _FakeUserService()}
+    services = {'bot_data': bot_data}
+    if schools_config is not None:
+        services['schools_config'] = schools_config
+    r = TestClient(create_app(services)).get('/api/schools')
+    assert r.status_code == 200
+    return r.json()['schools'][0]
+
+
+def test_schools_metadata_present_when_loaded():
+    """Загруженная школа отдаёт city/updated/homepage_url/features (W32)."""
+    entry = _entry_for(
+        _school_with_metadata(),
+        schools_config={'school_133': {'name': 'Школа', 'city': 'Москва', 'active': True}},
+    )
+    assert entry['id'] == 'school_133'
+    assert entry['loaded'] is True
+    # city из SCHOOLS_CONFIG имеет приоритет над CITY_NAME.
+    assert entry['city'] == 'Москва'
+    assert entry['updated'] == '04.10.2026 20:45:13'
+    assert entry['homepage_url'] == 'https://school.example/'
+    assert entry['features'] == {
+        'teachers': True, 'classrooms': True, 'rooms': True, 'homepage': True,
+    }
+
+
+def test_schools_city_falls_back_to_city_name():
+    """Нет city в конфиге — берём CITY_NAME из данных школы."""
+    entry = _entry_for(
+        _school_with_metadata(),
+        schools_config={'school_133': {'name': 'Школа', 'active': True}},
+    )
+    assert entry['city'] == 'Пермь'
+
+
+def test_schools_features_false_when_flags_false():
+    """Ложные флаги SHOW_*/USEROOMS/HOMEPAGE_BTN выключают features."""
+    school = _school_with_metadata(
+        SHOW_TEACHERS=False, SHOW_CLASSROOMS=False, USEROOMS=False, HOMEPAGE_BTN=False,
+    )
+    entry = _entry_for(school)
+    assert entry['features'] == {
+        'teachers': False, 'classrooms': False, 'rooms': False, 'homepage': False,
+    }
+
+
+def test_schools_features_default_true_when_flags_absent():
+    """Отсутствующие флаги считаются включёнными (default True)."""
+    entry = _entry_for(_school_with_metadata())
+    assert entry['features'] == {
+        'teachers': True, 'classrooms': True, 'rooms': True, 'homepage': True,
+    }
+
+
+def test_schools_metadata_defaults_when_not_loaded():
+    """Школа без данных: метаданные None, features по умолчанию True."""
+    bot_data = {'schools_data': {}, 'user_service': _FakeUserService()}
+    services = {
+        'bot_data': bot_data,
+        'schools_config': {'school_133': {'name': 'Школа', 'active': True}},
+    }
+    r = TestClient(create_app(services)).get('/api/schools')
+    assert r.status_code == 200
+    entry = r.json()['schools'][0]
+    assert entry['loaded'] is False
+    assert entry['city'] is None
+    assert entry['updated'] is None
+    assert entry['homepage_url'] is None
+    assert entry['features'] == {
+        'teachers': True, 'classrooms': True, 'rooms': True, 'homepage': True,
+    }
 
 
 def test_classes_list():
@@ -142,7 +230,11 @@ def test_schools_config_from_services_overrides_default():
     services = {'bot_data': bot_data, 'schools_config': custom}
     r = TestClient(create_app(services)).get('/api/schools')
     assert r.status_code == 200
-    assert r.json()['schools'] == [{'id': 'school_133', 'name': 'Своя школа', 'loaded': True}]
+    entry = r.json()['schools'][0]
+    # W32 добавляет метаданные аддитивно; базовый контракт сохраняется.
+    assert entry['id'] == 'school_133'
+    assert entry['name'] == 'Своя школа'
+    assert entry['loaded'] is True
 
 
 def test_schools_config_falls_back_to_module_default():
@@ -150,7 +242,10 @@ def test_schools_config_falls_back_to_module_default():
     bot_data = {'schools_data': {'school_133': _school()}, 'user_service': _FakeUserService()}
     r = TestClient(create_app({'bot_data': bot_data})).get('/api/schools')
     schools = {s['id']: s for s in r.json()['schools']}
-    assert schools['school_133'] == {'id': 'school_133', 'name': 'МАОУ СОШ №133', 'loaded': True}
+    entry = schools['school_133']
+    assert entry['id'] == 'school_133'
+    assert entry['name'] == 'МАОУ СОШ №133'
+    assert entry['loaded'] is True
 
 
 def test_static_dir_override(tmp_path):

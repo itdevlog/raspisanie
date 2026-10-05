@@ -45,6 +45,25 @@ def _now() -> datetime:
     return datetime.now(get_timezone())
 
 
+def _updated_at(school_data: dict) -> str | None:
+    """'дата время' выгрузки (EXPORT_DATE + EXPORT_TIME) или None."""
+    export_date = school_data.get('EXPORT_DATE')
+    export_time = school_data.get('EXPORT_TIME')
+    if export_date and export_time:
+        return f'{export_date} {export_time}'
+    return None
+
+
+def _school_features(school_data: dict) -> dict:
+    """Флаги разделов школы; отсутствующий флаг считается включённым."""
+    return {
+        'teachers': bool(school_data.get('SHOW_TEACHERS', True)),
+        'classrooms': bool(school_data.get('SHOW_CLASSROOMS', True)),
+        'rooms': bool(school_data.get('USEROOMS', True)),
+        'homepage': bool(school_data.get('HOMEPAGE_BTN', True)),
+    }
+
+
 def _lesson_time(lesson: dict) -> str:
     """'08:00-08:45' из полей start/end реального payload."""
     start = lesson.get('start') or ''
@@ -138,12 +157,24 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
     @app.get('/api/schools')
     async def schools_list():
         schools_data = services['bot_data'].get('schools_data', {})
+        result = []
+        for sid, cfg in schools.items():
+            if not cfg.get('active', True):
+                continue
+            school_data = schools_data.get(sid) or {}
+            result.append({
+                'id': sid,
+                'name': cfg.get('name'),
+                'loaded': sid in schools_data,
+                # city: конфиг школы имеет приоритет, иначе — CITY_NAME выгрузки.
+                'city': cfg.get('city') or school_data.get('CITY_NAME'),
+                'updated': _updated_at(school_data),
+                'homepage_url': school_data.get('HOMEPAGE_URL'),
+                'features': _school_features(school_data),
+            })
         return {
             'today': _now().strftime('%d.%m.%Y'),
-            'schools': [
-                {'id': sid, 'name': cfg.get('name'), 'loaded': sid in schools_data}
-                for sid, cfg in schools.items() if cfg.get('active', True)
-            ],
+            'schools': result,
         }
 
     @app.get('/api/{school_id}/classes')

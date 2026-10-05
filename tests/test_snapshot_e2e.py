@@ -174,7 +174,9 @@ def test_origin_to_edge_happy_path_serves_schedule(tmp_path, monkeypatch):
 
     # /api/schools отдаёт школу из прошедшего через снапшот конфига.
     schools = edge.get('/api/schools').json()['schools']
-    assert schools == [{'id': 's1', 'name': 'Школа №1', 'loaded': True}]
+    assert [(s['id'], s['name'], s['loaded']) for s in schools] == [
+        ('s1', 'Школа №1', True)
+    ]
 
     # Расписание (понедельник 07.09.2026) отдаётся из пришедших данных.
     day = edge.get('/api/s1/schedule/class/5а?date=07.09.2026').json()
