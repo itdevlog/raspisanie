@@ -102,9 +102,9 @@ edge — `deploy/edge/edge.env.example` (копируется в `/etc/raspisani
 | `EDGE_INGEST_SECRET` | `''` | Общий HMAC-секрет тела снапшота (совпадает с edge). **Секрет**. |
 | `EDGE_AUTH_SECRET` | `''` | Общий секрет origin↔edge: edge добавляет `X-Edge-Auth` при прокси push. **Секрет**. |
 | `SNAPSHOT_MAX_RETRIES` | `3` | Ретраи публикации снапшота (не путать с `MAX_RETRIES` загрузки). |
-| `SNAPSHOT_PATH` | `./data/snapshot.json` | Файл, куда origin пишет снапшот перед отправкой. |
-| `SNAPSHOT_MAX_AGE` | `7200` | Возраст (сек), после которого данные считаются stale. |
-| `SNAPSHOT_MAX_BYTES` | `20971520` | Максимальный размер снапшота (байт). |
+| `SNAPSHOT_MAX_BYTES` | `20971520` | Максимальный размер **публикуемого** снапшота (байт); тот же лимит edge применяет к приёму. |
+| `SNAPSHOT_PATH` | `./data/snapshot.json` | **на origin не используется** — origin не пишет файл, а шлёт тело снапшота по HTTP; переменную читает только edge (см. ниже). |
+| `SNAPSHOT_MAX_AGE` | `7200` | **на origin не используется** — читается только на edge (healthz/stale). |
 | `WEBAPP_URL` | `''` | **→ `.ru`-домен**: Telegram Mini App открывается из РФ через edge. |
 
 ### Edge (Москва)
@@ -156,14 +156,15 @@ push-подписки, хотя edge исправно проксирует за�
 
 Что это значит для эксплуатации:
 
-- `POST /api/push/subscribe` через edge-прокси вернёт `404`/`405`, подписка **не
-  сохранится**;
+- `POST /api/push/subscribe` через edge-прокси вернёт `404` (на origin нет такого
+  маршрута), подписка **не сохранится**;
 - `/api/push/vapid-public-key` на **edge** работает (отдаётся локально из
   `VAPID_PUBLIC_KEY`) — им пользуется фронтенд;
 - Telegram-уведомления о заменах работают как раньше и от этого не зависят.
 
 Follow-up: создать `PushSubscriptionStore` (W12, `services/push_store.py`) поверх
-`FileDB` бота и передать его в `create_app(...)` из `run_webapp`.
+`FileDB` бота; **проводка отложена на W15** — передать его в `create_app(...)` из
+`run_webapp` (сейчас вызывается `create_app(services)` без `push_store`).
 
 ---
 
@@ -180,3 +181,7 @@ Follow-up: создать `PushSubscriptionStore` (W12, `services/push_store.py`
 - [ ] Перед сборкой фронтенда задана `VITE_TELEGRAM_BOT` (иначе кнопка скрыта).
 - [ ] Проверка: `curl -sf https://<домен>/healthz` (возраст снапшота) и
       `curl -sf https://<домен>/api/push/vapid-public-key`.
+- [ ] ⚠️ `POST /api/push/subscribe` сейчас ожидаемо возвращает `404` (origin не
+      сохраняет подписки, follow-up W15, см. §6). Зелёный чек-лист ≠ Web Push
+      полностью работает: фронтенд и `vapid-public-key` живы, но сохранение
+      подписок на origin ещё не подключено.

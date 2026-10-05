@@ -453,9 +453,10 @@ ADMIN_LOG_FILE=./logs/admin.log
   `TIMESTAMP_TOLERANCE_SECONDS = 300`). Без синхронизации — `422` и stale-данные.
 - **origin-only**: `VAPID_*` (приватный ключ — только origin),
   `EDGE_INGEST_URL`/`EDGE_INGEST_SECRET`, `SNAPSHOT_MAX_RETRIES`.
-- **edge-only**: `EDGE_HOST`/`EDGE_PORT`, `SNAPSHOT_PATH`/`SNAPSHOT_MAX_AGE`/
-  `SNAPSHOT_MAX_BYTES`, `EDGE_ORIGIN_URL`, `VAPID_PUBLIC_KEY`.
-- **origin+edge**: `EDGE_AUTH_SECRET` (совпадает на обоих).
+- **edge-only**: `EDGE_HOST`/`EDGE_PORT`, `SNAPSHOT_PATH`/`SNAPSHOT_MAX_AGE`,
+  `EDGE_ORIGIN_URL`, `VAPID_PUBLIC_KEY`.
+- **origin+edge**: `EDGE_AUTH_SECRET` (совпадает на обоих),
+  `SNAPSHOT_MAX_BYTES` (origin — лимит публикации, edge — лимит приёма).
 - **Build-time фронтенда**: `VITE_TELEGRAM_BOT` — имя бота для кнопки «Открыть в
   Telegram»; если не задана при сборке, кнопка скрыта.
 - ⚠️ **Отложено (follow-up W15)**: origin пока не регистрирует `/api/push/*` —
