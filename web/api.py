@@ -226,6 +226,31 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
         except PeriodNotFoundError as e:
             raise HTTPException(422, e.message) from e
 
+    @app.get('/api/{school_id}/schedule/{kind}/{name}/now')
+    async def schedule_now(school_id: str, kind: str, name: str, date: str | None = None):
+        """Текущий/следующий урок: `{server_time, current, next}` (W36).
+
+        `date` опционален (по умолчанию — серверная дата, как у дневного
+        маршрута). `current`/`next` — сводки уроков того же формата, что
+        `next_lesson` виджета.
+        """
+        svc = _service_for(kind, _school_or_404(services, school_id))
+        current_date = _parse_date_or_none(date)
+        now = _now()
+        try:
+            day = await run_in_threadpool(svc.get_day, name, current_date)
+        except EntityNotFoundError as e:
+            raise HTTPException(404, e.message) from e
+        except PeriodNotFoundError as e:
+            raise HTTPException(422, e.message) from e
+        selected = await run_in_threadpool(
+            svc.select_current_and_next, day.get('lessons', []), current_date, now)
+        return {
+            'server_time': now.isoformat(),
+            'current': selected['current'],
+            'next': selected['next'],
+        }
+
     @app.get('/api/{school_id}/search')
     async def search(school_id: str, q: str = Query(..., min_length=1, max_length=80)):
         school_data = _school_or_404(services, school_id)
@@ -295,34 +320,10 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
             except (EntityNotFoundError, PeriodNotFoundError) as e:
                 raise HTTPException(404, str(e)) from e
 
-            # Определяем следующий урок
+            # Текущий/следующий урок — единый селектор (W36), как в `/now`.
             now = _now()
-            next_lesson = None
             lessons = day_data.get('lessons', [])
-
-            for lesson in lessons:
-                start = lesson.get('start', '')
-                if not start:
-                    continue
-                try:
-                    lesson_start = datetime.strptime(
-                        f"{current_date.strftime('%Y-%m-%d')} {start}",
-                        '%Y-%m-%d %H:%M'
-                    ).replace(tzinfo=get_timezone())
-                except ValueError:
-                    continue
-                if lesson_start > now and not lesson.get('is_cancelled'):
-                    items = lesson.get('items') or [{}]
-                    first_item = items[0]
-                    minutes_until = int((lesson_start - now).total_seconds() / 60)
-                    next_lesson = {
-                        'num': lesson.get('num'),
-                        'time': _lesson_time(lesson),
-                        'subject': first_item.get('subject') or '',
-                        'room': first_item.get('room') or '',
-                        'in_minutes': minutes_until
-                    }
-                    break
+            next_lesson = svc.select_current_and_next(lessons, current_date, now=now)['next']
 
             # Считаем замены
             exchanges_count = sum(1 for lesson in lessons if lesson.get('has_exchange'))

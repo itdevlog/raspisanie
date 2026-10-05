@@ -333,32 +333,122 @@ class BaseScheduleService:
             })
         return days
 
+    @staticmethod
+    def _lesson_time_str(lesson: dict) -> str:
+        """'08:00-08:45' из payload-урока (start/end), иначе что есть."""
+        start = lesson.get('start') or ''
+        end = lesson.get('end') or ''
+        if start and end:
+            return f'{start}-{end}'
+        return start or end or ''
+
+    @staticmethod
+    def _lesson_summary(lesson: dict, time_str: str, in_minutes: int) -> dict:
+        """Публичная сводка урока для виджета/`/now`.
+
+        Формат 1:1 с полями виджета: ``{num, time, subject, room,
+        in_minutes}``; первый item (или пустой словарь) даёт subject/room.
+        """
+        items = lesson.get('items') or [{}]
+        first_item = items[0] if items else {}
+        return {
+            'num': lesson.get('num'),
+            'time': time_str,
+            'subject': first_item.get('subject') or '',
+            'room': first_item.get('room') or '',
+            'in_minutes': in_minutes,
+        }
+
+    def select_current_and_next(self, lessons: list[dict], date: datetime,
+                                now: datetime | None = None) -> dict:
+        """Текущий и следующий уроки из payload-уроков ``get_day``.
+
+        ``lessons`` — список ``{num, start, end, items, is_cancelled}`` (формат
+        ``_lessons_payload``). Возвращает ``{'current': dict|None,
+        'next': dict|None}``, где каждая запись — ``{num, time, subject, room,
+        in_minutes}``:
+
+        - ``next`` — первый непотменённый урок со временем начала строго позже
+          ``now`` (обход в порядке ``lessons``, как делал виджет);
+          ``in_minutes`` — целых минут до начала;
+        - ``current`` — непотменённый урок, в который попадает ``now``
+          (``start <= now < end``); ``in_minutes`` — целых минут до конца.
+
+        Уроки без валидного времени начала пропускаются. ``now``
+        инъектируется для тестов; по умолчанию — время школы.
+        """
+        now = now or datetime.now(self.moscow_tz)
+        result: dict = {'current': None, 'next': None}
+        date_prefix = date.strftime('%Y-%m-%d')
+        for lesson in lessons:
+            if lesson.get('is_cancelled'):
+                continue
+            start = lesson.get('start') or ''
+            if not start:
+                continue
+            try:
+                lesson_start = datetime.strptime(
+                    f'{date_prefix} {start}', '%Y-%m-%d %H:%M'
+                ).replace(tzinfo=self.moscow_tz)
+            except ValueError:
+                continue
+            if lesson_start > now:
+                if result['next'] is None:
+                    result['next'] = self._lesson_summary(
+                        lesson, self._lesson_time_str(lesson),
+                        int((lesson_start - now).total_seconds() / 60),
+                    )
+                continue
+            end = lesson.get('end') or ''
+            if not end:
+                continue
+            try:
+                lesson_end = datetime.strptime(
+                    f'{date_prefix} {end}', '%Y-%m-%d %H:%M'
+                ).replace(tzinfo=self.moscow_tz)
+            except ValueError:
+                continue
+            if lesson_start <= now < lesson_end:
+                result['current'] = self._lesson_summary(
+                    lesson, self._lesson_time_str(lesson),
+                    int((lesson_end - now).total_seconds() / 60),
+                )
+        return result
+
+    def _next_lesson_payload(self, schedule_data: list[dict]) -> list[dict]:
+        """Payload-проекция внутренних уроков для ``select_current_and_next``."""
+        payload = []
+        for lesson in schedule_data:
+            times = self._get_lesson_times(lesson['lesson_num'])
+            payload.append({
+                'num': lesson['lesson_num'],
+                'start': times[0] if times else '',
+                'end': times[1] if len(times) > 1 else '',
+                'items': [],
+                'is_cancelled': lesson.get('is_cancelled', False),
+            })
+        return sorted(payload, key=lambda x: x['num'])
+
     def get_next_lesson(self, schedule_data: list[dict], date: datetime,
                         now: datetime | None = None) -> dict | None:
         """Возвращает текущий или следующий урок по времени LESSON_TIMES.
 
         Приоритет — предстоящий урок; если его нет (текущий был последним),
-        возвращается идущий сейчас урок.
+        возвращается идущий сейчас урок. Делегирует выбор в
+        ``select_current_and_next`` (единая логика с виджетом/`/now`).
         """
         if not schedule_data:
             return None
         now = now or datetime.now(self.moscow_tz)
-        current = None
-        for lesson in sorted(schedule_data, key=lambda x: x['lesson_num']):
-            times = self._get_lesson_times(lesson['lesson_num'])
-            if len(times) < 2 or times[0] == '?':
-                continue
-            try:
-                start = now.replace(hour=int(times[0][:2]), minute=int(times[0][3:5]),
-                                    second=0, microsecond=0)
-                end = start.replace(hour=int(times[1][:2]), minute=int(times[1][3:5]))
-            except (ValueError, IndexError):
-                continue
-            if start < now and now <= end:
-                current = lesson
-            elif now <= start:
+        selected = self.select_current_and_next(
+            self._next_lesson_payload(schedule_data), now, now=now)
+        chosen = selected['next'] or selected['current']
+        if chosen is None:
+            return None
+        for lesson in schedule_data:
+            if lesson['lesson_num'] == chosen['num']:
                 return lesson
-        return current
+        return None
 
     def _get_day_name(self, date: datetime) -> str:
         """Получает название дня недели - ОБЩАЯ ЛОГИКА"""

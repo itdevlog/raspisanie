@@ -285,3 +285,88 @@ def test_health_provider_overrides_status():
     client = _client_with(health_provider=lambda: {'status': 'stale', 'grade': 1})
     body = client.get('/healthz').json()
     assert body == {'status': 'stale', 'grade': 1}
+
+
+def _freeze_now(monkeypatch, hour, minute):
+    """Фиксирует `web.api._now` на 07.12.2026 (понедельник, урок 1)."""
+    from datetime import datetime
+
+    import web.api as api_module
+    from config.config import get_timezone
+
+    fixed = datetime(2026, 12, 7, hour, minute, tzinfo=get_timezone())
+    monkeypatch.setattr(api_module, '_now', lambda: fixed)
+    return fixed
+
+
+def test_schedule_now_route(monkeypatch):
+    """`/now` до первого урока: current=None, next — первый урок."""
+    _freeze_now(monkeypatch, 7, 30)
+    r = _client(None).get('/api/school_133/schedule/class/5а/now?date=07.12.2026')
+    assert r.status_code == 200
+    body = r.json()
+    assert body['server_time'].startswith('2026-12-07T07:30')
+    assert body['current'] is None
+    assert body['next'] == {
+        'num': 1, 'time': '08:00-08:45',
+        'subject': 'Математика', 'room': '101', 'in_minutes': 30,
+    }
+
+
+def test_schedule_now_route_during_lesson(monkeypatch):
+    """`/now` во время урока: current — идущий, next=None."""
+    _freeze_now(monkeypatch, 8, 30)
+    body = _client(None).get('/api/school_133/schedule/class/5а/now?date=07.12.2026').json()
+    assert body['current'] == {
+        'num': 1, 'time': '08:00-08:45',
+        'subject': 'Математика', 'room': '101', 'in_minutes': 15,
+    }
+    assert body['next'] is None
+
+
+def test_schedule_now_route_default_date(monkeypatch):
+    """`/now` без `date` берёт серверную дату."""
+    _freeze_now(monkeypatch, 7, 30)
+    r = _client(None).get('/api/school_133/schedule/class/5а/now')
+    assert r.status_code == 200
+    assert r.json()['next']['num'] == 1
+
+
+def test_schedule_now_route_out_of_period_422(monkeypatch):
+    """`/now` вне учебного периода — 422 (как у дневного маршрута)."""
+    _freeze_now(monkeypatch, 7, 30)
+    school = _school()
+    school['PERIODS'] = {}
+    bot_data = {'schools_data': {'school_133': school}, 'user_service': _FakeUserService()}
+    client = TestClient(create_app({'bot_data': bot_data}))
+    r = client.get('/api/school_133/schedule/class/5а/now?date=07.12.2026')
+    assert r.status_code == 422
+
+
+def test_schedule_now_route_unknown_entity_404(monkeypatch):
+    """`/now` для неизвестной сущности — 404."""
+    _freeze_now(monkeypatch, 7, 30)
+    r = _client(None).get('/api/school_133/schedule/class/11ю/now?date=07.12.2026')
+    assert r.status_code == 404
+
+
+def test_widget_next_lesson_matches_now_route(monkeypatch):
+    """Виджет после рефакторинга отдаёт тот же next, что и `/now` (W36)."""
+    from types import SimpleNamespace
+
+    from web.auth import generate_widget_token
+
+    token_cfg = '123456:ABC-DEF_token'
+    _freeze_now(monkeypatch, 7, 30)
+    bot_data = {'schools_data': {'school_133': _school()}, 'user_service': _FakeUserService()}
+    client = TestClient(create_app({
+        'bot_data': bot_data,
+        'config': SimpleNamespace(TELEGRAM_TOKEN=token_cfg),
+    }))
+    token = generate_widget_token(123456, token_cfg)
+    widget = client.get(
+        '/api/widget/123456?date=07.12.2026', headers={'X-Widget-Token': token},
+    ).json()
+    now_payload = client.get('/api/school_133/schedule/class/5а/now?date=07.12.2026').json()
+    assert widget['next_lesson'] == now_payload['next']
+    assert widget['next_lesson']['in_minutes'] == 30
