@@ -1,4 +1,5 @@
 # services/base_schedule_service.py
+from calendar import monthrange
 from datetime import datetime, timedelta
 
 from config.config import get_timezone
@@ -282,6 +283,55 @@ class BaseScheduleService:
         today = today or datetime.now(self.moscow_tz)
         monday = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
         return [monday + timedelta(days=d) for d in range(self.weekday_num)]
+
+    def get_day(self, entity: str, date: datetime) -> dict:
+        """Дневной payload сущности; реализуется подклассами (class/teacher/room)."""
+        raise NotImplementedError
+
+    def get_month(self, entity: str, year: int, month: int) -> list[dict]:
+        """Календарь месяца: запись на каждый календарный день.
+
+        Строится на ``self.get_day``: флаги ``weekend``/``vacation`` и уроки
+        берутся из дневного payload. Дни вне учебного периода
+        (``PeriodNotFoundError``) помечаются ``no_period=True`` (как в
+        ``get_week``). Неизвестная сущность (``EntityNotFoundError``)
+        пробрасывается вызывающему (→ 404).
+
+        Формат записи: ``{date('дд.мм.гггг'), day_name, weekend, vacation,
+        no_period, has_exchange, has_cancelled, lesson_count}``.
+        """
+        from services.schedule_exceptions import PeriodNotFoundError
+
+        days: list[dict] = []
+        for day in range(1, monthrange(year, month)[1] + 1):
+            date = datetime(year, month, day, tzinfo=self.moscow_tz)
+            try:
+                payload = self.get_day(entity, date)
+            except PeriodNotFoundError:
+                days.append({
+                    'date': date.strftime('%d.%m.%Y'),
+                    'day_name': self._get_day_name(date),
+                    'weekend': False,
+                    'vacation': False,
+                    'no_period': True,
+                    'has_exchange': False,
+                    'has_cancelled': False,
+                    'lesson_count': 0,
+                })
+                continue
+
+            lessons = payload.get('lessons', [])
+            days.append({
+                'date': payload['date'],
+                'day_name': payload['day_name'],
+                'weekend': payload.get('weekend', False),
+                'vacation': payload.get('vacation', False),
+                'no_period': payload.get('no_period', False),
+                'has_exchange': any(lesson.get('has_exchange') for lesson in lessons),
+                'has_cancelled': any(lesson.get('is_cancelled') for lesson in lessons),
+                'lesson_count': len(lessons),
+            })
+        return days
 
     def get_next_lesson(self, schedule_data: list[dict], date: datetime,
                         now: datetime | None = None) -> dict | None:

@@ -213,6 +213,19 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
         except EntityNotFoundError as e:
             raise HTTPException(404, e.message) from e
 
+    @app.get('/api/{school_id}/schedule/{kind}/{name}/calendar')
+    async def schedule_calendar(school_id: str, kind: str, name: str,
+                                year: int = Query(ge=2020),
+                                month: int = Query(ge=1, le=12)):
+        """Календарь месяца: `{days: [...]}` (та же форма, что у `/week`)."""
+        svc = _service_for(kind, _school_or_404(services, school_id))
+        try:
+            return {'days': await run_in_threadpool(svc.get_month, name, year, month)}
+        except EntityNotFoundError as e:
+            raise HTTPException(404, e.message) from e
+        except PeriodNotFoundError as e:
+            raise HTTPException(422, e.message) from e
+
     @app.get('/api/{school_id}/search')
     async def search(school_id: str, q: str = Query(..., min_length=1, max_length=80)):
         school_data = _school_or_404(services, school_id)
