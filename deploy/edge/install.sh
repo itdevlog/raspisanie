@@ -12,28 +12,55 @@
 #   6. ставит Caddyfile и systemd-юнит, перезагружает Caddy, включает сервис.
 #
 # Использование:
-#   sudo bash deploy/edge/install.sh
 #   sudo EDGE_DOMAIN=raspisanie.example.ru bash deploy/edge/install.sh
+#   sudo EDGE_DOMAIN=raspisanie.example.ru EDGE_DIR=/opt/raspisanie bash deploy/edge/install.sh
+#
+# EDGE_DOMAIN обязателен: без реального домена Caddy попытается выпустить
+# сертификат на чужое имя. Скрипт останавливается, если он не задан.
 #
 # Переопределяемые переменные (env):
-#   EDGE_DOMAIN   домен .ru для Caddy (по умолчанию schedule.example.ru)
+#   EDGE_DOMAIN   домен .ru для Caddy (ОБЯЗАТЕЛЕН, без значения — ошибка)
 #   EDGE_PORT     порт приложения (по умолчанию 8090)
 #   EDGE_USER     пользователь сервиса (по умолчанию raspisanie)
-#   EDGE_DIR      каталог приложения (по умолчанию — корень репозитория)
+#   EDGE_DIR      каталог приложения (по умолчанию /opt/raspisanie; НЕ внутри
+#                 /home, /root или /run/user — см. ProtectHome ниже)
 #   EDGE_ENV_FILE файл окружения сервиса (по умолчанию /etc/raspisanie-edge.env)
 #   EDGE_SNAPSHOT_DIR каталог снапшота (по умолчанию /var/lib/raspisanie-edge)
 set -Eeuo pipefail
 
 # --- Пути и параметры ----------------------------------------------------------
 deploy_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "${deploy_dir}/../.." && pwd)"
 
-EDGE_DOMAIN="${EDGE_DOMAIN:-schedule.example.ru}"
+# EDGE_DOMAIN обязателен. Caddyfile хранит плейсхолдер schedule.example.ru для
+# standalone `caddy validate`, но установщик на реальном хосте должен получить
+# настоящий домен: иначе Caddy молча пойдёт выпускать сертификат на чужое имя.
+if [[ -z "${EDGE_DOMAIN:-}" ]]; then
+    echo "Ошибка: не задан EDGE_DOMAIN." >&2
+    echo "Задайте реальный .ru-домен этого хоста, например:" >&2
+    echo "  sudo EDGE_DOMAIN=raspisanie.example.ru bash deploy/edge/install.sh" >&2
+    exit 1
+fi
+
 EDGE_PORT="${EDGE_PORT:-8090}"
 EDGE_USER="${EDGE_USER:-raspisanie}"
-EDGE_DIR="${EDGE_DIR:-$repo_root}"
+# Каталог приложения. По умолчанию — вне домашних каталогов: systemd-юнит
+# использует ProtectHome=yes, поэтому /home, /root и /run/user для сервиса
+# недоступны и запуск из клона в ~/ или /root/ провалился бы.
+EDGE_DIR="${EDGE_DIR:-/opt/raspisanie}"
 EDGE_ENV_FILE="${EDGE_ENV_FILE:-/etc/raspisanie-edge.env}"
 EDGE_SNAPSHOT_DIR="${EDGE_SNAPSHOT_DIR:-/var/lib/raspisanie-edge}"
+
+# Защита от кладбища граблей: даже явный EDGE_DIR внутри дома не сработает.
+case "$EDGE_DIR" in
+    /home/*|/home|/root/*|/root|/run/user/*)
+        echo "Ошибка: EDGE_DIR=${EDGE_DIR} находится внутри домашнего каталога." >&2
+        echo "Сервис работает с ProtectHome=yes и не увидит этот путь." >&2
+        echo "Перенесите репозиторий вне /home и /root (например /opt/raspisanie):" >&2
+        echo "  sudo mkdir -p /opt && sudo git clone <repo> /opt/raspisanie" >&2
+        echo "  sudo EDGE_DOMAIN=raspisanie.example.ru bash /opt/raspisanie/deploy/edge/install.sh" >&2
+        exit 1
+        ;;
+esac
 
 VENV_DIR="${EDGE_DIR}/.venv"
 FRONTEND_DIR="${EDGE_DIR}/frontend"

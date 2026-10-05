@@ -12,17 +12,29 @@ Origin (Германия) ── POST /internal/snapshot (HMAC)┘
 
 ## Быстрый старт
 
+`EDGE_DIR` по умолчанию — `/opt/raspisanie`, **вне** домашних каталогов: сервис
+работает с `ProtectHome=yes`, поэтому `/home`, `/root` и `/run/user` для него
+недоступны. Клонируйте репозиторий туда (или передайте другой путь вне дома):
+
 ```bash
-# На чистом Debian-хосте, из корня репозитория:
+# На чистом Debian-хосте:
+sudo mkdir -p /opt
+sudo git clone <repo-url> /opt/raspisanie
+cd /opt/raspisanie
 sudo EDGE_DOMAIN=raspisanie.example.ru bash deploy/edge/install.sh
 ```
+
+Если репозиторий уже склонирован в домашний каталог, `install.sh` остановится с
+понятной ошибкой — это защита от сервиса, который не увидит свой `EDGE_DIR`.
+`EDGE_DOMAIN` обязателен: без реального домена скрипт завершается ошибкой, чтобы
+Caddy не выпускал сертификат на чужое имя.
 
 Скрипт идемпотентен: повторный запуск обновляет код, пересобирает фронтенд и
 перезапускает сервис. Требуются открытые порты 80/443 и A-запись домена на этот
 сервер (иначе Let's Encrypt не выпустит сертификат).
 
-Переменные установщика: `EDGE_DOMAIN`, `EDGE_PORT`, `EDGE_USER`, `EDGE_DIR`,
-`EDGE_ENV_FILE`, `EDGE_SNAPSHOT_DIR` (см. шапку `install.sh`).
+Переменные установщика: `EDGE_DOMAIN` (обязателен), `EDGE_PORT`, `EDGE_USER`,
+`EDGE_DIR`, `EDGE_ENV_FILE`, `EDGE_SNAPSHOT_DIR` (см. шапку `install.sh`).
 
 ## Файлы
 
