@@ -207,6 +207,54 @@ def test_search():
     assert 'Иванов' in r.json()['teachers']
 
 
+def _client_for_school(school):
+    bot_data = {'schools_data': {'school_133': school}, 'user_service': _FakeUserService()}
+    return TestClient(create_app({'bot_data': bot_data}))
+
+
+def test_search_classes():
+    """W37: /search возвращает классы по подстроке."""
+    school = _school()
+    school['CLASSES'] = {'c1': '5а', 'c2': '5б', 'c3': '10а'}
+    r = _client_for_school(school).get('/api/school_133/search', params={'q': '5'})
+    assert r.status_code == 200
+    assert r.json()['classes'] == ['5а', '5б']
+
+
+def test_search_classes_case_insensitive():
+    """W37: поиск классов не зависит от регистра."""
+    school = _school()
+    school['CLASSES'] = {'c1': '5а', 'c2': '10А'}
+    r = _client_for_school(school).get('/api/school_133/search', params={'q': '10а'})
+    assert r.status_code == 200
+    assert r.json()['classes'] == ['10А']
+
+
+def test_search_returns_teachers_rooms_classes():
+    """W37: ответ /search содержит все три ключа (аддитивное изменение)."""
+    r = _client(None).get('/api/school_133/search', params={'q': 'ив'})
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {'classes', 'teachers', 'rooms'}
+    assert 'Иванов' in body['teachers']
+
+
+def test_search_classes_no_match_empty():
+    """W37: нет совпадений — пустой список, а не ошибка."""
+    school = _school()
+    school['CLASSES'] = {'c1': '5а'}
+    r = _client_for_school(school).get('/api/school_133/search', params={'q': '11ю'})
+    assert r.status_code == 200
+    assert r.json()['classes'] == []
+
+
+def test_search_preserves_rooms():
+    """W37: поведение поиска кабинетов не изменилось."""
+    r = _client(None).get('/api/school_133/search', params={'q': '20'})
+    assert r.status_code == 200
+    assert r.json()['rooms'] == ['202']
+
+
 def test_free_rooms():
     r = _client(None).get('/api/school_133/free-rooms?date=07.09.2026&lesson=1')
     assert r.status_code == 200

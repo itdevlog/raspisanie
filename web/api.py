@@ -255,6 +255,7 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
     async def search(school_id: str, q: str = Query(..., min_length=1, max_length=80)):
         school_data = _school_or_404(services, school_id)
         return {
+            'classes': await run_in_threadpool(ScheduleService(school_data).search_classes, q),
             'teachers': await run_in_threadpool(TeacherService(school_data).search_teachers, q),
             'rooms': await run_in_threadpool(RoomService(school_data).search_rooms, q),
         }

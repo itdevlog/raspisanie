@@ -84,6 +84,21 @@ class ScheduleService(BaseScheduleService):
         classes = self.school_data.get('CLASSES', {})
         return list(classes.values())
 
+    def search_classes(self, query: str) -> list[str]:
+        """Ищет классы по подстроке в названии (без учёта регистра)"""
+        if not query or len(query) < 1:
+            return []
+
+        all_classes = self.get_available_classes()
+        query = query.lower().strip()
+
+        found_classes = []
+        for class_name in all_classes:
+            if query in class_name.lower():
+                found_classes.append(class_name)
+
+        return sorted(found_classes)
+
     def _get_class_schedule_for_date(self, class_name: str, date: datetime, include_header: bool = False) -> str:
         """Основная логика получения расписания класса"""
         # Находим ID класса по имени
