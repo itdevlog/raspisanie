@@ -1,0 +1,57 @@
+# deploy/edge/raspisanie-edge.service — edge-сервер публичного сайта (W26).
+#
+# Устанавливается install.sh в /etc/systemd/system/. Запускает uvicorn-раннер
+# `python -m web.edge_server`, который читает настройки из /etc/raspisanie-edge.env
+# (EnvironmentFile ниже) и слушает 127.0.0.1:EDGE_PORT. Наружу порт не торчит —
+# перед ним только Caddy с TLS.
+#
+# Работает от непривилегированного пользователя `raspisanie` (создаёт install.sh).
+# ВНИМАНИЕ: %i не используется — это статический юнит, установщик (install.sh)
+# подставляет EDGE_USER/EDGE_DIR/EDGE_ENV_FILE через sed при установке.
+[Unit]
+Description=Public schedule site edge server (FastAPI/uvicorn)
+Documentation=https://github.com/itdevlog/raspisanie
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=EDGE_USER
+Group=EDGE_USER
+WorkingDirectory=EDGE_DIR
+EnvironmentFile=EDGE_ENV_FILE
+ExecStart=EDGE_DIR/.venv/bin/python -m web.edge_server
+Restart=always
+RestartSec=5
+# Мягкое завершение: uvicorn ловит SIGTERM и закрывает соединения.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# --- Hardening (systemd 247+; лишние директивы молча игнорируются на старых) ---
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+# MemoryDenyWriteExecute намеренно НЕ включён: CPython и cryptography
+# (pywebpush) используют страницы, меняющие права, — сервис не запустится.
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Запись разрешена только туда, где edge реально пишет: каталог снапшота
+# (SNAPSHOT_PATH) и, на случай относительных путей, каталог приложения.
+# Раскомментируйте/уточните под свой SNAPSHOT_PATH при необходимости.
+ReadWritePaths=EDGE_DIR EDGE_SNAPSHOT_DIR
+
+[Install]
+WantedBy=multi-user.target

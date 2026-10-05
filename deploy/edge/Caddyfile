@@ -1,0 +1,45 @@
+# deploy/edge/Caddyfile — публичный сайт расписания на московском (edge) хосте.
+#
+# Один сайт на сервер: Caddy слушает 80/443, автоматически выпускает и продлевает
+# Let's Encrypt-сертификат для домена (DNS A-запись .ru должна указывать сюда),
+# редиректит http -> https и проксирует всё на локальный edge-сервер FastAPI.
+#
+# Домен. По умолчанию — плейсхолдер `schedule.example.ru`; на реальном хосте
+# задайте свой, например через переменную окружения Caddy:
+#
+#   EDGE_DOMAIN=raspisanie.example.ru
+#
+# (`{$EDGE_DOMAIN:schedule.example.ru}` подставляет значение, а без него —
+# плейсхолдер, чтобы конфиг оставался валидным и self-consistent при
+# `caddy validate`.) install.sh задаёт EDGE_DOMAIN/EDGE_PORT через
+# /etc/caddy/edge.env и drop-in caddy.service.d/edge.conf.
+{$EDGE_DOMAIN:schedule.example.ru} {
+	encode zstd gzip
+
+	# ВАЖНО про X-Forwarded-For (безопасность rate-limit, W8).
+	#
+	# Здесь НЕТ директивы `reverse_proxy ... { trusted_proxies ... }` и НЕТ
+	# отключения `trusted_proxies_strict`. Так Caddy заменяет входящий
+	# X-Forwarded-For адресом непосредственного пира (клиента), а не
+	# дописывает клиентский заголовок. Именно поэтому левое значение XFF,
+	# которое видит FastAPI, — authentic, и лимитер может ему доверять
+	# (create_edge_app доверяет литералу 127.0.0.1).
+	#
+	# Если добавить `trusted_proxies`, Caddy начнёт доверять присланному извне
+	# XFF и подставит его левым значением — клиент сможет подделать IP и обойти
+	# rate-limit. Не добавляйте сюда `trusted_proxies` / `trusted_proxies_strict`.
+	#
+	# SPA-fallback живёт в приложении (web/api.py::SPAStaticFiles): оно отдаёт
+	# index.html для клиентских deep-link'ов и честный 404 для /api, /internal,
+	# /healthz. Проксируем как есть — Caddy не дублирует эту логику, поэтому
+	# /api/*, /internal/* и /healthz гарантированно уходят в FastAPI, а не в
+	# статику. Caddy также не раздаёт frontend/dist напрямую: static-dir
+	# монтируется приложением, и «try_files» здесь лишь замаскировал бы
+	# маршруты API.
+	reverse_proxy 127.0.0.1:{$EDGE_PORT:8090}
+
+	# Логи доступа — свои, не в journal (журнальные access-логи задваиваются).
+	log {
+		output file /var/log/caddy/edge-access.log
+	}
+}
