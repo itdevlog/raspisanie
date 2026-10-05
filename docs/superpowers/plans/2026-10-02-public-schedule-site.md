@@ -186,6 +186,7 @@
   `EDGE_AUTH_SECRET`. Дополнительно ограничить частоту subscribe (переиспользовать
   `RateLimiter`), чтобы публичный edge-proxy не мог забить FileDB мусором.
   `/api/push/vapid-public-key` на origin не обязателен (публичный — на edge).
+  — ⚠️ проводка origin `push_store` в `run_webapp` отложена (см. docs/EDGE.md §6 / WIKI §13.1).
   *Файлы: web/push_api.py, web/api.py, tests/test_push_api.py.*
 
 - [x] **W16. Отправка push при заменах.** В `BackgroundUpdater._check_exchange_updates`
@@ -353,7 +354,7 @@
 2. ✅ W1–W3 — конфиг и снапшот.
 3. ✅ W4–W7 — экспорт снапшота на origin.
 4. ✅ W8–W11 — edge-сервер (ingest + API).
-5. ✅ W12–W16 — Web Push backend.
+5. ✅ W12–W16 — Web Push backend. ⚠️ проводка origin `push_store` в `run_webapp` отложена (docs/EDGE.md §6 / WIKI §13.1).
 6. ✅ W17 — push-proxy на edge.
 7. ✅ W18–W25 — фронтенд Svelte PWA.
 8. ✅ W26–W28 — деплой `deploy/edge/`.

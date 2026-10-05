@@ -35,7 +35,7 @@
 - **W12.** `services/push_store.py` — коллекция `web_push_subscriptions` (валидация endpoint/keys, upsert, `remove_dead`, `cleanup_stale`).
 - **W13.** `services/push_service.py` — отправка через `pywebpush` в `to_thread`, удаление мёртвых подписок по `404/410`.
 - **W14.** Генерация VAPID-пары (`python -m services.push_keys`).
-- **W15.** Публичное push-API origin (`/api/push/subscribe|unsubscribe`), защищено `X-Edge-Auth` + rate-limit.
+- **W15.** Публичное push-API origin (`/api/push/subscribe|unsubscribe`), защищено `X-Edge-Auth` + rate-limit. ⚠️ проводка `push_store` в `run_webapp` отложена — в продакшене origin пока не регистрирует `/api/push/*` (см. [docs/EDGE.md](docs/EDGE.md) §6 / [WIKI.md](WIKI.md) §13.1).
 - **W16.** Push при заменах в `BackgroundUpdater._check_exchange_updates` (подписки класса, ссылка на share-страницу).
 - **W17.** `web/edge_push.py` — `vapid-public-key` локально и прокси push на origin.
 
@@ -52,7 +52,7 @@
 #### Документация и статусы (W31)
 
 - Обновлены [WIKI.md](WIKI.md) (§13.1), [README.md](README.md), [roadmap.md](roadmap.md) (§4.1), [CHANGELOG.md](CHANGELOG.md); спека и план отмечены как реализованные по MVP (W1–W31), паритет W32–W41 — запланирован.
-- **Отметка деплоя**: сотрудник и дата указываются при развёртывании (placeholders в плане/спеке) — здесь реальное имя не фиксируется.
+- **Отметка деплоя**: сотрудник и дата указываются при развёртывании (placeholders в плане/спеке, а также в README и WIKI) — здесь реальное имя не фиксируется.
 
 ## 17.09.2026
 
