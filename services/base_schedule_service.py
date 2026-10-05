@@ -71,6 +71,62 @@ class BaseScheduleService:
 
         return None
 
+    def get_period_info(self, date: datetime) -> dict | None:
+        """Информация об учебном периоде для даты: {'b', 'e', 'name'} или None.
+
+        Формат Nikasoft: PERIODS = {period_id: {'b': 'дд.мм.гггг',
+        'e': 'дд.мм.гггг', 'name': 'b - e'}}. Если период вложен по классам
+        ({period_id: {class_id: {...}}}) — берём первую запись класса:
+        границы и название у классов одного периода совпадают.
+        """
+        period_id = self._get_period_for_date(date)
+        if not period_id:
+            return None
+
+        info = self.school_data.get('PERIODS', {}).get(period_id)
+        if not isinstance(info, dict):
+            return None
+
+        if 'b' not in info and 'e' not in info:
+            nested = next(
+                (v for v in info.values()
+                 if isinstance(v, dict) and ('b' in v or 'e' in v)),
+                None,
+            )
+            if nested is None:
+                return None
+            info = nested
+
+        return {'b': info.get('b'), 'e': info.get('e'), 'name': info.get('name')}
+
+    def _get_second_shift(self, period_id: str | None, class_name: str | None) -> int | None:
+        """Номер второй смены класса из CLASS_SHIFT, иначе None.
+
+        Формат Nikasoft: CLASS_SHIFT = {period_id: {class_id: shift_number}};
+        запись присутствует только у классов со второй сменой. Любое
+        несоответствие формы — None.
+        """
+        if not period_id or not class_name:
+            return None
+
+        shifts = self.school_data.get('CLASS_SHIFT', {})
+        if not isinstance(shifts, dict):
+            return None
+        period_shifts = shifts.get(period_id)
+        if not isinstance(period_shifts, dict):
+            return None
+
+        class_id = self._find_class_id(class_name)
+        if not class_id:
+            return None
+        value = period_shifts.get(class_id)
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
     def _get_holiday_info(self, date: datetime) -> dict | None:
         """Информация о переносе/каникулах для даты (HOLIDAY_TRANSFER).
 
@@ -129,7 +185,9 @@ class BaseScheduleService:
         return self.school_data.get('LESSON_TIMES', {}).get(str(lesson_num), ['?', '?'])
 
     def _day_payload(self, kind: str, entity: str, date: datetime) -> dict:
-        """Общий каркас дневного payload: даты, каникулы, выходные."""
+        """Общий каркас дневного payload: даты, каникулы, выходные, период, смена."""
+        period_id = self._get_period_for_date(date)
+        class_name = entity if kind == 'class' else None
         return {
             'date': date.strftime('%d.%m.%Y'),
             'day_name': self._get_day_name(date),
@@ -139,7 +197,30 @@ class BaseScheduleService:
             'vacation': False,
             'weekend': False,
             'no_period': False,
+            'period': self.get_period_info(date),
+            'shift': self._get_second_shift(period_id, class_name),
         }
+
+    def _group_names(self) -> dict:
+        """Карта division-ключ -> название группы из CLASSGROUPS.
+
+        Формат Nikasoft (проверено на реальной выгрузке school_133) — плоский
+        {'0': 'Группа 1', '1': 'Группа 2'}. Если выгрузка вложена по периодам
+        ({period_id: {key: name}}), под-словари объединяются.
+        """
+        raw = self.school_data.get('CLASSGROUPS', {})
+        if not isinstance(raw, dict):
+            return {}
+        if raw and all(isinstance(v, str) for v in raw.values()):
+            return raw
+
+        merged: dict = {}
+        for sub in raw.values():
+            if isinstance(sub, dict):
+                for key, name in sub.items():
+                    if key not in merged and isinstance(name, str):
+                        merged[key] = name
+        return merged
 
     def _lessons_payload(self, schedule_data: list[dict]) -> list[dict]:
         """Преобразует внутренние lesson-словари в JSON-payload.
@@ -149,20 +230,32 @@ class BaseScheduleService:
         id (замены TEACH_EXCHANGE кладут имена, не id) — показываем как есть.
         """
         lessons = []
+        group_names = self._group_names()
         for lesson in schedule_data:
             times = self._get_lesson_times(lesson['lesson_num'])
             data = lesson.get('data', {})
+            divisions = data.get('g')
             items = []
             length = max(len(data.get('s', [])), len(data.get('t', [])), len(data.get('r', [])))
             for i in range(length):
                 subject_id = _nth(data.get('s'), i)
                 teacher_id = _nth(data.get('t'), i)
                 room_id = _nth(data.get('r'), i)
+                # division-ключ: явный `g[i]`; без него — индекс, но только если
+                # урок реально разбит на параллельные записи (иначе группы нет)
+                group_key = None
+                if isinstance(divisions, list) and i < len(divisions) and divisions[i] is not None:
+                    group_key = divisions[i]
+                elif length > 1:
+                    group_key = i
+                group_name = group_names.get(str(group_key)) if group_key is not None else None
                 items.append({
                     'subject': self.school_data.get('SUBJECTS', {}).get(subject_id, str(subject_id) if subject_id is not None else None),
                     'teacher': self.school_data.get('TEACHERS', {}).get(teacher_id, str(teacher_id) if teacher_id is not None else None),
                     'room': self.school_data.get('ROOMS', {}).get(room_id, str(room_id) if room_id is not None else None),
                     'class_name': lesson.get('class_name'),
+                    'groups': group_name,
+                    'is_method_hour': subject_id == 'M',
                 })
             lessons.append({
                 'num': lesson['lesson_num'],
