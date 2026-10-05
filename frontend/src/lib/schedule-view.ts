@@ -65,12 +65,17 @@ export function isCancelled(lesson: Lesson): boolean {
  * True when a lesson is a "free" slot (window) that the original site strikes
  * through (`STRIKEOUT_FREE_LSN`).
  *
- * The public API does not expose that flag (W32 `features` only covers
- * teachers/classrooms/rooms/homepage), so it is inferred from the lesson
- * payload: a lesson with no items, or whose items all lack a subject. Cancelled
- * lessons keep their own styling and are not treated as free.
+ * Free-ness is inferred from the lesson payload: a lesson with no items, or
+ * whose items all lack a subject. Cancelled lessons keep their own styling and
+ * are not treated as free.
+ *
+ * W41: the school feature flag `strikeout_free_lsn` gates the strike-through
+ * (default `true` when absent). When it is `false`, no lesson is marked free.
  */
-export function isFreeLesson(lesson: Lesson): boolean {
+export function isFreeLesson(lesson: Lesson, strikeoutFreeLsn = true): boolean {
+  if (!strikeoutFreeLsn) {
+    return false;
+  }
   if (lesson.is_cancelled) {
     return false;
   }

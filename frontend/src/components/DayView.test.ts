@@ -169,4 +169,26 @@ describe('DayView', () => {
     });
     expect(container.querySelector('.lesson.free')).toBeNull();
   });
+
+  it('strikes free lessons when strikeoutFreeLsn is true (W41)', () => {
+    const { container } = render(DayView, {
+      props: {
+        day: makeDay({ lessons: [makeLesson({ items: [] })] }),
+        kind: 'class',
+        strikeoutFreeLsn: true,
+      },
+    });
+    expect(container.querySelector('.lesson.free')).toBeTruthy();
+  });
+
+  it('does not strike free lessons when strikeoutFreeLsn is false (W41)', () => {
+    const { container } = render(DayView, {
+      props: {
+        day: makeDay({ lessons: [makeLesson({ items: [] })] }),
+        kind: 'class',
+        strikeoutFreeLsn: false,
+      },
+    });
+    expect(container.querySelector('.lesson.free')).toBeNull();
+  });
 });

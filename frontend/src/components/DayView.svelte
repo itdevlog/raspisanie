@@ -16,8 +16,13 @@
   interface Props {
     day: DaySchedule;
     kind: ScheduleKind;
+    /**
+     * W41: gate free-lesson strike-through on `STRIKEOUT_FREE_LSN`
+     * (default `true` when absent). Forwarded to every {@link LessonRow}.
+     */
+    strikeoutFreeLsn?: boolean;
   }
-  let { day, kind }: Props = $props();
+  let { day, kind, strikeoutFreeLsn = true }: Props = $props();
 
   const state = $derived(dayState(day));
   const hasExchanges = $derived(day.lessons.some((lesson) => isExchange(lesson)));
@@ -55,6 +60,7 @@
       {#each day.lessons as lesson (lesson.num)}
         <LessonRow
           {lesson}
+          {strikeoutFreeLsn}
           showRoom={kind !== 'room'}
           showTeacher={kind !== 'teacher'}
           showClass={kind !== 'class'}

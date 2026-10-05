@@ -42,6 +42,11 @@ export interface SchoolFeatures {
   classrooms?: boolean;
   rooms?: boolean;
   homepage?: boolean;
+  /**
+   * W41+ — strike through subject-less "free" lessons (`STRIKEOUT_FREE_LSN`).
+   * Missing flag mirrors the server default (enabled).
+   */
+  strikeout_free_lsn?: boolean;
 }
 
 /** Response of `GET /api/schools`. `today` is the server's date in DD.MM.YYYY. */

@@ -101,6 +101,7 @@ def test_schools_metadata_present_when_loaded():
     assert entry['homepage_url'] == 'https://school.example/'
     assert entry['features'] == {
         'teachers': True, 'classrooms': True, 'rooms': True, 'homepage': True,
+        'strikeout_free_lsn': True,
     }
 
 
@@ -117,10 +118,12 @@ def test_schools_features_false_when_flags_false():
     """Ложные флаги SHOW_*/USEROOMS/HOMEPAGE_BTN выключают features."""
     school = _school_with_metadata(
         SHOW_TEACHERS=False, SHOW_CLASSROOMS=False, USEROOMS=False, HOMEPAGE_BTN=False,
+        STRIKEOUT_FREE_LSN=False,
     )
     entry = _entry_for(school)
     assert entry['features'] == {
         'teachers': False, 'classrooms': False, 'rooms': False, 'homepage': False,
+        'strikeout_free_lsn': False,
     }
 
 
@@ -129,7 +132,20 @@ def test_schools_features_default_true_when_flags_absent():
     entry = _entry_for(_school_with_metadata())
     assert entry['features'] == {
         'teachers': True, 'classrooms': True, 'rooms': True, 'homepage': True,
+        'strikeout_free_lsn': True,
     }
+
+
+def test_schools_features_strikeout_free_lsn_true():
+    """W41: `STRIKEOUT_FREE_LSN=True` отдаётся в features."""
+    entry = _entry_for(_school_with_metadata(STRIKEOUT_FREE_LSN=True))
+    assert entry['features']['strikeout_free_lsn'] is True
+
+
+def test_schools_features_strikeout_free_lsn_false():
+    """W41: `STRIKEOUT_FREE_LSN=False` выключает зачёркивание свободных уроков."""
+    entry = _entry_for(_school_with_metadata(STRIKEOUT_FREE_LSN=False))
+    assert entry['features']['strikeout_free_lsn'] is False
 
 
 def test_schools_metadata_defaults_when_not_loaded():
@@ -148,6 +164,7 @@ def test_schools_metadata_defaults_when_not_loaded():
     assert entry['homepage_url'] is None
     assert entry['features'] == {
         'teachers': True, 'classrooms': True, 'rooms': True, 'homepage': True,
+        'strikeout_free_lsn': True,
     }
 
 

@@ -20,12 +20,23 @@
     showTeacher?: boolean;
     /** Hide the class column when viewing a class's own schedule. */
     showClass?: boolean;
+    /**
+     * W41: gate the free-lesson strike-through on `STRIKEOUT_FREE_LSN`.
+     * Defaults to `true` (server/flag default) when absent.
+     */
+    strikeoutFreeLsn?: boolean;
   }
-  let { lesson, showRoom = true, showTeacher = true, showClass = false }: Props = $props();
+  let {
+    lesson,
+    showRoom = true,
+    showTeacher = true,
+    showClass = false,
+    strikeoutFreeLsn = true,
+  }: Props = $props();
 
   const status = $derived(lessonStatusLabel(lesson));
   const time = $derived(lessonTime(lesson));
-  const free = $derived(isFreeLesson(lesson));
+  const free = $derived(isFreeLesson(lesson, strikeoutFreeLsn));
 </script>
 
 <li

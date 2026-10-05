@@ -152,4 +152,18 @@ describe('schedule-view helpers', () => {
     // A cancelled lesson keeps its own styling, not the "free" one.
     expect(isFreeLesson(makeLesson({ is_cancelled: true, items: [] }))).toBe(false);
   });
+
+  it('strikes free lessons when the flag is true or absent (default)', () => {
+    const free = makeLesson({ items: [] });
+    expect(isFreeLesson(free, true)).toBe(true);
+    // Explicit `undefined` falls back to the default (enabled).
+    expect(isFreeLesson(free, undefined)).toBe(true);
+  });
+
+  it('does not strike any lesson when strikeout_free_lsn is false', () => {
+    const free = makeLesson({ items: [] });
+    expect(isFreeLesson(free, false)).toBe(false);
+    // Even a genuinely subject-less lesson is not marked free when gated off.
+    expect(isFreeLesson(makeLesson({ items: [makeItem({ subject: null })] }), false)).toBe(false);
+  });
 });

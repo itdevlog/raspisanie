@@ -55,12 +55,18 @@ def _updated_at(school_data: dict) -> str | None:
 
 
 def _school_features(school_data: dict) -> dict:
-    """Флаги разделов школы; отсутствующий флаг считается включённым."""
+    """Флаги разделов школы; отсутствующий флаг считается включённым.
+
+    ``strikeout_free_lsn`` — паритет с ``STRIKEOUT_FREE_LSN`` оригинала
+    (зачёркивание свободных уроков); добавлен W41, чтобы фронтенд мог
+    управлять этим независимо. Отсутствие флага = включено (True).
+    """
     return {
         'teachers': bool(school_data.get('SHOW_TEACHERS', True)),
         'classrooms': bool(school_data.get('SHOW_CLASSROOMS', True)),
         'rooms': bool(school_data.get('USEROOMS', True)),
         'homepage': bool(school_data.get('HOMEPAGE_BTN', True)),
+        'strikeout_free_lsn': bool(school_data.get('STRIKEOUT_FREE_LSN', True)),
     }
 
 
