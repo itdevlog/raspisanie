@@ -119,6 +119,8 @@ export interface DaySchedule {
 /** Response of `GET /api/{school}/schedule/{kind}/{name}/week`. */
 export interface WeekScheduleResponse {
   days: DaySchedule[];
+  /** W41 fix — number of teaching days in the week (`WEEKDAYNUM`, 1..6). */
+  weekday_num: number;
 }
 
 /**

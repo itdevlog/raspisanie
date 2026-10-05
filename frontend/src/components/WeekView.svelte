@@ -6,13 +6,15 @@
   interface Props {
     week: WeekScheduleResponse;
     kind: ScheduleKind;
+    /** W41 fix: school `STRIKEOUT_FREE_LSN` flag forwarded to every day. */
+    strikeoutFreeLsn?: boolean;
   }
-  let { week, kind }: Props = $props();
+  let { week, kind, strikeoutFreeLsn = true }: Props = $props();
 </script>
 
 <div class="week">
   {#each week.days as day (day.date)}
-    <DayView {day} {kind} />
+    <DayView {day} {kind} {strikeoutFreeLsn} />
   {/each}
 </div>
 

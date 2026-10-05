@@ -125,6 +125,38 @@ describe('Home screen', () => {
     expect(requestedDate).not.toContain('2030');
   });
 
+  it('hides cancelled rows when the school sets strikeout_free_lsn=false (W41 fix)', async () => {
+    const school = schoolWithMeta({ features: { strikeout_free_lsn: false } });
+    const client = makeClient({
+      getSchools: vi.fn().mockResolvedValue({ today: '05.10.2026', schools: [school] }),
+      getDay: vi.fn().mockResolvedValue(
+        dayFor('05.10.2026', {
+          lessons: [
+            {
+              num: 1,
+              start: '08:00',
+              end: '08:45',
+              items: [],
+              has_exchange: false,
+              is_cancelled: true,
+            },
+          ],
+        }),
+      ),
+    });
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '5А');
+
+    const { findByText, queryByText } = render(Home, {
+      props: { client, selection, today: makeToday('05.10.2026') },
+    });
+
+    // The cancelled/free row is hidden -> the day collapses to the empty state.
+    expect(await findByText('Занятий нет')).toBeTruthy();
+    expect(queryByText('Отменён')).toBeNull();
+  });
+
   it('surfaces a load error', async () => {
     const client = makeClient({
       getSchools: vi.fn().mockRejectedValue(new Error('Сеть недоступна')),

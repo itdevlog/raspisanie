@@ -108,6 +108,55 @@ describe('App shell', () => {
     );
   });
 
+  it('threads strikeout_free_lsn=false from /api/schools into the schedule (W41 fix)', async () => {
+    const fake = makeFakeEnv('/s/gym1/class/5%D0%90');
+    const router = createRouteStore(fake.env);
+    const selection = makeSelection();
+    const client = makeClient({
+      getSchools: vi.fn().mockResolvedValue({
+        today: '05.10.2026',
+        schools: [
+          {
+            id: 'gym1',
+            name: 'Гимназия №1',
+            loaded: true,
+            features: { strikeout_free_lsn: false },
+          },
+        ],
+      }),
+      getDay: vi.fn().mockResolvedValue({
+        date: '05.10.2026',
+        day_name: 'Понедельник',
+        kind: 'class',
+        entity: '5А',
+        lessons: [
+          {
+            num: 1,
+            start: '08:00',
+            end: '08:45',
+            items: [],
+            has_exchange: false,
+            is_cancelled: true,
+          },
+        ],
+        vacation: false,
+        weekend: false,
+        no_period: false,
+        period: null,
+        shift: null,
+      }),
+    });
+
+    const { findByText, queryByText } = render(App, {
+      props: { client, selection, today: makeToday('05.10.2026'), router },
+    });
+
+    await waitFor(() => expect(selection.name).toBe('5А'));
+    // The cancelled/free row is hidden because the shell read the flag.
+    expect(await findByText('Занятий нет')).toBeTruthy();
+    expect(queryByText('Отменён')).toBeNull();
+  });
+
   it('falls back to Home for an unknown deep link', async () => {
     const fake = makeFakeEnv('/s/gym1/magic/5%D0%90');
     const router = createRouteStore(fake.env);

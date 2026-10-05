@@ -41,6 +41,11 @@
     onOpenSchedule?: () => void;
     /** Navigate to the free-rooms screen. */
     onOpenFreeRooms?: () => void;
+    /**
+     * W41 fix: `STRIKEOUT_FREE_LSN` for the selected school. The shell passes it
+     * down from `/api/schools`; when omitted, Home reads its own school list.
+     */
+    strikeoutFreeLsn?: boolean;
   }
   let {
     client = defaultApi,
@@ -49,6 +54,7 @@
     favorites = defaultFavorites,
     onOpenSchedule,
     onOpenFreeRooms,
+    strikeoutFreeLsn = undefined,
   }: Props = $props();
 
   const schoolsResource = createAsync<SchoolsResponse>(async () => {
@@ -115,6 +121,12 @@
   // Missing `features`/`homepage` mirrors the server default (enabled).
   const showHomepageLink = $derived(
     Boolean(selectedSchool?.homepage_url && (selectedSchool.features?.homepage ?? true)),
+  );
+
+  // W41 fix: flag from the shell if provided, else from Home's own school list;
+  // absent means the server default (enabled).
+  const freeLsn = $derived(
+    strikeoutFreeLsn ?? selectedSchool?.features?.strikeout_free_lsn ?? true,
   );
 
   const isFavorite = $derived(
@@ -190,7 +202,7 @@
         <p role="status">Загрузка…</p>
       {:else if todayResource.data}
         <h3>Сегодня</h3>
-        <DayView day={todayResource.data} kind="class" />
+        <DayView day={todayResource.data} kind="class" strikeoutFreeLsn={freeLsn} />
       {/if}
 
       {#if onOpenSchedule}

@@ -7,6 +7,7 @@ import {
   isCancelled,
   isExchange,
   isFreeLesson,
+  isHiddenFreeLesson,
   isSecondShift,
   itemSubjectLabel,
   KIND_LABELS,
@@ -165,5 +166,21 @@ describe('schedule-view helpers', () => {
     expect(isFreeLesson(free, false)).toBe(false);
     // Even a genuinely subject-less lesson is not marked free when gated off.
     expect(isFreeLesson(makeLesson({ items: [makeItem({ subject: null })] }), false)).toBe(false);
+  });
+
+  it('hides nothing while strikeout_free_lsn is true/absent (default)', () => {
+    expect(isHiddenFreeLesson(makeLesson({ items: [] }), true)).toBe(false);
+    expect(isHiddenFreeLesson(makeLesson({ items: [] }))).toBe(false);
+    expect(isHiddenFreeLesson(makeLesson({ is_cancelled: true }), true)).toBe(false);
+  });
+
+  it('hides free and cancelled lessons when strikeout_free_lsn is false (W41 fix)', () => {
+    // Subject-less (degenerate "free") row.
+    expect(isHiddenFreeLesson(makeLesson({ items: [] }), false)).toBe(true);
+    expect(isHiddenFreeLesson(makeLesson({ items: [makeItem({ subject: null })] }), false)).toBe(true);
+    // The real "free" lesson in this codebase: `s:'F'` -> is_cancelled.
+    expect(isHiddenFreeLesson(makeLesson({ is_cancelled: true }), false)).toBe(true);
+    // A normal lesson is never hidden.
+    expect(isHiddenFreeLesson(makeLesson(), false)).toBe(false);
   });
 });

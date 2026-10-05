@@ -7,6 +7,7 @@
     isCancelled,
     isExchange,
     isFreeLesson,
+    isHiddenFreeLesson,
     itemSubjectLabel,
     lessonStatusLabel,
     lessonTime,
@@ -37,34 +38,38 @@
   const status = $derived(lessonStatusLabel(lesson));
   const time = $derived(lessonTime(lesson));
   const free = $derived(isFreeLesson(lesson, strikeoutFreeLsn));
+  // W41 fix: with the flag off the site hides free/cancelled rows entirely.
+  const hidden = $derived(isHiddenFreeLesson(lesson, strikeoutFreeLsn));
 </script>
 
-<li
-  class="lesson"
-  class:exchange={isExchange(lesson) && !isCancelled(lesson)}
-  class:cancelled={isCancelled(lesson)}
-  class:free
-  aria-label={status ? 'Урок {lesson.num}: {status}' : undefined}
->
-  <div class="head">
-    <span class="num">{lesson.num}</span>
-    {#if time}<span class="time">{time}</span>{/if}
-    {#if status}<span class="badge">{status}</span>{/if}
-  </div>
-  <ul class="items">
-    {#each lesson.items as item, i (i)}
-      <li class="item">
-        <span class="subject" class:method={item.is_method_hour}>{itemSubjectLabel(item)}</span>
-        <span class="meta">
-          {#if item.groups}<span class="group">{item.groups}</span>{/if}
-          {#if showTeacher && item.teacher}<span>{item.teacher}</span>{/if}
-          {#if showRoom && item.room}<span>каб. {item.room}</span>{/if}
-          {#if showClass && item.class_name}<span>{item.class_name}</span>{/if}
-        </span>
-      </li>
-    {/each}
-  </ul>
-</li>
+{#if !hidden}
+  <li
+    class="lesson"
+    class:exchange={isExchange(lesson) && !isCancelled(lesson)}
+    class:cancelled={isCancelled(lesson)}
+    class:free
+    aria-label={status ? 'Урок {lesson.num}: {status}' : undefined}
+  >
+    <div class="head">
+      <span class="num">{lesson.num}</span>
+      {#if time}<span class="time">{time}</span>{/if}
+      {#if status}<span class="badge">{status}</span>{/if}
+    </div>
+    <ul class="items">
+      {#each lesson.items as item, i (i)}
+        <li class="item">
+          <span class="subject" class:method={item.is_method_hour}>{itemSubjectLabel(item)}</span>
+          <span class="meta">
+            {#if item.groups}<span class="group">{item.groups}</span>{/if}
+            {#if showTeacher && item.teacher}<span>{item.teacher}</span>{/if}
+            {#if showRoom && item.room}<span>каб. {item.room}</span>{/if}
+            {#if showClass && item.class_name}<span>{item.class_name}</span>{/if}
+          </span>
+        </li>
+      {/each}
+    </ul>
+  </li>
+{/if}
 
 <style>
   .lesson {

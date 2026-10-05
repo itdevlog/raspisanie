@@ -7,6 +7,7 @@
     dayTitle,
     isCancelled,
     isExchange,
+    isHiddenFreeLesson,
     periodLabel,
     shiftLabel,
   } from '../lib/schedule-view';
@@ -24,9 +25,15 @@
   }
   let { day, kind, strikeoutFreeLsn = true }: Props = $props();
 
-  const state = $derived(dayState(day));
-  const hasExchanges = $derived(day.lessons.some((lesson) => isExchange(lesson)));
-  const hasCancellations = $derived(day.lessons.some((lesson) => isCancelled(lesson)));
+  // W41 fix: when `STRIKEOUT_FREE_LSN` is off the site hides free/cancelled
+  // rows. Filter them out first so notices and the empty state reflect what is
+  // actually shown (mirrors `base_schedule_service.py` skipping cancelled items).
+  const visibleLessons = $derived(
+    day.lessons.filter((lesson) => !isHiddenFreeLesson(lesson, strikeoutFreeLsn)),
+  );
+  const state = $derived(dayState({ ...day, lessons: visibleLessons }));
+  const hasExchanges = $derived(visibleLessons.some((lesson) => isExchange(lesson)));
+  const hasCancellations = $derived(visibleLessons.some((lesson) => isCancelled(lesson)));
   const period = $derived(periodLabel(day.period));
   const shift = $derived(shiftLabel(day.shift));
 </script>
@@ -57,7 +64,7 @@
         detail="Отменённые уроки зачёркнуты."
       />{/if}
     <ul class="lessons">
-      {#each day.lessons as lesson (lesson.num)}
+      {#each visibleLessons as lesson (lesson.num)}
         <LessonRow
           {lesson}
           {strikeoutFreeLsn}

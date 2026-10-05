@@ -181,8 +181,8 @@ describe('DayView', () => {
     expect(container.querySelector('.lesson.free')).toBeTruthy();
   });
 
-  it('does not strike free lessons when strikeoutFreeLsn is false (W41)', () => {
-    const { container } = render(DayView, {
+  it('hides free lessons when strikeoutFreeLsn is false (W41 fix)', () => {
+    const { container, getByText } = render(DayView, {
       props: {
         day: makeDay({ lessons: [makeLesson({ items: [] })] }),
         kind: 'class',
@@ -190,5 +190,48 @@ describe('DayView', () => {
       },
     });
     expect(container.querySelector('.lesson.free')).toBeNull();
+    // The row is not rendered at all; the day collapses to the empty state.
+    expect(container.querySelector('.lesson')).toBeNull();
+    expect(getByText('Занятий нет')).toBeTruthy();
+  });
+
+  it('hides cancelled lessons when strikeoutFreeLsn is false (W41 fix)', () => {
+    const { container, queryByText } = render(DayView, {
+      props: {
+        day: makeDay({
+          lessons: [makeLesson({ is_cancelled: true, has_exchange: true })],
+        }),
+        kind: 'class',
+        strikeoutFreeLsn: false,
+      },
+    });
+    expect(container.querySelector('.lesson')).toBeNull();
+    expect(queryByText('Отменён')).toBeNull();
+    // No "Есть отмены" notice when the cancelled rows are hidden.
+    expect(queryByText('Есть отмены')).toBeNull();
+  });
+
+  it('keeps cancelled rows struck/shown when strikeoutFreeLsn is true (W41 fix)', () => {
+    const { container, getByText } = render(DayView, {
+      props: {
+        day: makeDay({
+          lessons: [makeLesson({ is_cancelled: true, has_exchange: true })],
+        }),
+        kind: 'class',
+        strikeoutFreeLsn: true,
+      },
+    });
+    expect(container.querySelector('.lesson.cancelled')).toBeTruthy();
+    expect(getByText('Отменён')).toBeTruthy();
+  });
+
+  it('keeps free rows struck when strikeoutFreeLsn is absent (default)', () => {
+    const { container } = render(DayView, {
+      props: {
+        day: makeDay({ lessons: [makeLesson({ items: [] })] }),
+        kind: 'class',
+      },
+    });
+    expect(container.querySelector('.lesson.free')).toBeTruthy();
   });
 });

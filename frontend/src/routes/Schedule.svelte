@@ -75,6 +75,11 @@
     pushInitiallyOn?: boolean;
     /** Test seam: force whether Web Push UI is available. */
     pushSupported?: boolean;
+    /**
+     * W41 fix: `STRIKEOUT_FREE_LSN` for the selected school, threaded from the
+     * shell (`/api/schools`). Default `true` keeps the strike-through behavior.
+     */
+    strikeoutFreeLsn?: boolean;
   }
   let {
     client = defaultApi,
@@ -90,10 +95,19 @@
     pushDisable = disablePush,
     pushInitiallyOn = false,
     pushSupported = undefined,
+    strikeoutFreeLsn = true,
   }: Props = $props();
 
   let period = $state<Period>('today');
-  const weekOffset = $state(0);
+  // W38 fix: `weekOffset` is mutable now that prev/next controls exist; the API
+  // accepts `offset` in -2..2.
+  let weekOffset = $state(0);
+  const WEEK_OFFSET_MIN = -2;
+  const WEEK_OFFSET_MAX = 2;
+  // W41 fix (minor): a calendar day outside a teaching period would make
+  // `get_day` raise `PeriodNotFoundError` (422). Track it so we can show a
+  // graceful notice instead of a load error.
+  let noPeriodDate = $state<string | null>(null);
   // Month cursor for the calendar tab; initialised from the *server* today (never
   // the browser clock) and then moved by the prev/next controls.
   let monthCursor = $state<{ year: number; month: number } | null>(null);
@@ -232,16 +246,18 @@
       }
     } else if (period === 'week') {
       void weekResource.load();
-    } else if (shareDate || today.isLoaded) {
+    } else if (!noPeriodDate && (shareDate || today.isLoaded)) {
       void dayResource.load();
     }
   });
 
   function handleKindChange(kind: ScheduleKind) {
+    noPeriodDate = null;
     selection.selectKind(kind);
   }
 
   function handleNameChange(name: string) {
+    noPeriodDate = null;
     selection.selectEntity(selection.kind, name);
   }
 
@@ -262,12 +278,28 @@
 
   /** Switching period tabs drops a pinned share date and uses server today. */
   function handlePeriodChange(next: Period) {
+    noPeriodDate = null;
     shareDate = null;
     period = next;
   }
 
-  /** Open a calendar day: show its schedule and let the shell sync the URL. */
+  /**
+   * Open a calendar day: show its schedule and let the shell sync the URL.
+   *
+   * W41 fix (minor): a day outside a teaching period (`no_period`) cannot be
+   * loaded — `get_day` raises 422. The calendar already carries the flag, so we
+   * show a graceful notice instead of routing into a load error.
+   */
   function handleSelectDay(date: string) {
+    const calendarDay = calendarResource.data?.days.find((day) => day.date === date);
+    if (calendarDay?.no_period) {
+      noPeriodDate = date;
+      shareDate = null;
+      period = 'today';
+      onOpenDay?.(date);
+      return;
+    }
+    noPeriodDate = null;
     shareDate = date;
     period = 'today';
     onOpenDay?.(date);
@@ -279,6 +311,18 @@
       monthCursor = shiftMonth(monthCursor.year, monthCursor.month, delta);
     }
   }
+
+  /** W38 fix: move the shown week by `delta` (API range -2..2). */
+  function shiftWeek(delta: number) {
+    const next = weekOffset + delta;
+    if (next < WEEK_OFFSET_MIN || next > WEEK_OFFSET_MAX) {
+      return;
+    }
+    weekOffset = next;
+  }
+
+  const canGoPrevWeek = $derived(weekOffset > WEEK_OFFSET_MIN);
+  const canGoNextWeek = $derived(weekOffset < WEEK_OFFSET_MAX);
 
   /** Share the currently open entity for the displayed date (W16-identical URL). */
   async function handleShare() {
@@ -407,16 +451,53 @@
         title="Выберите расписание"
         detail="Укажите класс, учителя или кабинет."
       />
+    {:else if noPeriodDate}
+      <StateNotice
+        tone="muted"
+        title="Нет учебного периода"
+        detail="Дата {noPeriodDate} вне учебного периода."
+      />
+    {:else if period === 'week'}
+      <!-- The week nav stays mounted while a week loads so the controls remain
+           clickable (W38 fix). -->
+      <div class="week-nav">
+        <button
+          type="button"
+          aria-label="Предыдущая неделя"
+          disabled={!canGoPrevWeek}
+          onclick={() => shiftWeek(-1)}
+        >
+          ‹
+        </button>
+        <span class="week-label" role="status">
+          {weekOffset === 0
+            ? 'Текущая неделя'
+            : weekOffset > 0
+              ? `+${weekOffset} нед.`
+              : `${weekOffset} нед.`}
+        </span>
+        <button
+          type="button"
+          aria-label="Следующая неделя"
+          disabled={!canGoNextWeek}
+          onclick={() => shiftWeek(1)}
+        >
+          ›
+        </button>
+      </div>
+      {#if bodyStatus === 'error'}
+        <StateNotice tone="error" title="Ошибка загрузки" detail={bodyError ?? ''} />
+      {:else if bodyStatus === 'loading' || bodyStatus === 'idle'}
+        <p role="status">Загрузка…</p>
+      {:else if weekResource.data && weekResource.data.days.length > 0}
+        <WeekView week={weekResource.data} kind={selection.kind} {strikeoutFreeLsn} />
+      {:else}
+        <StateNotice title="Занятий нет" detail="Расписание на неделю пустое." />
+      {/if}
     {:else if bodyStatus === 'error'}
       <StateNotice tone="error" title="Ошибка загрузки" detail={bodyError ?? ''} />
     {:else if bodyStatus === 'loading' || bodyStatus === 'idle'}
       <p role="status">Загрузка…</p>
-    {:else if period === 'week'}
-      {#if weekResource.data && weekResource.data.days.length > 0}
-        <WeekView week={weekResource.data} kind={selection.kind} />
-      {:else}
-        <StateNotice title="Занятий нет" detail="Расписание на неделю пустое." />
-      {/if}
     {:else if period === 'month'}
       {#if monthCursor && calendarResource.data}
         <CalendarView
@@ -430,7 +511,7 @@
         />
       {/if}
     {:else if dayResource.data}
-      <DayView day={dayResource.data} kind={selection.kind} />
+      <DayView day={dayResource.data} kind={selection.kind} {strikeoutFreeLsn} />
     {/if}
 
     {#if hasEntity}
@@ -473,6 +554,35 @@
 
   .pinned {
     margin: 0 0 0.5rem;
+    font-size: 0.9rem;
+    opacity: 0.8;
+  }
+
+  .week-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .week-nav button {
+    padding: 0.2rem 0.6rem;
+    border-radius: 0.4rem;
+    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+
+  .week-nav button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .week-label {
     font-size: 0.9rem;
     opacity: 0.8;
   }

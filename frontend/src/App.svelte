@@ -14,9 +14,11 @@
     selection as defaultSelection,
     serverToday as defaultToday,
     favorites as defaultFavorites,
+    createAsync,
     telegramEnv,
     initTelegramWebApp,
     initTelegramBackButton,
+    type SchoolsResponse,
     type TelegramEnv,
     type RouteStore,
     type FavoritesStore,
@@ -51,6 +53,20 @@
     const unsubscribe = router.start();
     return unsubscribe;
   });
+
+  // W41 fix: the shell owns the school feature flags. Fetch `/api/schools`
+  // once and thread `STRIKEOUT_FREE_LSN` (default true) down to the schedule
+  // screens so the flag actually reaches the UI.
+  const schoolsResource = createAsync<SchoolsResponse>(async () => client.getSchools());
+
+  $effect(() => {
+    void schoolsResource.load();
+  });
+
+  const selectedSchool = $derived(
+    schoolsResource.data?.schools.find((school) => school.id === selection.schoolId) ?? null,
+  );
+  const strikeoutFreeLsn = $derived(selectedSchool?.features?.strikeout_free_lsn ?? true);
 
   // W24: inside Telegram only — expand/ready + adopt the SDK theme. A regular
   // browser (no SDK) hits the no-op branch and is completely unaffected.
@@ -157,11 +173,20 @@
       {selection}
       {today}
       {favorites}
+      {strikeoutFreeLsn}
       onOpenSchedule={openSchedule}
       onOpenFreeRooms={() => router.goTo('tools')}
     />
   {:else if view === 'schedule'}
-    <Schedule {client} {selection} {today} {favorites} {pinnedDate} onOpenDay={openDay} />
+    <Schedule
+      {client}
+      {selection}
+      {today}
+      {favorites}
+      {pinnedDate}
+      {strikeoutFreeLsn}
+      onOpenDay={openDay}
+    />
   {:else}
     <Tools {client} {selection} {today} onOpenSchedule={openSchedule} />
   {/if}

@@ -465,6 +465,115 @@ describe('Schedule screen', () => {
     });
   });
 
+  // W38/W41 fix: week navigation and out-of-period calendar days.
+  describe('week navigation (W38 fix)', () => {
+    it('moves the week offset with prev/next and disables at bounds', async () => {
+      const client = makeClient({
+        getWeek: vi
+          .fn()
+          .mockResolvedValue({ days: [dayFor('05.10.2026')], weekday_num: 5 }),
+      });
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('class', '5А');
+
+      const { getByRole } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026') },
+      });
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+
+      await fireEvent.click(getByRole('tab', { name: 'Неделя' }));
+      await waitFor(() => expect(client.getWeek).toHaveBeenCalledWith('gym1', 'class', '5А', 0));
+
+      const prev = getByRole('button', { name: 'Предыдущая неделя' }) as HTMLButtonElement;
+      const next = getByRole('button', { name: 'Следующая неделя' }) as HTMLButtonElement;
+
+      await fireEvent.click(next);
+      await waitFor(() => expect(client.getWeek).toHaveBeenCalledWith('gym1', 'class', '5А', 1));
+      await fireEvent.click(next);
+      await waitFor(() => expect(client.getWeek).toHaveBeenCalledWith('gym1', 'class', '5А', 2));
+      // Upper bound (-2..2) reached.
+      expect(next.disabled).toBe(true);
+
+      await fireEvent.click(prev);
+      await waitFor(() => expect(client.getWeek).toHaveBeenCalledWith('gym1', 'class', '5А', 1));
+      await fireEvent.click(prev);
+      await waitFor(() => expect(client.getWeek).toHaveBeenCalledWith('gym1', 'class', '5А', 0));
+      await fireEvent.click(prev);
+      await waitFor(() => expect(client.getWeek).toHaveBeenCalledWith('gym1', 'class', '5А', -1));
+      await fireEvent.click(prev);
+      await waitFor(() => expect(client.getWeek).toHaveBeenCalledWith('gym1', 'class', '5А', -2));
+      // Lower bound reached.
+      expect(prev.disabled).toBe(true);
+    });
+  });
+
+  describe('out-of-period calendar day (W41 fix)', () => {
+    it('shows a graceful notice instead of a 422 load error', async () => {
+      const onOpenDay = vi.fn();
+      const client = makeClient({
+        getCalendar: vi
+          .fn()
+          .mockResolvedValue(
+            makeCalendar([makeCalendarDay({ date: '04.10.2026', no_period: true })]),
+          ),
+        getDay: vi.fn().mockResolvedValue(dayFor('05.10.2026')),
+      });
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('class', '5А');
+
+      const { getByRole, findByText } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), onOpenDay },
+      });
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+      (client.getDay as ReturnType<typeof vi.fn>).mockClear();
+
+      await fireEvent.click(getByRole('tab', { name: 'Месяц' }));
+      await waitFor(() => expect(client.getCalendar).toHaveBeenCalled());
+
+      await fireEvent.click(getByRole('button', { name: /04\.10\.2026/ }));
+
+      expect(await findByText('Нет учебного периода')).toBeTruthy();
+      expect(onOpenDay).toHaveBeenCalledWith('04.10.2026');
+      // No day request for the out-of-period date (which the server would 422).
+      expect(client.getDay).not.toHaveBeenCalledWith('gym1', 'class', '5А', '04.10.2026');
+    });
+  });
+
+  describe('strikeout_free_lsn threading (W41 fix)', () => {
+    it('hides a cancelled row when strikeoutFreeLsn is false', async () => {
+      const cancelled = dayFor('05.10.2026', {
+        lessons: [
+          {
+            num: 1,
+            start: '08:00',
+            end: '08:45',
+            items: [],
+            has_exchange: false,
+            is_cancelled: true,
+          },
+        ],
+      });
+      const client = makeClient({ getDay: vi.fn().mockResolvedValue(cancelled) });
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('class', '5А');
+
+      const { findByText, queryByText } = render(Schedule, {
+        props: {
+          client,
+          selection,
+          today: makeToday('05.10.2026'),
+          strikeoutFreeLsn: false,
+        },
+      });
+
+      expect(await findByText('Занятий нет')).toBeTruthy();
+      expect(queryByText('Отменён')).toBeNull();
+    });
+  });
+
   // W39: favorites for class/teacher/room, persisted per kind.
   describe('favorites', () => {
     it('toggles the shown class as a favorite', async () => {

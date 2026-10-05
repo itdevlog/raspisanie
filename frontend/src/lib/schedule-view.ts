@@ -86,6 +86,24 @@ export function isFreeLesson(lesson: Lesson, strikeoutFreeLsn = true): boolean {
 }
 
 /**
+ * W41 fix — whether a lesson row must be **hidden** (not rendered) when the
+ * school's `STRIKEOUT_FREE_LSN` flag is `false`.
+ *
+ * The original site hides cancelled/free lessons entirely when the flag is off
+ * (the server formatter skips them: `services/base_schedule_service.py`). In
+ * this codebase the real "free" lesson is `s:'F'` → `is_cancelled` (it keeps its
+ * original subject); subject-less items are the degenerate case. When the flag
+ * is `true` (the default) nothing is hidden — the existing strike-through
+ * behavior is kept.
+ */
+export function isHiddenFreeLesson(lesson: Lesson, strikeoutFreeLsn = true): boolean {
+  if (strikeoutFreeLsn) {
+    return false;
+  }
+  return lesson.is_cancelled || isFreeLesson(lesson, true);
+}
+
+/**
  * Label for a lesson item's subject. Method hours (`is_method_hour`) are shown
  * as «Метод. час» rather than the raw `M` code; a missing subject becomes `—`.
  */
