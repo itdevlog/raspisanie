@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import Schedule from './Schedule.svelte';
-import { makeClient, makeDay, makeSelection, makeToday } from '../test-helpers';
+import {
+  makeCalendar,
+  makeCalendarDay,
+  makeClient,
+  makeDay,
+  makeSelection,
+  makeToday,
+} from '../test-helpers';
 import type { DaySchedule } from '../lib/api/types';
 
 function dayFor(date: string, overrides: Partial<DaySchedule> = {}): DaySchedule {
@@ -350,5 +357,110 @@ describe('Schedule screen', () => {
     // The Schedule («Поделиться») is present, but no Telegram link without config.
     await findByRole('button', { name: 'Поделиться' });
     expect(queryByRole('link', { name: 'Открыть в Telegram' })).toBeNull();
+  });
+
+  // W38: month calendar tab.
+  describe('month calendar', () => {
+    it('loads the month for the selected class using the server month', async () => {
+      const client = makeClient({
+        getCalendar: vi.fn().mockResolvedValue(makeCalendar([makeCalendarDay()])),
+      });
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('class', '5А');
+
+      const { getByRole } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026') },
+      });
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+
+      await fireEvent.click(getByRole('tab', { name: 'Месяц' }));
+
+      await waitFor(() =>
+        expect(client.getCalendar).toHaveBeenCalledWith('gym1', 'class', '5А', 2026, 10),
+      );
+    });
+
+    it('requests the month for a teacher too', async () => {
+      const client = makeClient({
+        getCalendar: vi.fn().mockResolvedValue(makeCalendar([makeCalendarDay()])),
+      });
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('teacher', 'Иванов И.И.');
+
+      const { getByRole } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026') },
+      });
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+
+      await fireEvent.click(getByRole('tab', { name: 'Месяц' }));
+
+      await waitFor(() =>
+        expect(client.getCalendar).toHaveBeenCalledWith('gym1', 'teacher', 'Иванов И.И.', 2026, 10),
+      );
+    });
+
+    it('opens the clicked day and notifies the router hook', async () => {
+      const onOpenDay = vi.fn();
+      const client = makeClient({
+        getCalendar: vi
+          .fn()
+          .mockResolvedValue(
+            makeCalendar([makeCalendarDay({ date: '05.10.2026', lesson_count: 6 })]),
+          ),
+        getDay: vi.fn().mockResolvedValue(dayFor('05.10.2026')),
+      });
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('class', '5А');
+
+      const { getByRole, findByText } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), onOpenDay },
+      });
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+      (client.getDay as ReturnType<typeof vi.fn>).mockClear();
+
+      await fireEvent.click(getByRole('tab', { name: 'Месяц' }));
+      await waitFor(() => expect(client.getCalendar).toHaveBeenCalled());
+
+      await fireEvent.click(getByRole('button', { name: /05\.10\.2026/ }));
+
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '05.10.2026'),
+      );
+      expect(onOpenDay).toHaveBeenCalledWith('05.10.2026');
+      // The day view replaced the calendar.
+      expect(await findByText('Понедельник, 05.10.2026')).toBeTruthy();
+    });
+
+    it('navigates months across the year boundary', async () => {
+      const client = makeClient({
+        getCalendar: vi.fn().mockResolvedValue(makeCalendar([makeCalendarDay()])),
+      });
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('class', '5А');
+
+      const { getByRole } = render(Schedule, {
+        props: { client, selection, today: makeToday('15.01.2026') },
+      });
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+
+      await fireEvent.click(getByRole('tab', { name: 'Месяц' }));
+      await waitFor(() =>
+        expect(client.getCalendar).toHaveBeenCalledWith('gym1', 'class', '5А', 2026, 1),
+      );
+
+      await fireEvent.click(getByRole('button', { name: 'Предыдущий месяц' }));
+      await waitFor(() =>
+        expect(client.getCalendar).toHaveBeenCalledWith('gym1', 'class', '5А', 2025, 12),
+      );
+
+      await fireEvent.click(getByRole('button', { name: 'Следующий месяц' }));
+      await waitFor(() =>
+        expect(client.getCalendar).toHaveBeenCalledWith('gym1', 'class', '5А', 2026, 1),
+      );
+    });
   });
 });

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { vi } from 'vitest';
 import type { ScheduleApiClient } from './lib/api/client';
-import type { DaySchedule, School } from './lib/api/types';
+import type { CalendarDay, CalendarResponse, DaySchedule, School } from './lib/api/types';
 import { createSelectionStore } from './lib/stores/selection.svelte';
 import { createTodayStore } from './lib/stores/today.svelte';
 import { createRouteStore, type RouteStore } from './lib/stores/route.svelte';
@@ -29,6 +29,26 @@ export function makeDay(overrides: Partial<DaySchedule> = {}): DaySchedule {
   };
 }
 
+/** Build a month-calendar day with sensible defaults; override any field. */
+export function makeCalendarDay(overrides: Partial<CalendarDay> = {}): CalendarDay {
+  return {
+    date: '05.10.2026',
+    day_name: 'Понедельник',
+    weekend: false,
+    vacation: false,
+    no_period: false,
+    has_exchange: false,
+    has_cancelled: false,
+    lesson_count: 0,
+    ...overrides,
+  };
+}
+
+/** Wrap calendar days into the `/calendar` response shape. */
+export function makeCalendar(days: CalendarDay[] = [makeCalendarDay()]): CalendarResponse {
+  return { days };
+}
+
 /** Two schools, one loaded and one not. */
 export const SAMPLE_SCHOOLS: School[] = [
   { id: 'gym1', name: 'Гимназия №1', loaded: true },
@@ -47,6 +67,7 @@ export function makeClient(overrides: Partial<ScheduleApiClient> = {}): Schedule
     getRooms: vi.fn().mockResolvedValue({ rooms: ['101', '202'] }),
     getDay: vi.fn().mockResolvedValue(makeDay()),
     getWeek: vi.fn().mockResolvedValue({ days: [makeDay()] }),
+    getCalendar: vi.fn().mockResolvedValue(makeCalendar()),
     search: vi.fn().mockResolvedValue({ teachers: [], rooms: [] }),
     getFreeRooms: vi.fn().mockResolvedValue({ free_rooms: [] }),
     ...overrides,

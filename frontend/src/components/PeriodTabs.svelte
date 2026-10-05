@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Day/week period switch: Сегодня / Завтра / Неделя.
-  export type Period = 'today' | 'tomorrow' | 'week';
+  // Day/week/month period switch: Сегодня / Завтра / Неделя / Месяц.
+  export type Period = 'today' | 'tomorrow' | 'week' | 'month';
 
   interface Props {
     value: Period;
@@ -12,6 +12,7 @@
     { id: 'today', label: 'Сегодня' },
     { id: 'tomorrow', label: 'Завтра' },
     { id: 'week', label: 'Неделя' },
+    { id: 'month', label: 'Месяц' },
   ];
 </script>
 

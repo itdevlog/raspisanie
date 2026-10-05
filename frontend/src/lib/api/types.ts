@@ -95,6 +95,34 @@ export interface WeekScheduleResponse {
   days: DaySchedule[];
 }
 
+/**
+ * One calendar day of the month (`GET .../calendar`).
+ *
+ * Same shape as {@link DaySchedule} but flattened: the server only needs the
+ * markers, not the full lesson list. `has_exchange`/`has_cancelled` are `true`
+ * when at least one lesson carries the flag; `lesson_count` is the number of
+ * lessons on that day (0 on weekends/holidays/out-of-period days).
+ */
+export interface CalendarDay {
+  /** Date as `DD.MM.YYYY`. */
+  date: string;
+  day_name: string;
+  weekend: boolean;
+  vacation: boolean;
+  /** Date falls outside a configured teaching period. */
+  no_period: boolean;
+  /** At least one lesson is a substitution. */
+  has_exchange: boolean;
+  /** At least one lesson is cancelled. */
+  has_cancelled: boolean;
+  lesson_count: number;
+}
+
+/** Response of `GET /api/{school}/schedule/{kind}/{name}/calendar`. */
+export interface CalendarResponse {
+  days: CalendarDay[];
+}
+
 /** Response of `GET /api/{school}/classes`. */
 export interface ClassesResponse {
   classes: string[];

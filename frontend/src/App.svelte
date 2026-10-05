@@ -102,6 +102,19 @@
     }
   }
 
+  /**
+   * W38: open a specific day from the month calendar. Encodes the date in the
+   * same share scheme so the URL is deep-linkable and the back button works.
+   */
+  function openDay(date: string): void {
+    const school = selection.schoolId;
+    const name = selection.name;
+    if (!school || !name) {
+      return;
+    }
+    router.navigate({ view: 'schedule', school, kind: selection.kind, name, date });
+  }
+
   const view = $derived(router.route.view);
   const pinnedDate = $derived(router.route.view === 'schedule' ? router.route.date : null);
 </script>
@@ -137,7 +150,7 @@
   {#if view === 'home'}
     <Home {client} {selection} {today} onOpenSchedule={openSchedule} />
   {:else if view === 'schedule'}
-    <Schedule {client} {selection} {today} {pinnedDate} />
+    <Schedule {client} {selection} {today} {pinnedDate} onOpenDay={openDay} />
   {:else}
     <Tools {client} {selection} {today} onOpenSchedule={openSchedule} />
   {/if}

@@ -14,6 +14,7 @@ export * from './sw-register';
 export * from './offline';
 export * from './telegram';
 export * from './schedule-view';
+export * from './calendar';
 export * from './async.svelte';
 export * from './stores/persisted';
 export * from './stores/selection.svelte';

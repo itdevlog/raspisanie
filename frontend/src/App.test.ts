@@ -1,7 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import App from './App.svelte';
-import { makeClient, makeFakeEnv, makeRouter, makeSelection, makeToday } from './test-helpers';
+import {
+  makeCalendar,
+  makeCalendarDay,
+  makeClient,
+  makeFakeEnv,
+  makeRouter,
+  makeSelection,
+  makeToday,
+} from './test-helpers';
 import { createRouteStore } from './lib/stores/route.svelte';
 
 describe('App shell', () => {
@@ -90,6 +98,29 @@ describe('App shell', () => {
       props: { client: makeClient(), selection: makeSelection(), today: makeToday(), router },
     });
     expect(await findByText('Гимназия №1')).toBeTruthy();
+  });
+
+  it('syncs the URL to a day opened from the month calendar', async () => {
+    const fake = makeFakeEnv('/s/gym1/class/5%D0%90');
+    const router = createRouteStore(fake.env);
+    const selection = makeSelection();
+    const client = makeClient({
+      getCalendar: vi
+        .fn()
+        .mockResolvedValue(makeCalendar([makeCalendarDay({ date: '05.10.2026' })])),
+    });
+
+    const { getByRole } = render(App, {
+      props: { client, selection, today: makeToday('05.10.2026'), router },
+    });
+    await waitFor(() => expect(selection.name).toBe('5А'));
+    await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+
+    await fireEvent.click(getByRole('tab', { name: 'Месяц' }));
+    await waitFor(() => expect(client.getCalendar).toHaveBeenCalled());
+
+    await fireEvent.click(getByRole('button', { name: /05\.10\.2026/ }));
+    await waitFor(() => expect(fake.location.search).toContain('date=05.10.2026'));
   });
 
   describe('W24 Telegram WebApp', () => {

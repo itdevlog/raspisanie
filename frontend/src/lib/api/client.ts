@@ -8,6 +8,7 @@
 
 import {
   ApiError,
+  type CalendarResponse,
   type ClassesResponse,
   type DaySchedule,
   type FreeRoomsResponse,
@@ -35,10 +36,19 @@ export class InvalidWeekOffsetError extends RangeError {
   }
 }
 
+/** Thrown by {@link buildCalendarUrl} when the year/month are out of range. */
+export class InvalidCalendarRangeError extends RangeError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidCalendarRangeError';
+  }
+}
+
 const LESSON_MIN = 1;
 const LESSON_MAX = 12;
 const WEEK_OFFSET_MIN = -2;
 const WEEK_OFFSET_MAX = 2;
+const CALENDAR_YEAR_MIN = 2020;
 
 function encodePathSegment(value: string): string {
   return encodeURIComponent(value);
@@ -87,6 +97,29 @@ export function buildWeekUrl(
 /** URL for `GET /api/{schoolId}/search?q=`. */
 export function buildSearchUrl(schoolId: string, q: string): string {
   return `/api/${encodePathSegment(schoolId)}/search?${new URLSearchParams({ q }).toString()}`;
+}
+
+/**
+ * URL for `GET /api/{schoolId}/schedule/{kind}/{name}/calendar?year=&month=`.
+ *
+ * `year` must be >= 2020 and `month` 1..12 — the server rejects anything else
+ * with 422, so the builder fails fast with {@link InvalidCalendarRangeError}.
+ */
+export function buildCalendarUrl(
+  schoolId: string,
+  kind: ScheduleKind,
+  name: string,
+  year: number,
+  month: number,
+): string {
+  if (!Number.isInteger(year) || year < CALENDAR_YEAR_MIN) {
+    throw new InvalidCalendarRangeError(`Год должен быть не меньше 2020, получено: ${year}`);
+  }
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    throw new InvalidCalendarRangeError(`Месяц должен быть от 1 до 12, получено: ${month}`);
+  }
+  const base = `/api/${encodePathSegment(schoolId)}/schedule/${encodePathSegment(kind)}/${encodePathSegment(name)}/calendar`;
+  return `${base}?${new URLSearchParams({ year: String(year), month: String(month) }).toString()}`;
 }
 
 /**
@@ -141,6 +174,13 @@ export interface ScheduleApiClient {
     name: string,
     offset?: number,
   ): Promise<WeekScheduleResponse>;
+  getCalendar(
+    schoolId: string,
+    kind: ScheduleKind,
+    name: string,
+    year: number,
+    month: number,
+  ): Promise<CalendarResponse>;
   search(schoolId: string, q: string): Promise<SearchResponse>;
   getFreeRooms(schoolId: string, lesson: number, date?: string): Promise<FreeRoomsResponse>;
 }
@@ -164,6 +204,11 @@ export function createApiClient(fetchImpl: FetchLike = fetch, baseUrl = ''): Sch
     getWeek: (schoolId, kind, name, offset = 0) =>
       getJson<WeekScheduleResponse>(
         withBase(buildWeekUrl(schoolId, kind, name, offset)),
+        fetchImpl,
+      ),
+    getCalendar: (schoolId, kind, name, year, month) =>
+      getJson<CalendarResponse>(
+        withBase(buildCalendarUrl(schoolId, kind, name, year, month)),
         fetchImpl,
       ),
     search: (schoolId, q) =>

@@ -18,6 +18,7 @@
     selection as defaultSelection,
     serverToday as defaultToday,
     createAsync,
+    parseRuDate,
     shareSchedule,
     buildShareUrl,
     enablePush,
@@ -26,8 +27,10 @@
     supportsServiceWorker,
     offlineState,
     connectivityEnv,
+    shiftMonth,
     watchConnectivity,
     watchServiceWorkerCache,
+    type CalendarResponse,
     type ConnectivityEnv,
     type DaySchedule,
     type PushResult,
@@ -43,6 +46,7 @@
   import PeriodTabs, { type Period } from '../components/PeriodTabs.svelte';
   import DayView from '../components/DayView.svelte';
   import WeekView from '../components/WeekView.svelte';
+  import CalendarView from '../components/CalendarView.svelte';
   import StateNotice from '../components/StateNotice.svelte';
 
   interface Props {
@@ -51,6 +55,8 @@
     today?: TodayStore;
     /** Date pinned by a share link (`DD.MM.YYYY`), or null to use server today. */
     pinnedDate?: string | null;
+    /** Raised when a calendar day is opened; the shell can sync the URL. */
+    onOpenDay?: (date: string) => void;
     /** Browser origin used when building the share link; defaults to `location`. */
     origin?: string;
     /** Injectable navigator for tests; defaults to the global `navigator`. */
@@ -71,6 +77,7 @@
     selection = defaultSelection,
     today = defaultToday,
     pinnedDate = null,
+    onOpenDay,
     origin = typeof window === 'undefined' ? '' : window.location.origin,
     navigatorLike = undefined,
     connectivity = typeof window === 'undefined' ? undefined : connectivityEnv(),
@@ -82,6 +89,9 @@
 
   let period = $state<Period>('today');
   const weekOffset = $state(0);
+  // Month cursor for the calendar tab; initialised from the *server* today (never
+  // the browser clock) and then moved by the prev/next controls.
+  let monthCursor = $state<{ year: number; month: number } | null>(null);
   // A share link may pin a date; switching period tabs clears it and falls back
   // to the server today. Synced from the prop via an effect.
   let shareDate = $state<string | null>(null);
@@ -159,10 +169,34 @@
     return client.getWeek(schoolId, selection.kind, name, weekOffset);
   });
 
+  // Month-calendar payload for the active month cursor.
+  const calendarResource = createAsync<CalendarResponse>(async () => {
+    const schoolId = selection.schoolId;
+    const name = selection.name;
+    const cursor = monthCursor;
+    if (!schoolId || !name || !cursor) {
+      throw new Error('Выберите расписание');
+    }
+    return client.getCalendar(schoolId, selection.kind, name, cursor.year, cursor.month);
+  });
+
   const kindNamesKey = $derived(`${selection.schoolId ?? ''}|${selection.kind}`);
   const bodyKey = $derived(
-    `${selection.schoolId ?? ''}|${selection.kind}|${selection.name ?? ''}|${period}|${weekOffset}|${shareDate ?? ''}`,
+    `${selection.schoolId ?? ''}|${selection.kind}|${selection.name ?? ''}|${period}|${weekOffset}|${shareDate ?? ''}|${
+      period === 'month' ? `${monthCursor?.year ?? ''}|${monthCursor?.month ?? ''}` : ''
+    }`,
   );
+
+  // Seed the month cursor from the server today exactly once; user navigation
+  // afterwards must not be reset by a later reload.
+  $effect(() => {
+    if (monthCursor === null && today.isLoaded) {
+      const parsed = parseRuDate(today.today);
+      if (parsed) {
+        monthCursor = { year: parsed.year, month: parsed.month };
+      }
+    }
+  });
 
   // Reload the name list whenever the school/kind changes.
   $effect(() => {
@@ -187,7 +221,11 @@
   // share date is standalone data, so it does not wait for the server today.
   $effect(() => {
     void bodyKey;
-    if (period === 'week') {
+    if (period === 'month') {
+      if (monthCursor) {
+        void calendarResource.load();
+      }
+    } else if (period === 'week') {
       void weekResource.load();
     } else if (shareDate || today.isLoaded) {
       void dayResource.load();
@@ -208,6 +246,20 @@
     period = next;
   }
 
+  /** Open a calendar day: show its schedule and let the shell sync the URL. */
+  function handleSelectDay(date: string) {
+    shareDate = date;
+    period = 'today';
+    onOpenDay?.(date);
+  }
+
+  /** Move the calendar cursor by whole months, rolling the year over. */
+  function shiftCalendarMonth(delta: number) {
+    if (monthCursor) {
+      monthCursor = shiftMonth(monthCursor.year, monthCursor.month, delta);
+    }
+  }
+
   /** Share the currently open entity for the displayed date (W16-identical URL). */
   async function handleShare() {
     const schoolId = selection.schoolId;
@@ -225,8 +277,20 @@
     }
   }
 
-  const bodyStatus = $derived(period === 'week' ? weekResource.status : dayResource.status);
-  const bodyError = $derived(period === 'week' ? weekResource.error : dayResource.error);
+  const bodyStatus = $derived(
+    period === 'week'
+      ? weekResource.status
+      : period === 'month'
+        ? calendarResource.status
+        : dayResource.status,
+  );
+  const bodyError = $derived(
+    period === 'week'
+      ? weekResource.error
+      : period === 'month'
+        ? calendarResource.error
+        : dayResource.error,
+  );
   const hasEntity = $derived(selection.name !== null);
 
   // W24: «Открыть в Telegram» target — the currently shown entity/date.
@@ -332,6 +396,18 @@
         <WeekView week={weekResource.data} kind={selection.kind} />
       {:else}
         <StateNotice title="Занятий нет" detail="Расписание на неделю пустое." />
+      {/if}
+    {:else if period === 'month'}
+      {#if monthCursor && calendarResource.data}
+        <CalendarView
+          month={calendarResource.data}
+          year={monthCursor.year}
+          monthNumber={monthCursor.month}
+          today={today.today}
+          onSelectDay={handleSelectDay}
+          onPrevMonth={() => shiftCalendarMonth(-1)}
+          onNextMonth={() => shiftCalendarMonth(1)}
+        />
       {/if}
     {:else if dayResource.data}
       <DayView day={dayResource.data} kind={selection.kind} />

@@ -4,9 +4,11 @@ import {
   buildListUrl,
   buildDayUrl,
   buildWeekUrl,
+  buildCalendarUrl,
   buildSearchUrl,
   buildFreeRoomsUrl,
   createApiClient,
+  InvalidCalendarRangeError,
   InvalidLessonError,
   InvalidWeekOffsetError,
   type FetchLike,
@@ -50,6 +52,30 @@ describe('URL building', () => {
     expect(buildWeekUrl('gym1', 'class', '5А', 2)).toContain('offset=2');
     expect(() => buildWeekUrl('gym1', 'class', '5А', 3)).toThrow(InvalidWeekOffsetError);
     expect(() => buildWeekUrl('gym1', 'class', '5А', -3)).toThrow(InvalidWeekOffsetError);
+  });
+
+  it('builds a calendar URL with a validated year and month', () => {
+    expect(buildCalendarUrl('gym1', 'class', '5А', 2026, 10)).toBe(
+      '/api/gym1/schedule/class/5%D0%90/calendar?year=2026&month=10',
+    );
+    expect(buildCalendarUrl('gym1', 'teacher', 'Иванов', 2026, 1)).toContain(
+      '/schedule/teacher/%D0%98%D0%B2%D0%B0%D0%BD%D0%BE%D0%B2/calendar?year=2026&month=1',
+    );
+    expect(() => buildCalendarUrl('gym1', 'class', '5А', 2019, 10)).toThrow(
+      InvalidCalendarRangeError,
+    );
+    expect(() => buildCalendarUrl('gym1', 'class', '5А', 2026, 0)).toThrow(
+      InvalidCalendarRangeError,
+    );
+    expect(() => buildCalendarUrl('gym1', 'class', '5А', 2026, 13)).toThrow(
+      InvalidCalendarRangeError,
+    );
+    expect(() => buildCalendarUrl('gym1', 'class', '5А', 2026.5, 10)).toThrow(
+      InvalidCalendarRangeError,
+    );
+    expect(() => buildCalendarUrl('gym1', 'class', '5А', 2026, 1.5)).toThrow(
+      InvalidCalendarRangeError,
+    );
   });
 
   it('builds a search URL with an encoded query', () => {
@@ -159,6 +185,30 @@ describe('client requests (mocked fetch)', () => {
     const week = { days: [{ date: '05.10.2026', no_period: true }] };
     fetchMock.mockResolvedValueOnce(jsonResponse(week));
     await expect(client.getWeek('gym1', 'class', '5А', 0)).resolves.toEqual(week);
+  });
+
+  it('parses a month-calendar payload and requests year/month', async () => {
+    const calendar = {
+      days: [
+        {
+          date: '01.10.2026',
+          day_name: 'Четверг',
+          weekend: false,
+          vacation: false,
+          no_period: false,
+          has_exchange: true,
+          has_cancelled: false,
+          lesson_count: 6,
+        },
+      ],
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(calendar));
+
+    await expect(client.getCalendar('gym1', 'class', '5А', 2026, 10)).resolves.toEqual(calendar);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/gym1/schedule/class/5%D0%90/calendar?year=2026&month=10',
+      { headers: { Accept: 'application/json' } },
+    );
   });
 
   it('parses search and free-rooms payloads', async () => {
