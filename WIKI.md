@@ -437,6 +437,35 @@ ADMIN_LOG_FILE=./logs/admin.log
 > ✅ **`UPDATE_INTERVAL` используется** — `BackgroundUpdater` берёт интервал из `Config.UPDATE_INTERVAL` (по умолчанию 3600 c = 1 ч).
 > ⚠️ **`CACHE_PATH` не используется** — папка `cache/` пуста, переменная оставлена для обратной совместимости.
 
+### 13.1 Публичный сайт: origin/edge (деплой)
+
+Публичный сайт расписания (без входа) обслуживает отдельный **edge-сервер в
+Москве**; бот с данными и push остаётся на **origin (Германия)**. Origin
+публикует снапшот расписания на edge (`EDGE_INGEST_URL`, HMAC + timestamp), edge
+отдаёт сайт через Caddy с авто-TLS на `.ru`-домене и проксирует push-API на origin
+(`EDGE_ORIGIN_URL`).
+
+- **DNS**: `A`-запись `.ru`-домена → IP **московского** edge-сервера (нужна до
+  `install.sh`: Let's Encrypt HTTP-01). Домен идёт в `WEBAPP_URL` origin и
+  `EDGE_INGEST_URL`.
+- **NTP обязателен на обоих хостах**: ingest принимает снапшот только при
+  расхождении часов ≤ **±300 с** (`web/edge_ingest.py`:
+  `TIMESTAMP_TOLERANCE_SECONDS = 300`). Без синхронизации — `422` и stale-данные.
+- **origin-only**: `VAPID_*` (приватный ключ — только origin),
+  `EDGE_INGEST_URL`/`EDGE_INGEST_SECRET`, `SNAPSHOT_MAX_RETRIES`.
+- **edge-only**: `EDGE_HOST`/`EDGE_PORT`, `SNAPSHOT_PATH`/`SNAPSHOT_MAX_AGE`/
+  `SNAPSHOT_MAX_BYTES`, `EDGE_ORIGIN_URL`, `VAPID_PUBLIC_KEY`.
+- **origin+edge**: `EDGE_AUTH_SECRET` (совпадает на обоих).
+- **Build-time фронтенда**: `VITE_TELEGRAM_BOT` — имя бота для кнопки «Открыть в
+  Telegram»; если не задана при сборке, кнопка скрыта.
+- ⚠️ **Отложено (follow-up W15)**: origin пока не регистрирует `/api/push/*` —
+  `web/server.py::run_webapp` вызывает `create_app(services)` без `push_store`.
+  Подписки через edge-прокси не сохраняются до создания `PushSubscriptionStore`
+  из `FileDB` бота. Telegram-уведомления работают как раньше.
+
+Полный справочник — [docs/EDGE.md](docs/EDGE.md); развёртывание edge —
+[deploy/edge/README.md](deploy/edge/README.md); команда `sudo EDGE_DOMAIN=домен ./manage.sh edge`.
+
 ---
 
 ## 14. Частые проблемы и где искать
@@ -459,6 +488,8 @@ ADMIN_LOG_FILE=./logs/admin.log
 | `FileDB.delete_one` удалял все совпадающие документы, а не один | — **исправлено 11.09** | [database/file_db.py](database/file_db.py) |
 | Битый `database.json` перезатирался пустым при первой записи | — **исправлено 11.09**: сохраняется копия `.corrupt` (с ротацией `.corrupt.N`) | [database/file_db.py](database/file_db.py) |
 | Поиск учителя/кабинета выдавал чужого | Индексы поиска применялись к полному списку; кириллица в `callback_data` >64 байт — **исправлено 11.09** | [handlers/callbacks/teacher_callbacks.py](handlers/callbacks/teacher_callbacks.py), [handlers/callbacks/room_callbacks.py](handlers/callbacks/room_callbacks.py) |
+| Ingest снапшота возвращает `422` | Часы origin/edge расходятся >±300 с (нет NTP) | [web/edge_ingest.py](web/edge_ingest.py), `timedatectl status` на обоих хостах (`docs/EDGE.md` §3) |
+| `https://<домен>/api/push/subscribe` → `404` | Origin не подключил `push_store` (отложено W15) | [web/server.py](web/server.py) `run_webapp`, `docs/EDGE.md` §6 |
 
 ---
 
