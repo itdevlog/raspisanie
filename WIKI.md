@@ -1,6 +1,6 @@
 # 📚 Wiki: Telegram-бот расписания занятий
 
-> Дата создания: 2026-09-10, последнее обновление: 2026-10-05 (MVP публичного сайта, W1–W31)
+> Дата создания: 2026-09-10, последнее обновление: 2026-10-05 (публичный сайт: MVP W1–W31 и паритет W32–W41)
 > Назначение: единая точка знаний о проекте. Если что-то здесь не описано — это баг документации, дополняй.
 
 ---
@@ -453,9 +453,12 @@ ADMIN_LOG_FILE=./logs/admin.log
 
 ### 13.1 Публичный сайт: origin/edge (деплой)
 
-> ✅ **MVP реализован 2026-10-05 (план W1–W31).** Паритет с оригиналом Nikasoft
-> (W32–W41) — запланирован ([roadmap.md](roadmap.md) §4.1). Отметка деплоя:
-> сотрудник и дата — «(указываются при деплое)».
+> ✅ **MVP (W1–W31) и паритет с оригиналом Nikasoft (W32–W41) реализованы
+> 2026-10-05.** Паритет добавил метаданные школы (`city`/`updated`/`homepage_url`/
+> `features`), `period`/`shift`/`groups`/`is_method_hour` в дне, неделю Пн–Сб по
+> `WEEKDAYNUM`, `/calendar`, `/now`, поиск классов и `features.strikeout_free_lsn`
+> ([roadmap.md](roadmap.md) §4.1). Отметка деплоя: сотрудник и дата —
+> «(указываются при деплое)».
 
 Публичный сайт расписания (без входа) обслуживает отдельный **edge-сервер в
 Москве**; бот с данными и push остаётся на **origin (Германия)**. Origin
@@ -540,7 +543,7 @@ ADMIN_LOG_FILE=./logs/admin.log
 
 > ✅ **План [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) выполнен 17.09.2026** (T1–T45). Добавлено: починен CI (`conftest`), widget API + HMAC/IDOR/XSS, PWA-иконки, корректные напоминания/дайджесты (замены, переносы, `current_school`), надёжность рассылок (baseline после доставки, тихие часы, атомарные кэши), вынос I/O из event loop, rate limiting, SW-гигиена, валидация конфига, `manage.sh`, FSM/callback UX, дедуп замен per-замена, `JobQueue`, `UserRepository`, `AppConfig`, алертинг админам, офлайн-WebApp.
 
-> ✅ **MVP публичного сайта выполнен 2026-10-05** (план [2026-10-02-public-schedule-site.md](docs/superpowers/plans/2026-10-02-public-schedule-site.md), W1–W31): снапшот origin→edge (HMAC + timestamp), edge-сервер (ingest, публичный read-only API, `/healthz`), Web Push (VAPID), Svelte-PWA (расписание, поиск, свободные кабинеты, share-ссылки, офлайн), `deploy/edge/` (Caddy + systemd) и CI-джоба `frontend`. Паритет с оригиналом Nikasoft (W32–W41) — запланирован ([roadmap.md](roadmap.md) §4.1).
+> ✅ **MVP публичного сайта выполнен 2026-10-05** (план [2026-10-02-public-schedule-site.md](docs/superpowers/plans/2026-10-02-public-schedule-site.md), W1–W31): снапшот origin→edge (HMAC + timestamp), edge-сервер (ingest, публичный read-only API, `/healthz`), Web Push (VAPID), Svelte-PWA (расписание, поиск, свободные кабинеты, share-ссылки, офлайн), `deploy/edge/` (Caddy + systemd) и CI-джоба `frontend`. **Паритет с оригиналом Nikasoft (W32–W41) закрыт 2026-10-05**: метаданные `/api/schools` (`city`/`updated`/`homepage_url`/`features`), `period`/`shift`/`groups`/`is_method_hour` в дне, неделя Пн–Сб, `/calendar`, `/now`, поиск классов, `features.strikeout_free_lsn`; e2e `tests/test_parity_e2e.py` ([roadmap.md](roadmap.md) §4.1).
 
 ### 16.1 Открытый техдолг (P2)
 

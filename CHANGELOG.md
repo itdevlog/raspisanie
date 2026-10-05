@@ -10,7 +10,8 @@
 Завершён базовый MVP публичного (без входа) мобильного сайта расписания на отдельном
 `.ru`-домене: **origin (Германия)** публикует снапшот, **edge (Москва)** отдаёт сайт из
 локальной копии. Поведение Telegram-бота не менялось (кроме хуков снапшота и Web Push).
-Плата за паритет с оригиналом Nikasoft (W32–W41) → [roadmap.md](roadmap.md) §4.1.
+Паритет с оригиналом Nikasoft (W32–W41) закрыт в том же релизе 2026-10-05 — см.
+раздел ниже и [roadmap.md](roadmap.md) §4.1.
 
 #### Конфиг, снапшот, хранилище (W1–W3)
 
@@ -53,6 +54,37 @@
 
 - Обновлены [WIKI.md](WIKI.md) (§13.1), [README.md](README.md), [roadmap.md](roadmap.md) (§4.1), [CHANGELOG.md](CHANGELOG.md); спека и план отмечены как реализованные по MVP (W1–W31), паритет W32–W41 — запланирован.
 - **Отметка деплоя**: сотрудник и дата указываются при развёртывании (placeholders в плане/спеке, а также в README и WIKI) — здесь реальное имя не фиксируется.
+
+### Публичный сайт расписания — паритет с оригиналом Nikasoft (W32–W41)
+
+Закрыта **фаза 9** плана (W32–W41): публичный API и Svelte-PWA приведены к
+оригиналу Nikasoft по данным, уже присутствующим в выгрузке. Поведение
+Telegram-бота и тексты сообщений не менялись (только публичный API/фронтенд).
+
+- **W32.** `SchoolData` дополнен паритетными ключами (`WEEKDAYNUM`, `CLASS_SHIFT`,
+  `CLASSGROUPS`, флаги `SHOW_*` и т.д.); `/api/schools` отдаёт `city` (конфиг →
+  `CITY_NAME`), `updated` (`EXPORT_DATE`+`EXPORT_TIME`), `homepage_url` и
+  `features` `{teachers, classrooms, rooms, homepage}` (default `True`).
+- **W33.** Дневной payload: `period` (`b`/`e`/`name`), `shift` (вторая смена из
+  `CLASS_SHIFT`), в item — `groups` (названия из `CLASSGROUPS`) и `is_method_hour`
+  (предмет `M`). Только структурный `get_day`; Telegram-формат не тронут.
+- **W34.** `/week` — Пн–Сб по `WEEKDAYNUM` (default 5, clamp 1..6) + `weekday_num`;
+  шестидневные школы видят субботу как учебный день. Telegram-формат прежний.
+- **W35.** `GET …/schedule/{kind}/{name}/calendar?year=&month=` — запись на каждый
+  календарный день `{date, day_name, weekend, vacation, no_period, has_exchange,
+  has_cancelled, lesson_count}`.
+- **W36.** `GET …/schedule/{kind}/{name}/now?date=` → `{server_time, current, next}`
+  (единый `select_current_and_next`, переиспользован виджетом).
+- **W37.** `/search` возвращает также `classes`.
+- **W38–W40.** Фронтенд: экран календаря месяца, главная с метаданными и `/now`,
+  избранное, показ периода/смены/групп/метод-часа и зачёркивание свободных уроков.
+- **W41.** `tests/test_parity_e2e.py` — e2e через `TestClient` на представительной
+  фикстуре в форме `school_133` (метаданные, день, неделя, календарь, `/now`,
+  поиск, мандат «группы по индексу == по реальному `g`»). Расширение:
+  `features.strikeout_free_lsn` (`STRIKEOUT_FREE_LSN`, default `True`) — гейт
+  зачёркивания свободных уроков на фронтенде; при `true` поведение прежнее.
+- Документация: обновлены спека, [WIKI.md](WIKI.md) §13.1, [roadmap.md](roadmap.md)
+  §4.1, план (все W1–W41 — `[x]`).
 
 ## 17.09.2026
 
