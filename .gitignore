@@ -13,3 +13,5 @@ bot.pid
 .requirements.before
 htmlcov/
 .superpowers/
+node_modules/
+frontend/dist/
