@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createTodayStore } from './today.svelte';
+import { STORAGE_PREFIX } from './persisted';
 import type { ScheduleApiClient } from '../api/client';
 import type { SchoolsResponse } from '../api/types';
 
@@ -63,5 +64,26 @@ describe('server today store', () => {
     store.adopt('');
     expect(store.today).toBe('');
     expect(store.isLoaded).toBe(false);
+  });
+
+  it('only rejects an empty adopt; a non-empty value is adopted as-is', () => {
+    const store = createTodayStore(fakeClient({}), null);
+    store.adopt('not-a-date');
+    // `today` is the server's opaque DD.MM.YYYY string; adopt guards only against
+    // emptiness, so a caller passing junk gets it echoed back (and `tomorrow`/
+    // `yesterday` become null because `addDays` cannot parse it).
+    expect(store.today).toBe('not-a-date');
+    expect(store.tomorrow).toBeNull();
+    expect(store.yesterday).toBeNull();
+    expect(store.isLoaded).toBe(true);
+  });
+
+  it('seeds today verbatim from the cached server value', () => {
+    localStorage.setItem(STORAGE_PREFIX + 'server_today', JSON.stringify('07.11.2026'));
+    const store = createTodayStore(fakeClient({}), localStorage);
+    // The cache is trusted for the initial paint; the next load replaces it.
+    expect(store.today).toBe('07.11.2026');
+    expect(store.tomorrow).toBe('08.11.2026');
+    expect(store.isLoaded).toBe(true);
   });
 });

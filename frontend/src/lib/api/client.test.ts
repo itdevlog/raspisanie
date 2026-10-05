@@ -71,6 +71,27 @@ describe('URL building', () => {
     expect(buildListUrl('a/b', 'classes')).toBe('/api/a%2Fb/classes');
     expect(buildSearchUrl('a b', 'x')).toContain('/api/a%20b/search');
   });
+
+  it('omits the date query when the date is empty or absent', () => {
+    expect(buildDayUrl('gym1', 'class', '5А', '')).toBe('/api/gym1/schedule/class/5%D0%90');
+    expect(buildFreeRoomsUrl('gym1', 3, '')).toBe('/api/gym1/free-rooms?lesson=3');
+  });
+
+  it('rejects a non-integer week offset', () => {
+    expect(() => buildWeekUrl('gym1', 'class', '5А', 1.5)).toThrow(InvalidWeekOffsetError);
+    expect(() => buildWeekUrl('gym1', 'class', '5А', NaN)).toThrow(InvalidWeekOffsetError);
+  });
+
+  it('rejects out-of-range and non-integer lesson numbers', () => {
+    expect(() => buildFreeRoomsUrl('gym1', -1)).toThrow(InvalidLessonError);
+    expect(() => buildFreeRoomsUrl('gym1', 1.5)).toThrow(InvalidLessonError);
+  });
+
+  it('names the offending value in the range-error messages', () => {
+    // A truncated UI control that silently sent 0/13 must be diagnosable.
+    expect(() => buildFreeRoomsUrl('gym1', 13)).toThrow('13');
+    expect(() => buildWeekUrl('gym1', 'class', '5А', 5)).toThrow('-2 до 2');
+  });
 });
 
 describe('client requests (mocked fetch)', () => {

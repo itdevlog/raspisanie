@@ -80,6 +80,36 @@ describe('selection store', () => {
     expect(store.current).toEqual({ schoolId: null, kind: 'class', name: null });
   });
 
+  it('rejects empty-string school/name and non-string values', () => {
+    localStorage.setItem(
+      STORAGE_PREFIX + ENTITY_KEY,
+      JSON.stringify({ schoolId: '', kind: 'room', name: 7 }),
+    );
+    const store = createSelectionStore(localStorage);
+    // An empty school is "not selected"; a non-string name falls back to null.
+    expect(store.current).toEqual({ schoolId: null, kind: 'room', name: null });
+    expect(store.isComplete).toBe(false);
+  });
+
+  it('keeps a valid persisted school even when the kind is unknown', () => {
+    localStorage.setItem(
+      STORAGE_PREFIX + ENTITY_KEY,
+      JSON.stringify({ schoolId: 'gym1', kind: 'nope', name: '5А' }),
+    );
+    const store = createSelectionStore(localStorage);
+    expect(store.current).toEqual({ schoolId: 'gym1', kind: 'class', name: '5А' });
+    // Sanitization is per-field: the valid school survives the bad kind.
+    expect(store.isComplete).toBe(true);
+  });
+
+  it('falls back to defaults for non-object persisted values', () => {
+    for (const raw of ['null', '"gym1"', '42', '[]']) {
+      localStorage.setItem(STORAGE_PREFIX + ENTITY_KEY, raw);
+      const store = createSelectionStore(localStorage);
+      expect(store.current).toEqual({ schoolId: null, kind: 'class', name: null });
+    }
+  });
+
   it('works without storage (returns defaults, does not throw)', () => {
     const store = createSelectionStore(null);
     store.selectSchool('gym1');

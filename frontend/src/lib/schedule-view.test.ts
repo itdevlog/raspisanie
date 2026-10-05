@@ -7,6 +7,8 @@ import {
   isCancelled,
   isExchange,
   KIND_LABELS,
+  LESSONS_PER_DAY,
+  lessonNumbers,
   lessonStatusLabel,
   lessonTime,
 } from './schedule-view';
@@ -65,5 +67,24 @@ describe('schedule-view helpers', () => {
 
   it('builds a day title', () => {
     expect(dayTitle(makeDay())).toBe('Понедельник, 05.10.2026');
+  });
+
+  it('returns the date alone when the server omits day_name', () => {
+    expect(dayTitle(makeDay({ day_name: '' }))).toBe('05.10.2026');
+  });
+
+  it('lists lesson numbers 1..LESSONS_PER_DAY by default', () => {
+    const numbers = lessonNumbers();
+    expect(LESSONS_PER_DAY).toBe(12);
+    expect(numbers).toHaveLength(LESSONS_PER_DAY);
+    expect(numbers[0]).toBe(1);
+    expect(numbers[numbers.length - 1]).toBe(12);
+    // Contiguous 1..12, no gaps or duplicates.
+    expect(numbers).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  });
+
+  it('honours an explicit lessonNumbers max', () => {
+    expect(lessonNumbers(3)).toEqual([1, 2, 3]);
+    expect(lessonNumbers(0)).toEqual([]);
   });
 });

@@ -186,6 +186,50 @@ describe('route parsing (unknown / absent → Home)', () => {
     expect(isScheduleKind('CLASS')).toBe(false);
     expect(isScheduleKind('other')).toBe(false);
   });
+
+  it('tolerates a query string embedded in the path argument', () => {
+    // Callers may pass a single pathname+search string to parsePath.
+    expect(parsePath('/s/gym1/class/5%D0%90?date=05.10.2026')).toEqual({
+      view: 'schedule',
+      school: 'gym1',
+      kind: 'class',
+      name: '5А',
+      date: '05.10.2026',
+    });
+  });
+
+  it('merges an embedded query with an explicit search argument', () => {
+    expect(parsePath('/s/gym1/class/5%D0%90?date=05.10.2026', '?extra=1')).toEqual({
+      view: 'schedule',
+      school: 'gym1',
+      kind: 'class',
+      name: '5А',
+      date: '05.10.2026',
+    });
+  });
+
+  it('parses a bare or relative path through parseLocation', () => {
+    expect(parseLocation('/s/gym1/class/5%D0%90')).toEqual({
+      view: 'schedule',
+      school: 'gym1',
+      kind: 'class',
+      name: '5А',
+      date: null,
+    });
+    // A relative reference (no leading slash) still resolves the share target.
+    expect(parseLocation('s/gym1/class/5%D0%90')).toEqual({
+      view: 'schedule',
+      school: 'gym1',
+      kind: 'class',
+      name: '5А',
+      date: null,
+    });
+  });
+
+  it('treats a trailing-slash and root-only pathname as Home', () => {
+    expect(parsePath('/')).toEqual(HOME_ROUTE);
+    expect(parsePath('///')).toEqual(HOME_ROUTE);
+  });
 });
 
 describe('buildViewPath / buildSharePath', () => {
