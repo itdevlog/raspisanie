@@ -415,40 +415,32 @@ class BaseScheduleService:
                 )
         return result
 
-    def _next_lesson_payload(self, schedule_data: list[dict]) -> list[dict]:
-        """Payload-проекция внутренних уроков для ``select_current_and_next``."""
-        payload = []
-        for lesson in schedule_data:
-            times = self._get_lesson_times(lesson['lesson_num'])
-            payload.append({
-                'num': lesson['lesson_num'],
-                'start': times[0] if times else '',
-                'end': times[1] if len(times) > 1 else '',
-                'items': [],
-                'is_cancelled': lesson.get('is_cancelled', False),
-            })
-        return sorted(payload, key=lambda x: x['num'])
-
     def get_next_lesson(self, schedule_data: list[dict], date: datetime,
                         now: datetime | None = None) -> dict | None:
         """Возвращает текущий или следующий урок по времени LESSON_TIMES.
 
         Приоритет — предстоящий урок; если его нет (текущий был последним),
-        возвращается идущий сейчас урок. Делегирует выбор в
-        ``select_current_and_next`` (единая логика с виджетом/`/now`).
+        возвращается идущий сейчас урок.
         """
         if not schedule_data:
             return None
         now = now or datetime.now(self.moscow_tz)
-        selected = self.select_current_and_next(
-            self._next_lesson_payload(schedule_data), now, now=now)
-        chosen = selected['next'] or selected['current']
-        if chosen is None:
-            return None
-        for lesson in schedule_data:
-            if lesson['lesson_num'] == chosen['num']:
+        current = None
+        for lesson in sorted(schedule_data, key=lambda x: x['lesson_num']):
+            times = self._get_lesson_times(lesson['lesson_num'])
+            if len(times) < 2 or times[0] == '?':
+                continue
+            try:
+                start = now.replace(hour=int(times[0][:2]), minute=int(times[0][3:5]),
+                                    second=0, microsecond=0)
+                end = start.replace(hour=int(times[1][:2]), minute=int(times[1][3:5]))
+            except (ValueError, IndexError):
+                continue
+            if start < now and now <= end:
+                current = lesson
+            elif now <= start:
                 return lesson
-        return None
+        return current
 
     def _get_day_name(self, date: datetime) -> str:
         """Получает название дня недели - ОБЩАЯ ЛОГИКА"""

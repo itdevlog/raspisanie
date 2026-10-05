@@ -51,6 +51,31 @@ def test_get_next_lesson_returns_none_after_last():
     assert svc.get_next_lesson(data, date, now=date) is None
 
 
+def test_get_next_lesson_returns_lesson_at_exact_start():
+    """Ровно в момент начала урок считается следующим (now <= start)."""
+    svc = _svc()
+    date = datetime(2026, 9, 11, 8, 0, tzinfo=TZ)  # ровно начало урока 1
+    data = [
+        {'lesson_num': 1, 'data': {'s': ['x'], 't': [], 'r': []}, 'has_exchange': False, 'is_cancelled': False},
+        {'lesson_num': 2, 'data': {'s': ['y'], 't': [], 'r': []}, 'has_exchange': False, 'is_cancelled': False},
+    ]
+    nxt = svc.get_next_lesson(data, date, now=date)
+    assert nxt is not None
+    assert nxt['lesson_num'] == 1
+
+
+def test_get_next_lesson_returns_current_at_exact_end():
+    """Ровно в момент конца последнего урока он возвращается как текущий (now <= end)."""
+    svc = _svc()
+    date = datetime(2026, 9, 11, 8, 45, tzinfo=TZ)  # ровно конец урока 1
+    data = [
+        {'lesson_num': 1, 'data': {'s': ['x'], 't': [], 'r': []}, 'has_exchange': False, 'is_cancelled': False},
+    ]
+    nxt = svc.get_next_lesson(data, date, now=date)
+    assert nxt is not None
+    assert nxt['lesson_num'] == 1
+
+
 def test_week_schedule_accepts_offset():
     svc = _svc()
     # offset 1 не должен падать и не совпадать с текущей неделей
