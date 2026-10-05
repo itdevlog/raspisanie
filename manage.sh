@@ -1011,13 +1011,18 @@ cmd_edge() {
   sudo EDGE_DOMAIN=raspisanie.example.ru ./manage.sh edge"
     fi
 
-    info "Установка edge-сервера публичного сайта (домен ${EDGE_DOMAIN})"
+    # EDGE_DIR — каталог самого приложения (репозитория). По умолчанию берём клон, из
+    # которого запущен manage.sh: тогда установщик работает именно над этим репозиторием.
+    # Установщик W26 отклонит путь внутри home/root своим понятным сообщением.
+    local edge_dir="${EDGE_DIR:-$SCRIPT_DIR}"
+
+    info "Установка edge-сервера публичного сайта (домен ${EDGE_DOMAIN}, каталог ${edge_dir})"
     info "Для выпуска сертификата нужны открытые порты 80/443 и A-запись домена на этот сервер."
     run_root env \
         "EDGE_DOMAIN=${EDGE_DOMAIN}" \
         "EDGE_PORT=${EDGE_PORT:-8090}" \
         "EDGE_USER=${EDGE_USER:-raspisanie}" \
-        "EDGE_DIR=${EDGE_DIR:-/opt/raspisanie}" \
+        "EDGE_DIR=${edge_dir}" \
         "EDGE_ENV_FILE=${EDGE_ENV_FILE:-/etc/raspisanie-edge.env}" \
         "EDGE_SNAPSHOT_DIR=${EDGE_SNAPSHOT_DIR:-/var/lib/raspisanie-edge}" \
         bash "$installer"
