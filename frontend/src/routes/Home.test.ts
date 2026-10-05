@@ -94,7 +94,16 @@ describe('Home screen', () => {
               num: 1,
               start: '08:00',
               end: '08:45',
-              items: [{ subject: 'Физика', teacher: 'Петров', room: '202', class_name: '5А' }],
+              items: [
+                {
+                  subject: 'Физика',
+                  teacher: 'Петров',
+                  room: '202',
+                  class_name: '5А',
+                  groups: null,
+                  is_method_hour: false,
+                },
+              ],
               has_exchange: false,
               is_cancelled: false,
             },

@@ -1,8 +1,16 @@
 <script lang="ts">
-  // One lesson row: number + time, every parallel item (subject/teacher/room/
-  // class), and a status marker for substitutions/cancellations.
+  // One lesson row: number + time, every parallel item (subject/group/teacher/
+  // room/class), a «Метод. час» label for method hours, and a status marker for
+  // substitutions/cancellations. Subject-less "free" lessons are struck through.
   import type { Lesson } from '../lib/api/types';
-  import { isCancelled, isExchange, lessonStatusLabel, lessonTime } from '../lib/schedule-view';
+  import {
+    isCancelled,
+    isExchange,
+    isFreeLesson,
+    itemSubjectLabel,
+    lessonStatusLabel,
+    lessonTime,
+  } from '../lib/schedule-view';
 
   interface Props {
     lesson: Lesson;
@@ -17,12 +25,14 @@
 
   const status = $derived(lessonStatusLabel(lesson));
   const time = $derived(lessonTime(lesson));
+  const free = $derived(isFreeLesson(lesson));
 </script>
 
 <li
   class="lesson"
   class:exchange={isExchange(lesson) && !isCancelled(lesson)}
   class:cancelled={isCancelled(lesson)}
+  class:free
   aria-label={status ? 'Урок {lesson.num}: {status}' : undefined}
 >
   <div class="head">
@@ -33,8 +43,9 @@
   <ul class="items">
     {#each lesson.items as item, i (i)}
       <li class="item">
-        <span class="subject">{item.subject ?? '—'}</span>
+        <span class="subject" class:method={item.is_method_hour}>{itemSubjectLabel(item)}</span>
         <span class="meta">
+          {#if item.groups}<span class="group">{item.groups}</span>{/if}
           {#if showTeacher && item.teacher}<span>{item.teacher}</span>{/if}
           {#if showRoom && item.room}<span>каб. {item.room}</span>{/if}
           {#if showClass && item.class_name}<span>{item.class_name}</span>{/if}
@@ -86,6 +97,23 @@
 
   .cancelled .subject {
     text-decoration: line-through;
+  }
+
+  .lesson.free {
+    opacity: 0.65;
+  }
+
+  .lesson.free .subject {
+    text-decoration: line-through;
+  }
+
+  .subject.method {
+    font-style: italic;
+    font-weight: 600;
+  }
+
+  .group {
+    font-weight: 600;
   }
 
   .items {

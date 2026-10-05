@@ -1,16 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import type { Lesson } from './api/types';
+import type { Lesson, LessonItem } from './api/types';
 import {
   dayState,
   dayTitle,
   entityHeading,
   isCancelled,
   isExchange,
+  isFreeLesson,
+  isSecondShift,
+  itemSubjectLabel,
   KIND_LABELS,
   LESSONS_PER_DAY,
   lessonNumbers,
   lessonStatusLabel,
   lessonTime,
+  periodLabel,
+  shiftLabel,
 } from './schedule-view';
 import { makeDay } from '../test-helpers';
 
@@ -19,9 +24,30 @@ function makeLesson(overrides: Partial<Lesson> = {}): Lesson {
     num: 1,
     start: '08:00',
     end: '08:45',
-    items: [{ subject: 'Математика', teacher: 'Иванов', room: '101', class_name: '5А' }],
+    items: [
+      {
+        subject: 'Математика',
+        teacher: 'Иванов',
+        room: '101',
+        class_name: '5А',
+        groups: null,
+        is_method_hour: false,
+      },
+    ],
     has_exchange: false,
     is_cancelled: false,
+    ...overrides,
+  };
+}
+
+function makeItem(overrides: Partial<LessonItem> = {}): LessonItem {
+  return {
+    subject: 'Математика',
+    teacher: 'Иванов',
+    room: '101',
+    class_name: '5А',
+    groups: null,
+    is_method_hour: false,
     ...overrides,
   };
 }
@@ -86,5 +112,44 @@ describe('schedule-view helpers', () => {
   it('honours an explicit lessonNumbers max', () => {
     expect(lessonNumbers(3)).toEqual([1, 2, 3]);
     expect(lessonNumbers(0)).toEqual([]);
+  });
+
+  it('labels the teaching period from name, bounds, or bare', () => {
+    expect(periodLabel({ b: '01.09.2026', e: '31.05.2027', name: '01.09.2026 - 31.05.2027' })).toBe(
+      'На период: 01.09.2026 - 31.05.2027',
+    );
+    expect(periodLabel({ b: '01.09.2026', e: '31.05.2027', name: null })).toBe(
+      'На период: 01.09.2026 – 31.05.2027',
+    );
+    expect(periodLabel({ b: null, e: null, name: null })).toBe('На период');
+    expect(periodLabel(null)).toBeNull();
+    expect(periodLabel(undefined)).toBeNull();
+  });
+
+  it('detects a non-first shift without assuming it is 2', () => {
+    expect(isSecondShift(2)).toBe(true);
+    expect(isSecondShift(6)).toBe(true);
+    expect(isSecondShift(1)).toBe(false);
+    expect(isSecondShift(null)).toBe(false);
+    expect(isSecondShift(undefined)).toBe(false);
+    expect(shiftLabel(2)).toBe('Смена 2');
+    expect(shiftLabel(6)).toBe('Смена 6');
+    expect(shiftLabel(1)).toBeNull();
+    expect(shiftLabel(null)).toBeNull();
+  });
+
+  it('labels method hours and missing subjects', () => {
+    expect(itemSubjectLabel(makeItem({ is_method_hour: true, subject: 'M' }))).toBe('Метод. час');
+    expect(itemSubjectLabel(makeItem({ subject: 'Математика' }))).toBe('Математика');
+    expect(itemSubjectLabel(makeItem({ subject: null }))).toBe('—');
+    expect(itemSubjectLabel(makeItem({ subject: '  ' }))).toBe('—');
+  });
+
+  it('detects free (subject-less) lessons but not cancelled ones', () => {
+    expect(isFreeLesson(makeLesson())).toBe(false);
+    expect(isFreeLesson(makeLesson({ items: [] }))).toBe(true);
+    expect(isFreeLesson(makeLesson({ items: [makeItem({ subject: null })] }))).toBe(true);
+    // A cancelled lesson keeps its own styling, not the "free" one.
+    expect(isFreeLesson(makeLesson({ is_cancelled: true, items: [] }))).toBe(false);
   });
 });

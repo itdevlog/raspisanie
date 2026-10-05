@@ -175,7 +175,16 @@ describe('client requests (mocked fetch)', () => {
           num: 1,
           start: '08:00',
           end: '08:45',
-          items: [{ subject: 'Математика', teacher: 'Иванов', room: '101', class_name: null }],
+          items: [
+            {
+              subject: 'Математика',
+              teacher: 'Иванов',
+              room: '101',
+              class_name: null,
+              groups: null,
+              is_method_hour: false,
+            },
+          ],
           has_exchange: true,
           is_cancelled: false,
         },

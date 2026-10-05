@@ -51,12 +51,29 @@ export interface SchoolsResponse {
   schools: School[];
 }
 
+/**
+ * W33+ — teaching period covering a date (`PERIODS` entry). `b`/`e` are the
+ * period bounds (`DD.MM.YYYY`); `name` is the server's preformatted label.
+ */
+export interface PeriodInfo {
+  /** Period start as `DD.MM.YYYY`, or `null` when the export omits it. */
+  b: string | null;
+  /** Period end as `DD.MM.YYYY`, or `null` when the export omits it. */
+  e: string | null;
+  /** Human-readable period name (real exports use `b - e`), or `null`. */
+  name: string | null;
+}
+
 /** A single lesson item (one group/parallel row) inside a lesson. */
 export interface LessonItem {
   subject: string | null;
   teacher: string | null;
   room: string | null;
   class_name: string | null;
+  /** W33+ — group display name (`CLASSGROUPS`), or `null` for an ungrouped item. */
+  groups: string | null;
+  /** W33+ — subject code `M` (метод-час). */
+  is_method_hour: boolean;
 }
 
 /** One lesson entry in a day payload. */
@@ -88,6 +105,10 @@ export interface DaySchedule {
   weekend: boolean;
   /** Date falls outside a configured teaching period (week endpoint only). */
   no_period: boolean;
+  /** W33+ — teaching period covering the date, or `null` outside any period. */
+  period: PeriodInfo | null;
+  /** W33+ — second-shift number for a class (`> 1`), else `null`. */
+  shift: number | null;
 }
 
 /** Response of `GET /api/{school}/schedule/{kind}/{name}/week`. */

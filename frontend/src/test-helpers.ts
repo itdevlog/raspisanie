@@ -26,6 +26,8 @@ export function makeDay(overrides: Partial<DaySchedule> = {}): DaySchedule {
     vacation: false,
     weekend: false,
     no_period: false,
+    period: null,
+    shift: null,
     ...overrides,
   };
 }
@@ -156,9 +158,10 @@ export function makeFakeEnv(initialPath = '/') {
 }
 
 /** A router store on top of a fake env, for component tests. */
-export function makeRouter(
-  env: BrowserEnv = makeFakeEnv().env,
-): { router: RouteStore; env: BrowserEnv } {
+export function makeRouter(env: BrowserEnv = makeFakeEnv().env): {
+  router: RouteStore;
+  env: BrowserEnv;
+} {
   return { router: createRouteStore(env), env };
 }
 

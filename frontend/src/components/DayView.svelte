@@ -1,8 +1,15 @@
 <script lang="ts">
-  // Renders a single day payload: heading, holiday/weekend/no-period notices,
-  // or the list of lessons.
+  // Renders a single day payload: heading, the teaching period / second-shift
+  // line (W40), holiday/weekend/no-period notices, or the list of lessons.
   import type { DaySchedule, ScheduleKind } from '../lib/api/types';
-  import { dayState, dayTitle, isCancelled, isExchange } from '../lib/schedule-view';
+  import {
+    dayState,
+    dayTitle,
+    isCancelled,
+    isExchange,
+    periodLabel,
+    shiftLabel,
+  } from '../lib/schedule-view';
   import LessonRow from './LessonRow.svelte';
   import StateNotice from './StateNotice.svelte';
 
@@ -15,10 +22,19 @@
   const state = $derived(dayState(day));
   const hasExchanges = $derived(day.lessons.some((lesson) => isExchange(lesson)));
   const hasCancellations = $derived(day.lessons.some((lesson) => isCancelled(lesson)));
+  const period = $derived(periodLabel(day.period));
+  const shift = $derived(shiftLabel(day.shift));
 </script>
 
 <section class="day">
   <h3>{dayTitle(day)}</h3>
+
+  {#if period}
+    <p class="period">{period}</p>
+  {/if}
+  {#if shift}
+    <p class="shift" data-shift={day.shift}>{shift}</p>
+  {/if}
 
   {#if state === 'vacation'}
     <StateNotice tone="muted" title="Каникулы" detail="В этот день занятий нет." />
@@ -56,6 +72,13 @@
   h3 {
     font-size: 1rem;
     margin: 0 0 0.35rem;
+  }
+
+  .period,
+  .shift {
+    margin: 0 0 0.35rem;
+    font-size: 0.85rem;
+    opacity: 0.75;
   }
 
   .lessons {
