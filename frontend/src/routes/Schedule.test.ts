@@ -319,4 +319,36 @@ describe('Schedule screen', () => {
 
     expect(await findByText('Нет подключения к сети')).toBeTruthy();
   });
+
+  // W24: «Открыть в Telegram» control on the schedule screen.
+  it('renders an «Открыть в Telegram» deep link carrying the shown target', async () => {
+    vi.stubEnv('VITE_TELEGRAM_BOT', 'raspisanie_bot');
+    const client = makeClient();
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '5А');
+
+    const { findByRole } = render(Schedule, {
+      props: { client, selection, today: makeToday('05.10.2026') },
+    });
+
+    const link = (await findByRole('link', { name: 'Открыть в Telegram' })) as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toContain('https://t.me/raspisanie_bot?start=');
+    vi.unstubAllEnvs();
+  });
+
+  it('hides the Telegram control when no bot username is configured', async () => {
+    const client = makeClient();
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '5А');
+
+    const { queryByRole, findByRole } = render(Schedule, {
+      props: { client, selection, today: makeToday('05.10.2026') },
+    });
+
+    // The Schedule («Поделиться») is present, but no Telegram link without config.
+    await findByRole('button', { name: 'Поделиться' });
+    expect(queryByRole('link', { name: 'Открыть в Telegram' })).toBeNull();
+  });
 });

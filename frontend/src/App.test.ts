@@ -91,4 +91,71 @@ describe('App shell', () => {
     });
     expect(await findByText('Гимназия №1')).toBeTruthy();
   });
+
+  describe('W24 Telegram WebApp', () => {
+    it('works in a regular browser with no SDK (no crash, BackButton inert)', async () => {
+      const { router } = makeRouter();
+      const { getByRole, findByText } = render(App, {
+        props: {
+          client: makeClient(),
+          selection: makeSelection(),
+          today: makeToday(),
+          router,
+          telegram: {},
+        },
+      });
+      // The app still renders and navigates without a Telegram SDK.
+      await fireEvent.click(getByRole('button', { name: 'Поиск' }));
+      expect(await findByText('Поиск и кабинеты')).toBeTruthy();
+    });
+
+    it('applies the SDK theme and shows the BackButton off Home', async () => {
+      const fake = makeFakeEnv('/tools');
+      const router = createRouteStore(fake.env);
+      const style = { setProperty: vi.fn() };
+      const show = vi.fn();
+      const hide = vi.fn();
+      const onClick = vi.fn();
+      const offClick = vi.fn();
+
+      render(App, {
+        props: {
+          client: makeClient(),
+          selection: makeSelection(),
+          today: makeToday(),
+          router,
+          themeTarget: { style },
+          telegram: {
+            webApp: {
+              initData: 'query_id=abc',
+              colorScheme: 'dark',
+              themeParams: { bg_color: '#101010' },
+              BackButton: { show, hide, onClick, offClick },
+            },
+          },
+        },
+      });
+
+      await waitFor(() => expect(show).toHaveBeenCalled());
+      expect(style.setProperty).toHaveBeenCalledWith('--tg-bg', '#101010');
+      expect(onClick).toHaveBeenCalled();
+    });
+
+    it('hides the BackButton on Home even with the SDK present', async () => {
+      const { router } = makeRouter();
+      const show = vi.fn();
+      const hide = vi.fn();
+      render(App, {
+        props: {
+          client: makeClient(),
+          selection: makeSelection(),
+          today: makeToday(),
+          router,
+          telegram: { webApp: { initData: 'x', BackButton: { show, hide } } },
+        },
+      });
+      await waitFor(() => expect(hide).toHaveBeenCalled());
+      expect(show).not.toHaveBeenCalled();
+    });
+  });
 });

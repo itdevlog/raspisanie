@@ -12,6 +12,7 @@ export * from './platform';
 export * from './push';
 export * from './sw-register';
 export * from './offline';
+export * from './telegram';
 export * from './schedule-view';
 export * from './async.svelte';
 export * from './stores/persisted';

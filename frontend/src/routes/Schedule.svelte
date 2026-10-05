@@ -38,6 +38,7 @@
     type WeekScheduleResponse,
   } from '../lib';
   import EntityPicker from '../components/EntityPicker.svelte';
+  import OpenInTelegram from '../components/OpenInTelegram.svelte';
   import { untrack } from 'svelte';
   import PeriodTabs, { type Period } from '../components/PeriodTabs.svelte';
   import DayView from '../components/DayView.svelte';
@@ -113,8 +114,7 @@
   $effect(() => {
     const container =
       typeof navigator === 'undefined' ? undefined : navigator.serviceWorker;
-    return watchServiceWorkerCache(container, (value) => {
-      fromCache = value;
+    return watchServiceWorkerCache(container, (value) => {      fromCache = value;
     });
   });
 
@@ -228,6 +228,14 @@
   const bodyError = $derived(period === 'week' ? weekResource.error : dayResource.error);
   const hasEntity = $derived(selection.name !== null);
 
+  // W24: «Открыть в Telegram» target — the currently shown entity/date.
+  const telegramTarget = $derived({
+    school: selection.schoolId ?? '',
+    kind: selection.kind,
+    name: selection.name ?? '',
+    date: shareDate ?? (period === 'tomorrow' ? today.tomorrow : today.today) ?? null,
+  });
+
   // W23: the offline/cached indicator. `fromCache` is derived from the SW's
   // marker on the last schedule response; the SW is engaged only when the
   // service worker is supported.
@@ -330,6 +338,7 @@
 
     {#if hasEntity}
       <button type="button" class="share" onclick={handleShare}>Поделиться</button>
+      <OpenInTelegram target={telegramTarget} />
       {#if shareNotice}
         <p class="share-notice" role="status">{shareNotice}</p>
       {/if}

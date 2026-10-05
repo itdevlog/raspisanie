@@ -13,6 +13,10 @@
     route as defaultRoute,
     selection as defaultSelection,
     serverToday as defaultToday,
+    telegramEnv,
+    initTelegramWebApp,
+    initTelegramBackButton,
+    type TelegramEnv,
     type RouteStore,
     type ScheduleApiClient,
     type SelectionStore,
@@ -24,18 +28,38 @@
     selection?: SelectionStore;
     today?: TodayStore;
     router?: RouteStore;
+    /** Injectable Telegram WebApp env (tests); defaults to the real `window.Telegram`. */
+    telegram?: TelegramEnv;
+    /** Element to receive Telegram theme CSS variables; defaults to `<html>`. */
+    themeTarget?: { style: { setProperty(name: string, value: string): void } };
   }
   let {
     client = defaultApi,
     selection = defaultSelection,
     today = defaultToday,
     router = defaultRoute,
+    telegram = typeof window === 'undefined' ? { webApp: undefined } : telegramEnv(),
+    themeTarget = typeof document === 'undefined' ? undefined : document.documentElement,
   }: Props = $props();
 
   // Parse the initial location and subscribe to popstate (back/forward).
   $effect(() => {
     const unsubscribe = router.start();
     return unsubscribe;
+  });
+
+  // W24: inside Telegram only — expand/ready + adopt the SDK theme. A regular
+  // browser (no SDK) hits the no-op branch and is completely unaffected.
+  $effect(() => {
+    if (!themeTarget) {
+      return;
+    }
+    return initTelegramWebApp(telegram, themeTarget);
+  });
+
+  // W24: show the Telegram BackButton on any non-Home screen and route it home.
+  $effect(() => {
+    return initTelegramBackButton(telegram, router.route, () => router.goTo('home'));
   });
 
   // A schedule deep link carries the selection in the URL: adopt it into the
