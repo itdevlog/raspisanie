@@ -27,4 +27,15 @@ describe('App shell', () => {
 
     expect(await findByText('Школа не выбрана')).toBeTruthy();
   });
+
+  it('switches to the search & free-rooms screen', async () => {
+    const { getByRole, findByText } = render(App, {
+      props: { client: makeClient(), selection: makeSelection(), today: makeToday() },
+    });
+    await waitFor(() => expect(getByRole('button', { name: 'Поиск' })).toBeTruthy());
+
+    await fireEvent.click(getByRole('button', { name: 'Поиск' }));
+
+    expect(await findByText('Поиск и кабинеты')).toBeTruthy();
+  });
 });

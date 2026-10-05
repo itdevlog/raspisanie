@@ -12,6 +12,17 @@ export const KIND_LABELS: Record<ScheduleKind, string> = {
   room: 'Кабинет',
 };
 
+/**
+ * Highest supported lesson number. Mirrors the server's `LESSONSINDAY`
+ * default (12) and the API's `free-rooms` `lesson` range (1..12).
+ */
+export const LESSONS_PER_DAY = 12;
+
+/** Lesson numbers `1..{@link LESSONS_PER_DAY}`, for inline selectors. */
+export function lessonNumbers(max: number = LESSONS_PER_DAY): number[] {
+  return Array.from({ length: max }, (_, index) => index + 1);
+}
+
 /** Plural form of the entity name used in a heading, e.g. «Класс 5А». */
 export function entityHeading(kind: ScheduleKind, name: string): string {
   return `${KIND_LABELS[kind]} ${name}`;

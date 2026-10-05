@@ -5,6 +5,7 @@
   // history). A thin view toggle keeps W20 self-contained and testable.
   import Home from './routes/Home.svelte';
   import Schedule from './routes/Schedule.svelte';
+  import Tools from './routes/Tools.svelte';
   import {
     api as defaultApi,
     selection as defaultSelection,
@@ -21,7 +22,7 @@
   }
   let { client = defaultApi, selection = defaultSelection, today = defaultToday }: Props = $props();
 
-  type View = 'home' | 'schedule';
+  type View = 'home' | 'schedule' | 'tools';
   let view = $state<View>('home');
 </script>
 
@@ -43,12 +44,22 @@
     >
       Расписание
     </button>
+    <button
+      type="button"
+      class:active={view === 'tools'}
+      aria-current={view === 'tools' ? 'page' : undefined}
+      onclick={() => (view = 'tools')}
+    >
+      Поиск
+    </button>
   </nav>
 
   {#if view === 'home'}
     <Home {client} {selection} {today} onOpenSchedule={() => (view = 'schedule')} />
-  {:else}
+  {:else if view === 'schedule'}
     <Schedule {client} {selection} {today} />
+  {:else}
+    <Tools {client} {selection} {today} onOpenSchedule={() => (view = 'schedule')} />
   {/if}
 </main>
 
