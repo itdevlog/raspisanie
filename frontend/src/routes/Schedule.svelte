@@ -8,13 +8,19 @@
   //   * body: a {@link DayView} or {@link WeekView}.
   //
   // All data comes from the injected client; the today store is the source of
-  // "сегодня"/"завтра". Search and free-rooms screens are W21 and intentionally
-  // absent here.
+  // "сегодня"/"завтра". Search and free-rooms screens are W21.
+  //
+  // W22 adds:
+  //   * a `pinnedDate` prop: when a share link carries `?date=`, the day view
+  //     opens that date instead of the server's today;
+  //   * a «Поделиться» action building the same URL scheme as W16.
   import {
     api as defaultApi,
     selection as defaultSelection,
     serverToday as defaultToday,
     createAsync,
+    shareSchedule,
+    buildShareUrl,
     type DaySchedule,
     type ScheduleApiClient,
     type ScheduleKind,
@@ -32,11 +38,32 @@
     client?: ScheduleApiClient;
     selection?: SelectionStore;
     today?: TodayStore;
+    /** Date pinned by a share link (`DD.MM.YYYY`), or null to use server today. */
+    pinnedDate?: string | null;
+    /** Browser origin used when building the share link; defaults to `location`. */
+    origin?: string;
+    /** Injectable navigator for tests; defaults to the global `navigator`. */
+    navigatorLike?: Parameters<typeof shareSchedule>[2];
   }
-  let { client = defaultApi, selection = defaultSelection, today = defaultToday }: Props = $props();
+  let {
+    client = defaultApi,
+    selection = defaultSelection,
+    today = defaultToday,
+    pinnedDate = null,
+    origin = typeof window === 'undefined' ? '' : window.location.origin,
+    navigatorLike = undefined,
+  }: Props = $props();
 
   let period = $state<Period>('today');
   const weekOffset = $state(0);
+  // A share link may pin a date; switching period tabs clears it and falls back
+  // to the server today. Synced from the prop via an effect.
+  let shareDate = $state<string | null>(null);
+  let shareNotice = $state<string | null>(null);
+
+  $effect(() => {
+    shareDate = pinnedDate;
+  });
 
   // Names for the active kind within the selected school.
   const namesResource = createAsync<string[]>(async () => {
@@ -53,14 +80,15 @@
     return (await client.getRooms(schoolId)).rooms;
   });
 
-  // Day payload for today/tomorrow; unused for the week period.
+  // Day payload for today/tomorrow; unused for the week period. A date pinned by
+  // a share link (`?date=`) takes precedence over the server's today.
   const dayResource = createAsync<DaySchedule>(async () => {
     const schoolId = selection.schoolId;
     const name = selection.name;
     if (!schoolId || !name) {
       throw new Error('Выберите расписание');
     }
-    const date = period === 'tomorrow' ? today.tomorrow : today.today;
+    const date = shareDate ?? (period === 'tomorrow' ? today.tomorrow : today.today);
     if (!date) {
       throw new Error('Не удалось определить дату');
     }
@@ -79,7 +107,7 @@
 
   const kindNamesKey = $derived(`${selection.schoolId ?? ''}|${selection.kind}`);
   const bodyKey = $derived(
-    `${selection.schoolId ?? ''}|${selection.kind}|${selection.name ?? ''}|${period}|${weekOffset}`,
+    `${selection.schoolId ?? ''}|${selection.kind}|${selection.name ?? ''}|${period}|${weekOffset}|${shareDate ?? ''}`,
   );
 
   // Reload the name list whenever the school/kind changes.
@@ -101,12 +129,13 @@
   });
 
   // Load the payload for the current period. Split into two effects so only the
-  // relevant resource is touched and the week offset is respected.
+  // relevant resource is touched and the week offset is respected. A pinned
+  // share date is standalone data, so it does not wait for the server today.
   $effect(() => {
     void bodyKey;
     if (period === 'week') {
       void weekResource.load();
-    } else if (today.isLoaded) {
+    } else if (shareDate || today.isLoaded) {
       void dayResource.load();
     }
   });
@@ -117,6 +146,29 @@
 
   function handleNameChange(name: string) {
     selection.selectEntity(selection.kind, name);
+  }
+
+  /** Switching period tabs drops a pinned share date and uses server today. */
+  function handlePeriodChange(next: Period) {
+    shareDate = null;
+    period = next;
+  }
+
+  /** Share the currently open entity for the displayed date (W16-identical URL). */
+  async function handleShare() {
+    const schoolId = selection.schoolId;
+    const name = selection.name;
+    if (!schoolId || !name) {
+      return;
+    }
+    const date = shareDate ?? (period === 'tomorrow' ? today.tomorrow : today.today) ?? null;
+    const url = buildShareUrl(origin, schoolId, selection.kind, name, date);
+    const result = await shareSchedule(url, { title: 'Расписание', text: name }, navigatorLike);
+    if (result.ok) {
+      shareNotice = result.method === 'share' ? null : 'Ссылка скопирована';
+    } else {
+      shareNotice = result.error ?? 'Не удалось поделиться';
+    }
   }
 
   const bodyStatus = $derived(period === 'week' ? weekResource.status : dayResource.status);
@@ -147,7 +199,11 @@
       />
     {/if}
 
-    <PeriodTabs value={period} onChange={(p) => (period = p)} />
+    <PeriodTabs value={period} onChange={handlePeriodChange} />
+
+    {#if shareDate}
+      <p class="pinned" role="status">Расписание на {shareDate}</p>
+    {/if}
 
     {#if !hasEntity}
       <StateNotice
@@ -168,6 +224,13 @@
     {:else if dayResource.data}
       <DayView day={dayResource.data} kind={selection.kind} />
     {/if}
+
+    {#if hasEntity}
+      <button type="button" class="share" onclick={handleShare}>Поделиться</button>
+      {#if shareNotice}
+        <p class="share-notice" role="status">{shareNotice}</p>
+      {/if}
+    {/if}
   {/if}
 </section>
 
@@ -179,6 +242,29 @@
   h2 {
     font-size: 1.25rem;
     margin: 0 0 0.75rem;
+  }
+
+  .pinned {
+    margin: 0 0 0.5rem;
+    font-size: 0.9rem;
+    opacity: 0.8;
+  }
+
+  .share {
+    margin-top: 0.75rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 0.4rem;
+    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 1rem;
+  }
+
+  .share-notice {
+    margin: 0.35rem 0 0;
+    font-size: 0.85rem;
+    opacity: 0.75;
   }
 
   [role='status'] {

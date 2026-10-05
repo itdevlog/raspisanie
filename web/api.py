@@ -10,6 +10,7 @@ from fastapi import APIRouter, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from config.config import Config, get_timezone
 from config.schools import SCHOOLS_CONFIG
@@ -326,6 +327,68 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
         app.include_router(extra_router)
 
     if os.path.isdir(static_dir):
-        app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')
+        app.mount('/', SPAStaticFiles(directory=static_dir, html=True), name='static')
 
     return app
+
+
+# Префиксы, которые SPA-fallback НЕ должен перехватывать: их 404 обязан быть
+# настоящим 404 (иначе клиент/мониторинг получит HTML от API-пути).
+_SPA_BYPASS_PREFIXES = ('/api', '/internal', '/healthz')
+
+
+def _is_bypass_path(path: str) -> bool:
+    """True для `/api`, `/api/...`, `/healthz`, `/internal/...` (не `/apiary`)."""
+    return any(path == prefix or path.startswith(prefix + '/')
+               for prefix in _SPA_BYPASS_PREFIXES)
+
+# Файловые расширения: явный запрос статики, index.html подставлять нельзя.
+_STATIC_EXTENSIONS = (
+    '.js', '.mjs', '.css', '.map', '.json', '.png', '.jpg', '.jpeg', '.gif',
+    '.svg', '.ico', '.webp', '.woff', '.woff2', '.ttf', '.eot', '.txt', '.webmanifest',
+)
+
+
+class SPAStaticFiles(StaticFiles):
+    """`StaticFiles` с SPA-fallback для клиентских deep-link'ов (W22).
+
+    `StaticFiles(html=True)` отдаёт `index.html` только для `/` и каталогов;
+    прямой deep-link `/s/{school}/{kind}/{name}` получал бы 404, потому что
+    такого файла нет. Здесь на «не найден» отдаём `index.html`, но только если:
+
+    - путь НЕ под ``/api/``/``/internal/``/``/healthz`` (их 404 остаётся
+      честным, а не HTML приложения);
+    - у пути нет файлового расширения (JS/CSS/шрифт — это запрос статики, а не
+      клиентский маршрут);
+    - запрос принимает HTML (навигация браузера, а не fetch за данными).
+
+    Иначе — обычный 404. Существующие файлы обслуживаются как раньше.
+    """
+
+    def _is_spa_candidate(self, path: str, headers: dict[bytes, bytes]) -> bool:
+        if _is_bypass_path(path):
+            return False
+        if path.lower().endswith(_STATIC_EXTENSIONS):
+            return False
+        accept = headers.get(b'accept', b'').decode('latin-1')
+        return 'text/html' in accept or '*/*' in accept
+
+    async def get_response(self, path: str, scope):
+        # Starlette >=0.37 raises HTTPException(404) (does not return a response).
+        try:
+            response = await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            response = None
+        if response is not None and response.status_code != 404:
+            return response
+        # ASGI scope already carries the URL and headers; no Request needed.
+        headers = {k.lower(): v for k, v in scope.get('headers', [])}
+        full_path = scope.get('path', '') or ('/' + path)
+        if not self._is_spa_candidate(full_path, headers):
+            if response is None:
+                raise HTTPException(status_code=404)
+            return response
+        # Serve the SPA shell so the client router can resolve the deep link.
+        return await super().get_response('index.html', scope)

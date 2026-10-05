@@ -8,6 +8,8 @@ import type { ScheduleApiClient } from './lib/api/client';
 import type { DaySchedule, School } from './lib/api/types';
 import { createSelectionStore } from './lib/stores/selection.svelte';
 import { createTodayStore } from './lib/stores/today.svelte';
+import { createRouteStore, type RouteStore } from './lib/stores/route.svelte';
+import type { BrowserEnv } from './lib/platform';
 
 /** Build a day payload with sensible defaults; override any field. */
 export function makeDay(overrides: Partial<DaySchedule> = {}): DaySchedule {
@@ -58,4 +60,71 @@ export function makeSelection() {
 export function makeToday(today = '05.10.2026') {
   const client = makeClient({ getSchools: vi.fn().mockResolvedValue({ today, schools: [] }) });
   return createTodayStore(client, null);
+}
+
+/**
+ * A fake {@link BrowserEnv} for router tests: push/replace update the location,
+ * `back`/`forward` replay entries to a subscribed popstate listener.
+ */
+export function makeFakeEnv(initialPath = '/') {
+  const stack: string[] = [initialPath];
+  let index = 0;
+  let listener: (() => void) | null = null;
+  const location = { pathname: '/', search: '' };
+
+  function sync(url: string) {
+    const [path, search = ''] = url.split('?');
+    location.pathname = path || '/';
+    location.search = search ? `?${search}` : '';
+  }
+  sync(initialPath);
+
+  const env: BrowserEnv = {
+    location,
+    origin: 'https://rasp.example.ru',
+    history: {
+      pushState(_state, _title, url) {
+        stack.splice(index + 1);
+        stack.push(url);
+        index = stack.length - 1;
+        sync(url);
+      },
+      replaceState(_state, _title, url) {
+        stack[index] = url;
+        sync(url);
+      },
+    },
+    addPopStateListener(cb) {
+      listener = cb;
+      return () => {
+        listener = null;
+      };
+    },
+  };
+
+  return {
+    env,
+    location,
+    back() {
+      if (index > 0) {
+        index -= 1;
+        sync(stack[index]);
+        listener?.();
+      }
+    },
+    forward() {
+      if (index < stack.length - 1) {
+        index += 1;
+        sync(stack[index]);
+        listener?.();
+      }
+    },
+  };
+}
+
+/** A router store on top of a fake env, for component tests. */
+export function makeRouter(
+  env: BrowserEnv = makeFakeEnv().env,
+): { router: RouteStore; env: BrowserEnv } {
+  return { router: createRouteStore(env), env };
 }

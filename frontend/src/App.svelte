@@ -1,15 +1,19 @@
 <script lang="ts">
-  // W20: minimal app shell wiring the two screens together.
+  // W22: app shell now driven by the History-API router. The URL mirrors the
+  // W16 share scheme (`/s/{school}/{kind}/{name}?date=…`), so a deep link opens
+  // the right screen and back/forward work. Nav tabs push history entries.
   //
-  // No routing library and no URL routing yet — that is W22 (share links +
-  // history). A thin view toggle keeps W20 self-contained and testable.
+  // A `router` prop is injectable so tests can drive navigation with a fake
+  // browser env; production uses the default `route` store.
   import Home from './routes/Home.svelte';
   import Schedule from './routes/Schedule.svelte';
   import Tools from './routes/Tools.svelte';
   import {
     api as defaultApi,
+    route as defaultRoute,
     selection as defaultSelection,
     serverToday as defaultToday,
+    type RouteStore,
     type ScheduleApiClient,
     type SelectionStore,
     type TodayStore,
@@ -19,11 +23,63 @@
     client?: ScheduleApiClient;
     selection?: SelectionStore;
     today?: TodayStore;
+    router?: RouteStore;
   }
-  let { client = defaultApi, selection = defaultSelection, today = defaultToday }: Props = $props();
+  let {
+    client = defaultApi,
+    selection = defaultSelection,
+    today = defaultToday,
+    router = defaultRoute,
+  }: Props = $props();
 
-  type View = 'home' | 'schedule' | 'tools';
-  let view = $state<View>('home');
+  // Parse the initial location and subscribe to popstate (back/forward).
+  $effect(() => {
+    const unsubscribe = router.start();
+    return unsubscribe;
+  });
+
+  // A schedule deep link carries the selection in the URL: adopt it into the
+  // selection store so the screen opens on the linked class/teacher/room.
+  $effect(() => {
+    const current = router.route;
+    if (current.view === 'schedule' && current.school && current.name) {
+      if (selection.schoolId !== current.school) {
+        selection.selectSchool(current.school);
+      }
+      if (selection.kind !== current.kind || selection.name !== current.name) {
+        selection.selectEntity(current.kind, current.name);
+      }
+    }
+  });
+
+  /**
+   * Open the schedule tab. When an entity is selected, encode it in the URL
+   * (share scheme); otherwise switch to the bare schedule view.
+   */
+  function openSchedule(): void {
+    const school = selection.schoolId;
+    const name = selection.name;
+    const current = router.route;
+    if (school && name) {
+      const next = { view: 'schedule' as const, school, kind: selection.kind, name, date: null };
+      // Avoid pushing a duplicate entry when already showing this entity.
+      if (
+        current.view === 'schedule' &&
+        current.school === school &&
+        current.kind === selection.kind &&
+        current.name === name &&
+        current.date === null
+      ) {
+        return;
+      }
+      router.navigate(next);
+    } else {
+      router.goTo('schedule');
+    }
+  }
+
+  const view = $derived(router.route.view);
+  const pinnedDate = $derived(router.route.view === 'schedule' ? router.route.date : null);
 </script>
 
 <main>
@@ -32,7 +88,7 @@
       type="button"
       class:active={view === 'home'}
       aria-current={view === 'home' ? 'page' : undefined}
-      onclick={() => (view = 'home')}
+      onclick={() => router.goTo('home')}
     >
       Главная
     </button>
@@ -40,7 +96,7 @@
       type="button"
       class:active={view === 'schedule'}
       aria-current={view === 'schedule' ? 'page' : undefined}
-      onclick={() => (view = 'schedule')}
+      onclick={openSchedule}
     >
       Расписание
     </button>
@@ -48,18 +104,18 @@
       type="button"
       class:active={view === 'tools'}
       aria-current={view === 'tools' ? 'page' : undefined}
-      onclick={() => (view = 'tools')}
+      onclick={() => router.goTo('tools')}
     >
       Поиск
     </button>
   </nav>
 
   {#if view === 'home'}
-    <Home {client} {selection} {today} onOpenSchedule={() => (view = 'schedule')} />
+    <Home {client} {selection} {today} onOpenSchedule={openSchedule} />
   {:else if view === 'schedule'}
-    <Schedule {client} {selection} {today} />
+    <Schedule {client} {selection} {today} {pinnedDate} />
   {:else}
-    <Tools {client} {selection} {today} onOpenSchedule={() => (view = 'schedule')} />
+    <Tools {client} {selection} {today} onOpenSchedule={openSchedule} />
   {/if}
 </main>
 

@@ -365,6 +365,85 @@ def test_origin_healthz_unchanged(tmp_path):
     assert TestClient(app).get('/healthz').json() == {'status': 'ok'}
 
 
+# --- W22: SPA-fallback для share/deep-link ---------------------------------
+
+
+def _spa_client(tmp_path, **kwargs) -> TestClient:
+    """Edge со «собранным» index.html и одним реальным ассетом."""
+    static = tmp_path / 'dist'
+    static.mkdir()
+    (static / 'index.html').write_text('<html>SPA shell</html>', encoding='utf-8')
+    (static / 'app.js').write_text('console.log(1)', encoding='utf-8')
+    return _client(_store(tmp_path), static_dir=str(static), **kwargs)
+
+
+def test_spa_fallback_serves_index_for_share_deep_link(tmp_path):
+    """`/s/{school}/{kind}/{name}?date=…` (deep-link W16) отдаёт index.html."""
+    client = _spa_client(tmp_path)
+    r = client.get(
+        '/s/gym1/class/5%D0%90?date=07.09.2026',
+        headers={'Accept': 'text/html'},
+    )
+    assert r.status_code == 200
+    assert 'SPA shell' in r.text
+    assert r.headers['content-type'].startswith('text/html')
+
+
+def test_spa_fallback_serves_index_for_bare_html_navigation(tmp_path):
+    """Любой не-файловый GET с Accept: text/html получает SPA-шелл."""
+    client = _spa_client(tmp_path)
+    assert 'SPA shell' in client.get('/some-client-route', headers={'Accept': 'text/html'}).text
+    assert 'SPA shell' in client.get('/tools', headers={'Accept': '*/*'}).text
+
+
+def test_spa_fallback_does_not_swallow_api(tmp_path):
+    """`/api/...` остаётся честным 404 (JSON), а не HTML приложения."""
+    client = _spa_client(tmp_path)
+    r = client.get('/api/does-not-exist', headers={'Accept': 'text/html'})
+    assert r.status_code == 404
+    assert 'SPA shell' not in r.text
+    # `/api` без слэша — тоже API-префикс.
+    assert client.get('/api', headers={'Accept': 'text/html'}).status_code == 404
+
+
+def test_spa_fallback_treats_apinary_as_client_route(tmp_path):
+    """`/apiary` — не API-путь (проверка границы `/api` vs `/apiary`)."""
+    client = _spa_client(tmp_path)
+    r = client.get('/apiary', headers={'Accept': 'text/html'})
+    assert r.status_code == 200
+    assert 'SPA shell' in r.text
+
+
+def test_spa_fallback_does_not_swallow_internal_or_healthz(tmp_path, monkeypatch):
+    """`/internal/...` и `/healthz` не подменяются index.html."""
+    monkeypatch.setattr('web.edge_ingest.Config', _FakeConfig)
+    client = _spa_client(tmp_path)
+    # healthz — реальный маршрут, отдаёт JSON в любом случае.
+    assert client.get('/healthz').json()['status'] in ('ok', 'stale')
+    # неизвестный ingest-путь — 404, а не SPA.
+    r = client.get('/internal/nope', headers={'Accept': 'text/html'})
+    assert r.status_code == 404
+    assert 'SPA shell' not in r.text
+
+
+def test_spa_fallback_leaves_real_and_missing_files_to_staticfiles(tmp_path):
+    """Существующий файл отдаётся; запрос файлового расширения не подменяется."""
+    client = _spa_client(tmp_path)
+    app_js = client.get('/app.js')
+    assert app_js.status_code == 200
+    assert app_js.text == 'console.log(1)'
+
+    missing = client.get('/missing.js', headers={'Accept': 'text/html'})
+    assert missing.status_code == 404
+    assert 'SPA shell' not in missing.text
+
+
+def test_spa_fallback_skipped_without_static_dir(tmp_path):
+    """Без смонтированной статики deep-link остаётся 404 (нет index.html)."""
+    client = _client(_store(tmp_path), static_dir=str(tmp_path / 'no-such-dist'))
+    assert client.get('/s/gym1/class/5%D0%90', headers={'Accept': 'text/html'}).status_code == 404
+
+
 class _FakeConfig:
     EDGE_INGEST_SECRET = _SECRET
     SNAPSHOT_MAX_BYTES = 1024 * 1024
