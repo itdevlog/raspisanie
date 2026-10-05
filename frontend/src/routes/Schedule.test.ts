@@ -222,4 +222,101 @@ describe('Schedule screen', () => {
       ),
     );
   });
+
+  // W23: push opt-in. The fake push fn receives the selected class + W16 URL.
+  it('enables push for the selected class with the W16 share URL', async () => {
+    const client = makeClient();
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '5А');
+    const pushEnable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+
+    const { getByRole, findByText } = render(Schedule, {
+      props: {
+        client,
+        selection,
+        today: makeToday('05.10.2026'),
+        origin: 'https://rasp.example.ru',
+        pushEnable,
+        pushDisable: vi.fn(),
+        pushSupported: true,
+      },
+    });
+
+    await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+    await fireEvent.click(getByRole('button', { name: 'Включить уведомления' }));
+
+    await waitFor(() =>
+      expect(pushEnable).toHaveBeenCalledWith({
+        schoolId: 'gym1',
+        name: '5А',
+        kind: 'class',
+        url: 'https://rasp.example.ru/s/gym1/class/5%D0%90?date=05.10.2026',
+      }),
+    );
+    expect(await findByText('Выключить уведомления')).toBeTruthy();
+  });
+
+  it('disables push through the injected handler', async () => {
+    const client = makeClient();
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '5А');
+    const pushDisable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+
+    const { getByRole, findByText } = render(Schedule, {
+      props: {
+        client,
+        selection,
+        today: makeToday('05.10.2026'),
+        pushEnable: vi.fn(),
+        pushDisable,
+        // Pretend a subscription already exists so the button offers opt-out.
+        pushInitiallyOn: true,
+        pushSupported: true,
+      },
+    });
+
+    await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+    expect(await findByText('Выключить уведомления')).toBeTruthy();
+    await fireEvent.click(getByRole('button', { name: 'Выключить уведомления' }));
+    await waitFor(() => expect(pushDisable).toHaveBeenCalled());
+  });
+
+  it('does not offer push for teacher/room (MVP class-only)', async () => {
+    const client = makeClient();
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('teacher', 'Иванов И.И.');
+
+    const { queryByRole, getByRole } = render(Schedule, {
+      props: { client, selection, today: makeToday('05.10.2026') },
+    });
+
+    await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+    expect(queryByRole('button', { name: /уведомления/ })).toBeNull();
+    expect(getByRole('button', { name: 'Поделиться' })).toBeTruthy();
+  });
+
+  it('shows the offline indicator when the browser reports offline', async () => {
+    const client = makeClient();
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '5А');
+
+    const { findByText } = render(Schedule, {
+      props: {
+        client,
+        selection,
+        today: makeToday('05.10.2026'),
+        connectivity: {
+          online: false,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        },
+      },
+    });
+
+    expect(await findByText('Нет подключения к сети')).toBeTruthy();
+  });
 });
