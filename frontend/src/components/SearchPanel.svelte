@@ -1,13 +1,15 @@
 <script lang="ts">
-  // W21 search panel: find teachers/rooms by name and open their schedule.
+  // W21 search panel: find classes/teachers/rooms by name and open their schedule.
   //
   // Presentational + local query state only — the debounced network request is
-  // owned by the parent screen, which passes the current `teachers`/`rooms`
-  // results and the load status. Clicking a result raises `onSelect` so the
-  // parent can update the selection store (same navigation as W20).
+  // owned by the parent screen, which passes the current `classes`/`teachers`/
+  // `rooms` results and the load status. Clicking a result raises `onSelect` so
+  // the parent can update the selection store (same navigation as W20).
   import type { ScheduleKind } from '../lib/api/types';
 
   interface Props {
+    /** Matching classes (names). Defaults to none (W37 added classes to `/search`). */
+    classes?: string[];
     /** Matching teachers (names). */
     teachers: string[];
     /** Matching rooms (names). */
@@ -24,6 +26,7 @@
     onSelect: (kind: ScheduleKind, name: string) => void;
   }
   let {
+    classes = [],
     teachers,
     rooms,
     status,
@@ -42,7 +45,11 @@
   }
 
   const isEmpty = $derived(
-    status === 'ready' && hasQuery && teachers.length === 0 && rooms.length === 0,
+    status === 'ready' &&
+      hasQuery &&
+      classes.length === 0 &&
+      teachers.length === 0 &&
+      rooms.length === 0,
   );
 </script>
 
@@ -51,7 +58,7 @@
     <span>Поиск</span>
     <input
       type="search"
-      placeholder="Учитель или кабинет…"
+      placeholder="Класс, учитель или кабинет…"
       autocomplete="off"
       value={query}
       oninput={handleInput}
@@ -65,6 +72,21 @@
   {:else if isEmpty}
     <p class="empty" role="status">Ничего не найдено</p>
   {:else if status === 'ready' && hasQuery}
+    {#if classes.length > 0}
+      <div class="group">
+        <h4>Классы</h4>
+        <ul>
+          {#each classes as className (className)}
+            <li>
+              <button type="button" onclick={() => onSelect('class', className)}>
+                {className}
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
     {#if teachers.length > 0}
       <div class="group">
         <h4>Учителя</h4>

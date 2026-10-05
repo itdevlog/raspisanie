@@ -49,7 +49,7 @@
   const searchResource = createAsync<SearchResponse>(async () => {
     const schoolId = selection.schoolId;
     if (!schoolId || query.trim().length < MIN_QUERY_LENGTH) {
-      return { teachers: [], rooms: [] };
+      return { classes: [], teachers: [], rooms: [] };
     }
     return client.search(schoolId, query.trim());
   });
@@ -113,6 +113,7 @@
     <StateNotice title="Школа не выбрана" detail="Сначала выберите школу на главной." />
   {:else}
     <SearchPanel
+      classes={searchResource.data?.classes ?? []}
       teachers={searchResource.data?.teachers ?? []}
       rooms={searchResource.data?.rooms ?? []}
       status={searchResource.status}

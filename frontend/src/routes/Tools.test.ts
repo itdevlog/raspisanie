@@ -30,6 +30,28 @@ describe('Tools screen (search + free rooms)', () => {
     expect(await findByRole('button', { name: '101' })).toBeTruthy();
   });
 
+  it('renders class search results and opens the class schedule (W37 fix)', async () => {
+    const client = makeClient({
+      search: vi.fn().mockResolvedValue({ classes: ['5А'], teachers: [], rooms: [] }),
+    });
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    const onOpenSchedule = vi.fn();
+
+    const { getByRole, findByRole } = render(Tools, {
+      props: { client, selection, today: makeToday('05.10.2026'), onOpenSchedule },
+    });
+
+    await fireEvent.input(getByRole('searchbox'), { target: { value: '5' } });
+
+    await waitFor(() => expect(client.search).toHaveBeenCalledWith('gym1', '5'));
+    await fireEvent.click(await findByRole('button', { name: '5А' }));
+
+    expect(selection.kind).toBe('class');
+    expect(selection.name).toBe('5А');
+    expect(onOpenSchedule).toHaveBeenCalledTimes(1);
+  });
+
   it('selecting a result persists it and opens the schedule', async () => {
     const client = makeClient({
       search: vi.fn().mockResolvedValue({ teachers: ['Иванов И.И.'], rooms: ['101'] }),
