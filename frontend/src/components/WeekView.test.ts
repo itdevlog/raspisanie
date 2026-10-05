@@ -1,0 +1,25 @@
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/svelte';
+import WeekView from './WeekView.svelte';
+import type { DaySchedule } from '../lib/api/types';
+import { makeDay } from '../test-helpers';
+
+function day(date: string, overrides: Partial<DaySchedule> = {}): DaySchedule {
+  return makeDay({ date, ...overrides });
+}
+
+describe('WeekView', () => {
+  it('renders each day of the week', () => {
+    const week = {
+      days: [
+        day('05.10.2026'),
+        day('06.10.2026', { weekend: true }),
+        day('07.10.2026', { no_period: true }),
+      ],
+    };
+    const { getByText } = render(WeekView, { props: { week, kind: 'class' } });
+    expect(getByText('Понедельник, 05.10.2026')).toBeTruthy();
+    expect(getByText('Выходной')).toBeTruthy();
+    expect(getByText('Нет учебного периода')).toBeTruthy();
+  });
+});

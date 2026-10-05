@@ -76,6 +76,15 @@ export function createSelectionStore(storage?: StorageLike | null) {
     selectEntity(kind: ScheduleKind, name: string): void {
       persist({ schoolId: state.schoolId, kind, name });
     },
+    /**
+     * Select the schedule entity kind, clearing any previously chosen name.
+     *
+     * Switching kind must not carry a name across kinds (a class name is not a
+     * teacher/room name). The chosen school is preserved.
+     */
+    selectKind(kind: ScheduleKind): void {
+      persist({ schoolId: state.schoolId, kind, name: null });
+    },
     /** Clear both school and entity and drop persisted state. */
     clear(): void {
       state = { ...DEFAULT_SELECTION };

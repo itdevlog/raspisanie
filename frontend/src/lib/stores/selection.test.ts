@@ -44,6 +44,17 @@ describe('selection store', () => {
     expect(store.name).toBe('101');
   });
 
+  it('selectKind switches kind and clears the name, preserving the school', () => {
+    const store = createSelectionStore(localStorage);
+    store.selectSchool('gym1');
+    store.selectEntity('class', '5А');
+
+    store.selectKind('teacher');
+
+    expect(store.current).toEqual({ schoolId: 'gym1', kind: 'teacher', name: null });
+    expect(store.isComplete).toBe(false);
+  });
+
   it('clears state and persisted data', () => {
     const store = createSelectionStore(localStorage);
     store.selectSchool('gym1');

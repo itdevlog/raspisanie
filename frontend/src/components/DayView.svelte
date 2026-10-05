@@ -1,0 +1,66 @@
+<script lang="ts">
+  // Renders a single day payload: heading, holiday/weekend/no-period notices,
+  // or the list of lessons.
+  import type { DaySchedule, ScheduleKind } from '../lib/api/types';
+  import { dayState, dayTitle, isCancelled, isExchange } from '../lib/schedule-view';
+  import LessonRow from './LessonRow.svelte';
+  import StateNotice from './StateNotice.svelte';
+
+  interface Props {
+    day: DaySchedule;
+    kind: ScheduleKind;
+  }
+  let { day, kind }: Props = $props();
+
+  const state = $derived(dayState(day));
+  const hasExchanges = $derived(day.lessons.some((lesson) => isExchange(lesson)));
+  const hasCancellations = $derived(day.lessons.some((lesson) => isCancelled(lesson)));
+</script>
+
+<section class="day">
+  <h3>{dayTitle(day)}</h3>
+
+  {#if state === 'vacation'}
+    <StateNotice tone="muted" title="Каникулы" detail="В этот день занятий нет." />
+  {:else if state === 'weekend'}
+    <StateNotice tone="muted" title="Выходной" detail="В этот день занятий нет." />
+  {:else if state === 'no_period'}
+    <StateNotice tone="muted" title="Нет учебного периода" detail="Дата вне учебного периода." />
+  {:else if state === 'empty'}
+    <StateNotice title="Занятий нет" detail="Расписание на этот день пустое." />
+  {:else}
+    {#if hasExchanges}<StateNotice title="Есть замены" detail="Изменения отмечены ниже." />{/if}
+    {#if hasCancellations}<StateNotice
+        tone="error"
+        title="Есть отмены"
+        detail="Отменённые уроки зачёркнуты."
+      />{/if}
+    <ul class="lessons">
+      {#each day.lessons as lesson (lesson.num)}
+        <LessonRow
+          {lesson}
+          showRoom={kind !== 'room'}
+          showTeacher={kind !== 'teacher'}
+          showClass={kind !== 'class'}
+        />
+      {/each}
+    </ul>
+  {/if}
+</section>
+
+<style>
+  .day {
+    margin-bottom: 1rem;
+  }
+
+  h3 {
+    font-size: 1rem;
+    margin: 0 0 0.35rem;
+  }
+
+  .lessons {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+</style>
