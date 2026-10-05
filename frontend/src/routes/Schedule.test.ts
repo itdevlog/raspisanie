@@ -6,6 +6,7 @@ import {
   makeCalendarDay,
   makeClient,
   makeDay,
+  makeFavorites,
   makeSelection,
   makeToday,
 } from '../test-helpers';
@@ -461,6 +462,53 @@ describe('Schedule screen', () => {
       await waitFor(() =>
         expect(client.getCalendar).toHaveBeenCalledWith('gym1', 'class', '5А', 2026, 1),
       );
+    });
+  });
+
+  // W39: favorites for class/teacher/room, persisted per kind.
+  describe('favorites', () => {
+    it('toggles the shown class as a favorite', async () => {
+      const client = makeClient();
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('class', '5А');
+      const favorites = makeFavorites();
+
+      const { getByRole } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), favorites },
+      });
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+
+      const button = getByRole('button', { name: /5А/ });
+      await fireEvent.click(button);
+      expect(favorites.has('gym1', 'class', '5А')).toBe(true);
+
+      await fireEvent.click(button);
+      expect(favorites.has('gym1', 'class', '5А')).toBe(false);
+    });
+
+    it('favorites a teacher and a room under their own kinds', async () => {
+      const client = makeClient();
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('teacher', 'Иванов И.И.');
+      const favorites = makeFavorites();
+
+      const { getByRole } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), favorites },
+      });
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+
+      await fireEvent.click(getByRole('button', { name: /Иванов И\.И\./ }));
+      expect(favorites.has('gym1', 'teacher', 'Иванов И.И.')).toBe(true);
+
+      await fireEvent.click(getByRole('tab', { name: 'Кабинет' }));
+      await waitFor(() => expect(client.getRooms).toHaveBeenCalledWith('gym1'));
+      await fireEvent.change(getByRole('combobox'), { target: { value: '101' } });
+
+      await waitFor(() => expect(selection.name).toBe('101'));
+      await fireEvent.click(getByRole('button', { name: /101/ }));
+      expect(favorites.has('gym1', 'room', '101')).toBe(true);
     });
   });
 });

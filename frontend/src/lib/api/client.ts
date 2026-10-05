@@ -12,6 +12,7 @@ import {
   type ClassesResponse,
   type DaySchedule,
   type FreeRoomsResponse,
+  type NowResponse,
   type RoomsResponse,
   type ScheduleKind,
   type SchoolsResponse,
@@ -94,6 +95,17 @@ export function buildWeekUrl(
   return `${base}?${new URLSearchParams({ offset: String(offset) }).toString()}`;
 }
 
+/** URL for `GET /api/{schoolId}/schedule/{kind}/{name}/now?date=`. */
+export function buildNowUrl(
+  schoolId: string,
+  kind: ScheduleKind,
+  name: string,
+  date?: string,
+): string {
+  const base = `/api/${encodePathSegment(schoolId)}/schedule/${encodePathSegment(kind)}/${encodePathSegment(name)}/now`;
+  return date ? `${base}?${new URLSearchParams({ date }).toString()}` : base;
+}
+
 /** URL for `GET /api/{schoolId}/search?q=`. */
 export function buildSearchUrl(schoolId: string, q: string): string {
   return `/api/${encodePathSegment(schoolId)}/search?${new URLSearchParams({ q }).toString()}`;
@@ -168,6 +180,7 @@ export interface ScheduleApiClient {
   getTeachers(schoolId: string): Promise<TeachersResponse>;
   getRooms(schoolId: string): Promise<RoomsResponse>;
   getDay(schoolId: string, kind: ScheduleKind, name: string, date?: string): Promise<DaySchedule>;
+  getNow(schoolId: string, kind: ScheduleKind, name: string, date?: string): Promise<NowResponse>;
   getWeek(
     schoolId: string,
     kind: ScheduleKind,
@@ -201,6 +214,8 @@ export function createApiClient(fetchImpl: FetchLike = fetch, baseUrl = ''): Sch
       getJson<RoomsResponse>(withBase(buildListUrl(schoolId, 'rooms')), fetchImpl),
     getDay: (schoolId, kind, name, date) =>
       getJson<DaySchedule>(withBase(buildDayUrl(schoolId, kind, name, date)), fetchImpl),
+    getNow: (schoolId, kind, name, date) =>
+      getJson<NowResponse>(withBase(buildNowUrl(schoolId, kind, name, date)), fetchImpl),
     getWeek: (schoolId, kind, name, offset = 0) =>
       getJson<WeekScheduleResponse>(
         withBase(buildWeekUrl(schoolId, kind, name, offset)),

@@ -26,12 +26,12 @@ export interface School {
   name: string;
   /** Whether the edge/origin has schedule data loaded for this school. */
   loaded: boolean;
-  /** W32+ — city name. */
-  city?: string;
-  /** W32+ — human-readable "updated" timestamp (EXPORT_DATE + EXPORT_TIME). */
-  updated?: string;
-  /** W32+ — school homepage URL. */
-  homepage_url?: string;
+  /** W32+ — city name, or `null` when the school has none. */
+  city?: string | null;
+  /** W32+ — human-readable "updated" timestamp (EXPORT_DATE + EXPORT_TIME), or `null`. */
+  updated?: string | null;
+  /** W32+ — school homepage URL, or `null` when the school has none. */
+  homepage_url?: string | null;
   /** W32+ — feature flags gating UI (teachers/classrooms/rooms/homepage). */
   features?: SchoolFeatures;
 }
@@ -154,6 +154,40 @@ export interface SearchResponse {
 /** Response of `GET /api/{school}/free-rooms`. */
 export interface FreeRoomsResponse {
   free_rooms: string[];
+}
+
+/**
+ * One lesson summary returned by `/now` (W36).
+ *
+ * Mirrors the server's `_lesson_summary` exactly: `time` is `start-end` (or a
+ * single bound / empty string), `subject`/`room` are empty strings when absent.
+ */
+export interface LessonSummary {
+  num: number;
+  /** Lesson time as `HH:MM-HH:MM`, or `''`/partial when the server lacks it. */
+  time: string;
+  /** Subject of the first parallel item, or `''`. */
+  subject: string;
+  /** Room of the first parallel item, or `''`. */
+  room: string;
+  /**
+   * For `current` — whole minutes until the lesson ends;
+   * for `next` — whole minutes until the lesson starts.
+   */
+  in_minutes: number;
+}
+
+/**
+ * Response of `GET /api/{school}/schedule/{kind}/{name}/now?date=`.
+ *
+ * `server_time` is an ISO-8601 timestamp with a UTC offset. `current` is the
+ * lesson running at the server time (or `null`); `next` is the first upcoming
+ * lesson (or `null`).
+ */
+export interface NowResponse {
+  server_time: string;
+  current: LessonSummary | null;
+  next: LessonSummary | null;
 }
 
 /** HTTP status carried by an {@link ApiError}. */

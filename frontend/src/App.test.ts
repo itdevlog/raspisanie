@@ -54,6 +54,23 @@ describe('App shell', () => {
     expect(await findByText('Поиск и кабинеты')).toBeTruthy();
   });
 
+  it('opens the free-rooms screen from the home button', async () => {
+    const fake = makeFakeEnv('/');
+    const router = createRouteStore(fake.env);
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+
+    const { findByRole, findByText } = render(App, {
+      props: { client: makeClient(), selection, today: makeToday(), router },
+    });
+    await waitFor(() => expect(router.started).toBe(true));
+
+    await fireEvent.click(await findByRole('button', { name: 'Свободные кабинеты' }));
+
+    expect(await findByText('Поиск и кабинеты')).toBeTruthy();
+    expect(fake.location.pathname).toBe('/tools');
+  });
+
   it('opens a share deep link at the linked entity and date', async () => {
     // W16-shaped link: /s/{school}/class/{encoded name}?date=…
     const fake = makeFakeEnv('/s/gym1/class/5%D0%90?date=07.09.2026');

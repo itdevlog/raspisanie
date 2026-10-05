@@ -17,6 +17,7 @@
     api as defaultApi,
     selection as defaultSelection,
     serverToday as defaultToday,
+    favorites as defaultFavorites,
     createAsync,
     parseRuDate,
     shareSchedule,
@@ -33,6 +34,7 @@
     type CalendarResponse,
     type ConnectivityEnv,
     type DaySchedule,
+    type FavoritesStore,
     type PushResult,
     type ScheduleApiClient,
     type ScheduleKind,
@@ -41,6 +43,7 @@
     type WeekScheduleResponse,
   } from '../lib';
   import EntityPicker from '../components/EntityPicker.svelte';
+  import FavoriteButton from '../components/FavoriteButton.svelte';
   import OpenInTelegram from '../components/OpenInTelegram.svelte';
   import { untrack } from 'svelte';
   import PeriodTabs, { type Period } from '../components/PeriodTabs.svelte';
@@ -53,6 +56,7 @@
     client?: ScheduleApiClient;
     selection?: SelectionStore;
     today?: TodayStore;
+    favorites?: FavoritesStore;
     /** Date pinned by a share link (`DD.MM.YYYY`), or null to use server today. */
     pinnedDate?: string | null;
     /** Raised when a calendar day is opened; the shell can sync the URL. */
@@ -76,6 +80,7 @@
     client = defaultApi,
     selection = defaultSelection,
     today = defaultToday,
+    favorites = defaultFavorites,
     pinnedDate = null,
     onOpenDay,
     origin = typeof window === 'undefined' ? '' : window.location.origin,
@@ -238,6 +243,21 @@
 
   function handleNameChange(name: string) {
     selection.selectEntity(selection.kind, name);
+  }
+
+  // W39: favorite toggle for the shown class/teacher/room.
+  const isFavorite = $derived(
+    selection.schoolId !== null &&
+      selection.name !== null &&
+      favorites.has(selection.schoolId, selection.kind, selection.name),
+  );
+
+  function handleToggleFavorite() {
+    const schoolId = selection.schoolId;
+    const name = selection.name;
+    if (schoolId && name) {
+      favorites.toggle(schoolId, selection.kind, name);
+    }
   }
 
   /** Switching period tabs drops a pinned share date and uses server today. */
@@ -414,6 +434,11 @@
     {/if}
 
     {#if hasEntity}
+      <FavoriteButton
+        active={isFavorite}
+        onToggle={handleToggleFavorite}
+        label={selection.name ?? undefined}
+      />
       <button type="button" class="share" onclick={handleShare}>Поделиться</button>
       <OpenInTelegram target={telegramTarget} />
       {#if shareNotice}

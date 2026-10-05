@@ -13,11 +13,13 @@
     route as defaultRoute,
     selection as defaultSelection,
     serverToday as defaultToday,
+    favorites as defaultFavorites,
     telegramEnv,
     initTelegramWebApp,
     initTelegramBackButton,
     type TelegramEnv,
     type RouteStore,
+    type FavoritesStore,
     type ScheduleApiClient,
     type SelectionStore,
     type TodayStore,
@@ -27,6 +29,7 @@
     client?: ScheduleApiClient;
     selection?: SelectionStore;
     today?: TodayStore;
+    favorites?: FavoritesStore;
     router?: RouteStore;
     /** Injectable Telegram WebApp env (tests); defaults to the real `window.Telegram`. */
     telegram?: TelegramEnv;
@@ -37,6 +40,7 @@
     client = defaultApi,
     selection = defaultSelection,
     today = defaultToday,
+    favorites = defaultFavorites,
     router = defaultRoute,
     telegram = typeof window === 'undefined' ? { webApp: undefined } : telegramEnv(),
     themeTarget = typeof document === 'undefined' ? undefined : document.documentElement,
@@ -148,9 +152,16 @@
   </nav>
 
   {#if view === 'home'}
-    <Home {client} {selection} {today} onOpenSchedule={openSchedule} />
+    <Home
+      {client}
+      {selection}
+      {today}
+      {favorites}
+      onOpenSchedule={openSchedule}
+      onOpenFreeRooms={() => router.goTo('tools')}
+    />
   {:else if view === 'schedule'}
-    <Schedule {client} {selection} {today} {pinnedDate} onOpenDay={openDay} />
+    <Schedule {client} {selection} {today} {favorites} {pinnedDate} onOpenDay={openDay} />
   {:else}
     <Tools {client} {selection} {today} onOpenSchedule={openSchedule} />
   {/if}

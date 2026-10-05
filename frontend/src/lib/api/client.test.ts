@@ -3,6 +3,7 @@ import {
   buildSchoolsUrl,
   buildListUrl,
   buildDayUrl,
+  buildNowUrl,
   buildWeekUrl,
   buildCalendarUrl,
   buildSearchUrl,
@@ -41,6 +42,16 @@ describe('URL building', () => {
     );
     expect(buildDayUrl('gym1', 'room', '101', '05.10.2026')).toBe(
       '/api/gym1/schedule/room/101?date=05.10.2026',
+    );
+  });
+
+  it('builds a now URL with and without a date', () => {
+    expect(buildNowUrl('gym1', 'class', '5А')).toBe('/api/gym1/schedule/class/5%D0%90/now');
+    expect(buildNowUrl('gym1', 'class', '5А', '05.10.2026')).toBe(
+      '/api/gym1/schedule/class/5%D0%90/now?date=05.10.2026',
+    );
+    expect(buildNowUrl('gym1', 'teacher', 'Иванов', '')).toBe(
+      '/api/gym1/schedule/teacher/%D0%98%D0%B2%D0%B0%D0%BD%D0%BE%D0%B2/now',
     );
   });
 
@@ -209,6 +220,26 @@ describe('client requests (mocked fetch)', () => {
       '/api/gym1/schedule/class/5%D0%90/calendar?year=2026&month=10',
       { headers: { Accept: 'application/json' } },
     );
+  });
+
+  it('parses a now payload and requests the date', async () => {
+    const now = {
+      server_time: '2026-10-05T10:00:00+03:00',
+      current: {
+        num: 2,
+        time: '09:00-09:45',
+        subject: 'Физика',
+        room: '202',
+        in_minutes: 20,
+      },
+      next: null,
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(now));
+
+    await expect(client.getNow('gym1', 'class', '5А', '05.10.2026')).resolves.toEqual(now);
+    expect(fetchMock).toHaveBeenCalledWith('/api/gym1/schedule/class/5%D0%90/now?date=05.10.2026', {
+      headers: { Accept: 'application/json' },
+    });
   });
 
   it('parses search and free-rooms payloads', async () => {

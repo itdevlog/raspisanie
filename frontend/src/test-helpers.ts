@@ -10,6 +10,7 @@ import { vi } from 'vitest';
 import type { ScheduleApiClient } from './lib/api/client';
 import type { CalendarDay, CalendarResponse, DaySchedule, School } from './lib/api/types';
 import { createSelectionStore } from './lib/stores/selection.svelte';
+import { createFavoritesStore } from './lib/stores/favorites.svelte';
 import { createTodayStore } from './lib/stores/today.svelte';
 import { createRouteStore, type RouteStore } from './lib/stores/route.svelte';
 import type { BrowserEnv } from './lib/platform';
@@ -66,6 +67,9 @@ export function makeClient(overrides: Partial<ScheduleApiClient> = {}): Schedule
     getTeachers: vi.fn().mockResolvedValue({ teachers: ['Иванов И.И.'] }),
     getRooms: vi.fn().mockResolvedValue({ rooms: ['101', '202'] }),
     getDay: vi.fn().mockResolvedValue(makeDay()),
+    getNow: vi
+      .fn()
+      .mockResolvedValue({ server_time: '2026-10-05T10:00:00+03:00', current: null, next: null }),
     getWeek: vi.fn().mockResolvedValue({ days: [makeDay()] }),
     getCalendar: vi.fn().mockResolvedValue(makeCalendar()),
     search: vi.fn().mockResolvedValue({ teachers: [], rooms: [] }),
@@ -78,6 +82,11 @@ export function makeClient(overrides: Partial<ScheduleApiClient> = {}): Schedule
 /** A selection store backed by an isolated in-memory storage. */
 export function makeSelection() {
   return createSelectionStore(null);
+}
+
+/** A favorites store backed by an isolated in-memory storage. */
+export function makeFavorites() {
+  return createFavoritesStore(null);
 }
 
 /** A today store backed by an isolated storage and a fake client. */
