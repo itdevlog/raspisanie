@@ -63,10 +63,11 @@ async def test_wait_forever_cancelled():
 
 async def test_run_webapp_wires_server(monkeypatch):
     """run_webapp строит uvicorn.Server из create_app(services) и вызывает serve()."""
-    seen: dict[str, Any] = {'served': 0, 'config': None, 'services': None}
+    seen: dict[str, Any] = {'served': 0, 'config': None, 'services': None, 'push_store': None}
 
-    def fake_create_app(services):
+    def fake_create_app(services, *, push_store=None):
         seen['services'] = services
+        seen['push_store'] = push_store
         return 'app-object'
 
     monkeypatch.setattr('web.api.create_app', fake_create_app)
@@ -87,8 +88,10 @@ async def test_run_webapp_wires_server(monkeypatch):
 
     monkeypatch.setattr(server.uvicorn, 'Config', FakeUvicornConfig)
 
+    store = object()
+
     class FakeApplication:
-        bot_data = {'user_service': 'u'}
+        bot_data = {'user_service': 'u', 'push_store': store}
 
     class FakeConfig:
         WEBAPP_HOST = '127.0.0.1'
@@ -100,5 +103,7 @@ async def test_run_webapp_wires_server(monkeypatch):
     assert seen['config'].app == 'app-object'
     assert seen['config'].kwargs['host'] == '127.0.0.1'
     assert seen['config'].kwargs['port'] == 8080
-    assert seen['services']['bot_data'] == {'user_service': 'u'}
+    assert seen['services']['bot_data'] == {'user_service': 'u', 'push_store': store}
     assert isinstance(seen['services']['config'], FakeConfig)
+    # Fix 1: push_store из bot_data доезжает до create_app (origin-маршруты).
+    assert seen['push_store'] is store

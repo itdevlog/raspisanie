@@ -44,11 +44,11 @@ def _headers(body: bytes, *, timestamp: float = _NOW, signature: str | None = No
 
 def _app(store, *, max_bytes: int = _MAX_BYTES) -> FastAPI:
     app = FastAPI()
-    app.include_router(
-        create_ingest_router(
-            store, secret=_SECRET, max_bytes=max_bytes, now_fn=lambda: _NOW
-        )
+    router = create_ingest_router(
+        store, secret=_SECRET, max_bytes=max_bytes, now_fn=lambda: _NOW
     )
+    assert router is not None
+    app.include_router(router)
     return app
 
 
@@ -331,11 +331,11 @@ def test_route_not_subject_to_api_rate_limit(tmp_path):
         window_seconds=60.0,
         static_dir=str(tmp_path / 'no-static'),
     )
-    app.include_router(
-        create_ingest_router(
-            store, secret=_SECRET, max_bytes=_MAX_BYTES, now_fn=lambda: _NOW
-        )
+    _ingest = create_ingest_router(
+        store, secret=_SECRET, max_bytes=_MAX_BYTES, now_fn=lambda: _NOW
     )
+    assert _ingest is not None
+    app.include_router(_ingest)
     client = TestClient(app)
     payload = _payload()
     body = serialize_snapshot(payload)
@@ -347,3 +347,41 @@ def test_route_not_subject_to_api_rate_limit(tmp_path):
     # контроль: публичный маршрут всё ещё под лимитом (сравнение с ingest)
     assert client.get('/api/schools').status_code == 200
     assert client.get('/api/schools').status_code == 429
+
+
+# --- fail-closed при пустом EDGE_INGEST_SECRET ------------------------------
+
+
+def test_empty_secret_returns_no_router():
+    """Пустой секрет → ingest-роутер не создаётся (нечего сверять)."""
+    assert create_ingest_router(_SpyStore(), secret='') is None
+
+
+def test_empty_secret_does_not_accept_forged_signature(tmp_path):
+    """С пустым секретом подпись, посчитанная от пустой строки, не принимается.
+
+    Fail-closed: роутера нет, поэтому даже «правильная» с точки зрения
+    пустого секрета подпись не открывает ingest.
+    """
+    store = SnapshotStore(str(tmp_path / 'snapshot.json'), max_age=7200)
+    router = create_ingest_router(store, secret='', max_bytes=_MAX_BYTES)
+    assert router is None
+
+    # Контроль: попытка собрать приложение с пустым секретом не регистрирует
+    # маршрут → запрос с подписью от пустого секрета получает 404, а данные
+    # остаются нетронутыми.
+    if router is None:
+        app = FastAPI()
+        body = serialize_snapshot(_payload())
+        forged = sign_payload('', body)
+        r = TestClient(app).post(
+            '/internal/snapshot',
+            content=body,
+            headers={
+                'X-Snapshot-Signature': forged,
+                'X-Snapshot-Timestamp': str(int(_NOW)),
+            },
+        )
+        assert r.status_code == 404
+        assert store.schools_data == {}
+        assert not (tmp_path / 'snapshot.json').exists()

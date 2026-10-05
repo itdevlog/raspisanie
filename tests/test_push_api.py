@@ -4,9 +4,9 @@
 Origin принимает `POST /api/push/subscribe` и `POST /api/push/unsubscribe`
 только от edge-прокси, аутентифицированного общим секретом `X-Edge-Auth`
 (сверка `hmac.compare_digest`, несовпадение → 403). Подписка проходит
-валидацию и ложится в реальный `FileDB` через `PushSubscriptionStore`;
-subscribe дополнительно ограничен собственным `RateLimiter`, чтобы
-публичный edge не завалил FileDB мусором.
+валидацию и ложится в реальный `FileDB` через `PushSubscriptionStore`.
+Собственного rate-limit у origin нет: per-client лимит subscribe живёт на
+edge (`/api/` middleware, W8/W17), потому что origin вызывается одним peer IP.
 
 Маршруты регистрируются, только если заданы VAPID-ключи И `EDGE_AUTH_SECRET`;
 иначе их в приложении нет вовсе.
@@ -51,8 +51,6 @@ def _app(
     secret: str = _SECRET,
     vapid_public: str = _VAPID_PUBLIC,
     vapid_private: str = _VAPID_PRIVATE,
-    subscribe_rate_limit: int = 100,
-    window_seconds: float = 60.0,
 ) -> FastAPI:
     app = FastAPI()
     router = create_push_router(
@@ -60,8 +58,6 @@ def _app(
         edge_auth_secret=secret,
         vapid_public_key=vapid_public,
         vapid_private_key=vapid_private,
-        subscribe_rate_limit=subscribe_rate_limit,
-        window_seconds=window_seconds,
     )
     assert router is not None
     app.include_router(router)
@@ -233,62 +229,6 @@ def test_subscribe_non_object_json_rejected_422(tmp_path):
 
     assert r.status_code == 422
     assert store.collection.find() == []
-
-
-# --- rate limit ------------------------------------------------------------
-
-def test_subscribe_rate_limit_returns_429_after_budget(tmp_path):
-    store = _store(tmp_path)
-    client = TestClient(_app(store, subscribe_rate_limit=2, window_seconds=60.0))
-
-    assert client.post('/api/push/subscribe', json=_sub(_ENDPOINT), headers=_auth()).status_code == 200
-    assert client.post('/api/push/subscribe', json=_sub(_ENDPOINT_2), headers=_auth()).status_code == 200
-    r = client.post(
-        '/api/push/subscribe',
-        json=_sub('https://fcm.googleapis.com/fcm/send/ghi789'),
-        headers=_auth(),
-    )
-
-    assert r.status_code == 429
-    # третий запрос не дошёл до store
-    assert [d['endpoint'] for d in store.collection.find()] == [_ENDPOINT, _ENDPOINT_2]
-
-
-def test_unsubscribe_not_rate_limited(tmp_path):
-    store = _store(tmp_path)
-    client = TestClient(_app(store, subscribe_rate_limit=1, window_seconds=60.0))
-
-    assert client.post('/api/push/subscribe', json=_sub(), headers=_auth()).status_code == 200
-    for _ in range(3):
-        assert client.post(
-            '/api/push/unsubscribe', json={'endpoint': _ENDPOINT}, headers=_auth()
-        ).status_code == 200
-
-
-def test_rate_limit_buckets_are_per_client_ip(tmp_path):
-    """Разные реальные клиенты за доверенным прокси не делят bucket."""
-    store = _store(tmp_path)
-    app = FastAPI()
-    router = create_push_router(
-        store,
-        edge_auth_secret=_SECRET,
-        vapid_public_key=_VAPID_PUBLIC,
-        vapid_private_key=_VAPID_PRIVATE,
-        subscribe_rate_limit=1,
-        window_seconds=60.0,
-        trusted_proxies={'testclient'},
-    )
-    assert router is not None
-    app.include_router(router)
-    client = TestClient(app)
-    headers_a = {**_auth(), 'X-Forwarded-For': '203.0.113.5'}
-    headers_b = {**_auth(), 'X-Forwarded-For': '198.51.100.7'}
-
-    assert client.post('/api/push/subscribe', json=_sub(_ENDPOINT), headers=headers_a).status_code == 200
-    assert client.post('/api/push/subscribe', json=_sub(_ENDPOINT_2), headers=headers_a).status_code == 429
-    assert client.post(
-        '/api/push/subscribe', json=_sub('https://fcm.googleapis.com/fcm/send/ghi789'), headers=headers_b
-    ).status_code == 200
 
 
 # --- gating: enabled only with VAPID keys + EDGE_AUTH_SECRET ---------------

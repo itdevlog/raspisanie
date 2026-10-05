@@ -39,6 +39,19 @@ _ENDPOINT = 'https://fcm.googleapis.com/fcm/send/abc123'
 _KEYS = {'p256dh': 'public-key', 'auth': 'auth-secret'}
 
 
+class _FakeConfig:
+    """Config-заглушка для ingest: fail-closed эндпоинт требует непустой секрет."""
+
+    EDGE_INGEST_SECRET = _SECRET
+    SNAPSHOT_MAX_BYTES = 1024 * 1024
+
+
+@pytest.fixture(autouse=True)
+def _default_ingest_secret(monkeypatch):
+    """create_edge_app собирает ingest fail-closed — даём непустой секрет."""
+    monkeypatch.setattr('web.edge_ingest.Config', _FakeConfig)
+
+
 def _sub() -> dict:
     return {
         'endpoint': _ENDPOINT,

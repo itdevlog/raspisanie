@@ -121,6 +121,9 @@ def create_edge_app(store: SnapshotStore, *, static_dir: str | None = None,
     `/healthz` отдаёт возраст/версию/число школ снапшота (W11) — origin этого
     не видит, у него `/healthz` остаётся `{status: ok}`.
 
+    Пустой `EDGE_INGEST_SECRET` — фатальная ошибка конфигурации: поднимаем
+    `RuntimeError`, а не сервер с открытым ingest (fail-closed).
+
     Push-прокси (W17) регистрируется тем же `extra_router`: ingest плюс
     push-роутер (последний включается только при заданных `EDGE_ORIGIN_URL` и
     `EDGE_AUTH_SECRET`).
@@ -134,7 +137,15 @@ def create_edge_app(store: SnapshotStore, *, static_dir: str | None = None,
         static_dir = _built_frontend_dir()
 
     extra = APIRouter()
-    extra.include_router(create_ingest_router(store))
+    ingest_router = create_ingest_router(store)
+    if ingest_router is None:
+        # Fail-closed: без EDGE_INGEST_SECRET ingest был бы открыт для подделки
+        # (Caddy проксирует все пути, `/internal/snapshot` доступен публично).
+        raise RuntimeError(
+            "EDGE_INGEST_SECRET не задан: ingest отключён (fail-closed). "
+            "Задайте секрет в /etc/raspisanie-edge.env и перезапустите edge."
+        )
+    extra.include_router(ingest_router)
     push_router = create_edge_push_router()
     if push_router is not None:
         extra.include_router(push_router)

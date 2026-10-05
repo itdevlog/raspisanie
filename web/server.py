@@ -50,7 +50,7 @@ async def run_webapp(application, config) -> None:
         'config': config,
     }
     server = uvicorn.Server(uvicorn.Config(
-        create_app(services),
+        create_app(services, push_store=application.bot_data.get('push_store')),
         host=config.WEBAPP_HOST,
         port=config.WEBAPP_PORT,
         log_level='warning',

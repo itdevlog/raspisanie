@@ -12,6 +12,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -27,6 +28,22 @@ from web import edge_server
 from web.edge_server import create_edge_app
 
 _SECRET = 'edge-test-secret'
+
+
+class _FakeConfig:
+    """Конфиг ingest с заданным секретом — дефолт для тестов edge-приложения."""
+
+    EDGE_INGEST_SECRET = _SECRET
+    SNAPSHOT_MAX_BYTES = 1024 * 1024
+
+
+@pytest.fixture(autouse=True)
+def _default_ingest_secret(monkeypatch):
+    """Fail-closed ingest требует непустой секрет: по умолчанию он задан.
+
+    Тесты, проверяющие отсутствие/пустоту секрета, переопределяют патч сами.
+    """
+    monkeypatch.setattr('web.edge_ingest.Config', _FakeConfig)
 
 
 def _store(tmp_path) -> SnapshotStore:
@@ -444,6 +461,12 @@ def test_spa_fallback_skipped_without_static_dir(tmp_path):
     assert client.get('/s/gym1/class/5%D0%90', headers={'Accept': 'text/html'}).status_code == 404
 
 
-class _FakeConfig:
-    EDGE_INGEST_SECRET = _SECRET
-    SNAPSHOT_MAX_BYTES = 1024 * 1024
+def test_create_edge_app_rejects_empty_ingest_secret(tmp_path, monkeypatch):
+    """Пустой EDGE_INGEST_SECRET → старт edge падает (fail-closed), не сервер."""
+    class _EmptySecretConfig:
+        EDGE_INGEST_SECRET = ''
+        SNAPSHOT_MAX_BYTES = 1024 * 1024
+
+    monkeypatch.setattr('web.edge_ingest.Config', _EmptySecretConfig)
+    with pytest.raises(RuntimeError, match='EDGE_INGEST_SECRET'):
+        create_edge_app(_store(tmp_path), static_dir=str(tmp_path / 'no-static'))

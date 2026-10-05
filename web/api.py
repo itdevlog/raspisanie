@@ -98,9 +98,7 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
                trusted_proxies: Iterable[str] | None = None,
                health_provider: Callable[[], dict] | None = None,
                extra_router: APIRouter | None = None,
-               push_store: Any = None,
-               push_subscribe_rate_limit: int = 30,
-               push_window_seconds: float = 60.0) -> FastAPI:
+               push_store: Any = None) -> FastAPI:
     app = FastAPI(title="Schedule Bot Mini App API", docs_url=None, redoc_url=None)
 
     # Приоритет: явный параметр → services['schools_config'] (edge) →
@@ -307,16 +305,13 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
 
     # Публичное push-API origin (W15): включается только при заданных VAPID-
     # ключах и EDGE_AUTH_SECRET (иначе create_push_router вернёт None — маршрутов
-    # нет). Регистрируется до статики: mount `/` перехватывает любой путь.
+    # нет). Собственного rate-limit у origin нет: origin вызывается только edge
+    # (один peer IP), а per-client лимит subscribe живёт на edge (W8/W17).
+    # Регистрируется до статики: mount `/` перехватывает любой путь.
     if push_store is not None:
         from web.push_api import create_push_router
 
-        push_router = create_push_router(
-            push_store,
-            subscribe_rate_limit=push_subscribe_rate_limit,
-            window_seconds=push_window_seconds,
-            trusted_proxies=trusted_proxy_hosts,
-        )
+        push_router = create_push_router(push_store)
         if push_router is not None:
             app.include_router(push_router)
 

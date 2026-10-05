@@ -57,12 +57,17 @@ def create_ingest_router(
     secret: str | None = None,
     max_bytes: int | None = None,
     now_fn: Callable[[], float] | None = None,
-) -> APIRouter:
-    """Собирает APIRouter с ingest-маршрутом.
+) -> APIRouter | None:
+    """Собирает APIRouter с ingest-маршрутом или `None`, если секрет не задан.
 
     `store` — любой объект с `apply(payload) -> bool` (обычно `SnapshotStore`).
     `secret`/`max_bytes` по умолчанию берутся из `Config`
     (`EDGE_INGEST_SECRET`/`SNAPSHOT_MAX_BYTES`); `now_fn` инъектируется в тестах.
+
+    Пустой `EDGE_INGEST_SECRET` — fail-closed: без секрета HMAC подпись
+    тривиально подделывается (при reverse-proxy Caddy `/internal/snapshot`
+    доступен из интернета), поэтому роутер не создаётся вовсе. `create_edge_app`
+    трактует `None` как фатальную ошибку конфигурации и не поднимает сервер.
     """
     cfg = Config()
     if secret is None:
@@ -71,6 +76,11 @@ def create_ingest_router(
         max_bytes = cfg.SNAPSHOT_MAX_BYTES
     if now_fn is None:
         now_fn = time.time
+
+    # Пустой секрет — нечего сверять: принять подпись, посчитанную от пустой
+    # строки, означало бы открытый ingest. Не регистрируем маршрут.
+    if not secret:
+        return None
 
     router = APIRouter()
 

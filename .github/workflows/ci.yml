@@ -56,6 +56,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install deps
         run: npm ci
+      - name: Types (svelte-check)
+        run: npm run check
+      - name: Lint (eslint)
+        run: npm run lint
       - name: Tests (vitest)
         run: npm run test
       - name: Build (vite)

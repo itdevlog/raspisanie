@@ -12,9 +12,11 @@ Edge проксирует subscribe/unsubscribe на origin, аутентифи�
 - subscribe валидирует тело и кладёт подписку в `PushSubscriptionStore`
   (`upsert` сам проверяет endpoint/keys/kind; здесь — форма тела и
   school_id/name), unsubscribe удаляет по endpoint;
-- subscribe дополнительно ограничен собственным `RateLimiter` по реальному
-  IP клиента, чтобы публичный edge не мог завалить FileDB мусором;
-  unsubscribe не лимитируется (её задача — чистка);
+- собственного rate-limit здесь НЕТ: origin вызывается только edge-сервером
+  (один peer IP), поэтому локальный лимитер выродился бы в один глобальный
+  bucket на весь сайт. Единственный per-client лимитер subscribe — общий
+  `/api/` middleware edge (`web/api.py`, W8), который применяется и к
+  `/api/push/*` (W17); edge аутентифицируется `X-Edge-Auth`.
 
 Роутер возвращается только когда заданы **и** VAPID-ключи, **и**
 `EDGE_AUTH_SECRET`; иначе `None`, и маршруты в приложение не попадают.
@@ -23,18 +25,15 @@ Edge проксирует subscribe/unsubscribe на origin, аутентифи�
 from __future__ import annotations
 
 import hmac
-from collections.abc import Callable, Iterable
 from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from config.config import Config
-from web.rate_limit import RateLimiter
 
-# Безликие ответы: причина отказа наружу не раскрывается.
+# Безликий ответ: причина отказа наружу не раскрывается.
 _FORBIDDEN_BODY = {'detail': 'Forbidden'}
-_TOO_MANY_BODY = {'detail': 'Слишком много запросов'}
 
 
 def _constant_time_equal(provided: str | None, expected: str) -> bool:
@@ -54,18 +53,12 @@ def create_push_router(
     edge_auth_secret: str | None = None,
     vapid_public_key: str | None = None,
     vapid_private_key: str | None = None,
-    subscribe_rate_limit: int = 30,
-    window_seconds: float = 60.0,
-    trusted_proxies: Iterable[str] = (),
-    client_ip_fn: Callable[[Request], str] | None = None,
 ) -> APIRouter | None:
     """Собирает APIRouter push-API или `None`, если фича не сконфигурирована.
 
     `store` — любой объект с `upsert(...)`/`remove_by_endpoint(...)` (обычно
     `PushSubscriptionStore`). Секрет и VAPID-ключи по умолчанию берутся из
     `Config`; явный пустой `''` означает «выключено» (не откат к Config).
-    `client_ip_fn(request) -> str` инъектируется в тестах; по умолчанию
-    используется тот же резолвер IP, что и в `web/api.py` (W8).
     """
     cfg = Config()
     if edge_auth_secret is None:
@@ -79,15 +72,6 @@ def create_push_router(
     if not (edge_auth_secret and vapid_public_key and vapid_private_key):
         return None
 
-    if client_ip_fn is None:
-        from web.api import _client_ip
-
-        trusted = set(trusted_proxies)
-
-        def client_ip_fn(request: Request) -> str:
-            return _client_ip(request, trusted)
-
-    limiter = RateLimiter(max_requests=subscribe_rate_limit, window_seconds=window_seconds)
     router = APIRouter()
 
     def _authorized(request: Request) -> bool:
@@ -102,12 +86,8 @@ def create_push_router(
 
     @router.post('/api/push/subscribe')
     async def push_subscribe(request: Request):
-        # Аутентификация ДО rate-limit: запрос без секрета не тратит бюджет
-        # реального edge и не может вытеснить его из окна.
         if not _authorized(request):
             return JSONResponse(status_code=403, content=_FORBIDDEN_BODY)
-        if not limiter.allow(f'push-subscribe:{client_ip_fn(request)}'):
-            return JSONResponse(status_code=429, content=_TOO_MANY_BODY)
 
         body = await _json_object(request)
         if body is None:
