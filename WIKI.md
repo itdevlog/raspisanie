@@ -1,20 +1,23 @@
 # 📚 Wiki: Telegram-бот расписания занятий
 
-> Дата создания: 2026-09-10, последнее обновление: 2026-09-11 (после большого рефакторинга)
+> Дата создания: 2026-09-10, последнее обновление: 2026-10-05 (MVP публичного сайта, W1–W31)
 > Назначение: единая точка знаний о проекте. Если что-то здесь не описано — это баг документации, дополняй.
 
 ---
 
 ## 1. Что это за проект
 
-Telegram-бот для просмотра школьного расписания и автоматических уведомлений о заменах.
+Telegram-бот для просмотра школьного расписания и автоматических уведомлений о заменах,
+а также **публичный сайт расписания** (PWA без входа) на отдельном `.ru`-домене.
 
 - **Источник данных**: система расписания [Nikasoft (Ника-Люкс)](https://raspisanie.nikasoft.ru).
 - **Фреймворк**: `python-telegram-bot` v22.8 (асинхронный, `Defaults` + `AIORateLimiter`).
 - **База данных**: локальный JSON-файл (`data/database.json`) через обёртку `FileDB`.
 - **Язык**: Python 3.11+.
 - **Веб / Mini App**: `fastapi` + `uvicorn` (`web/`) в процессе бота.
-- **HTTP**: `httpx` (загрузка данных Nikasoft).
+- **Публичный сайт**: Svelte 5 + Vite PWA (`frontend/`); edge-сервер (`web/edge_server.py`) из снапшота; Caddy + systemd (`deploy/edge/`). Гео-разделение: origin (Германия) публикует снапшот → edge (Москва) отдаёт сайт.
+- **Web Push**: `pywebpush` + VAPID (Service Worker на фронтенде).
+- **HTTP**: `httpx` (загрузка данных Nikasoft, публикация снапшота, прокси push).
 - **Часовой пояс**: `zoneinfo` (stdlib).
 - **Поддерживаемые школы**: МАОУ СОШ №133, МАОУ СОШ №181 (г. Екатеринбург).
 
@@ -109,6 +112,17 @@ Telegram-бот для просмотра школьного расписани�
 | [handlers/schools/school_selection.py](handlers/schools/school_selection.py) | Выбор школы. |
 | [handlers/teachers/teacher_menu.py](handlers/teachers/teacher_menu.py) | Тонкая обёртка над `EntityMenuHandler` (меню и расписание учителей). |
 | [handlers/rooms/room_schedule.py](handlers/rooms/room_schedule.py) | Тонкая обёртка над `EntityMenuHandler` (меню и расписание кабинетов). |
+| [services/snapshot.py](services/snapshot.py) | Снапшот расписания (формат v1): сборка, сериализация, HMAC-подпись, атомарная запись. |
+| [services/snapshot_store.py](services/snapshot_store.py) | Потокобезопасное хранилище снапшота на edge (возраст, stale). |
+| [services/snapshot_exporter.py](services/snapshot_exporter.py) | Публикация снапшота origin → edge (HMAC + timestamp, gzip, ретраи). |
+| [services/push_store.py](services/push_store.py) | Web Push подписки (коллекция `web_push_subscriptions`): upsert, `remove_dead`, `cleanup_stale`. |
+| [services/push_service.py](services/push_service.py) | Отправка Web Push (`pywebpush`, `to_thread`), удаление мёртвых подписок. |
+| [web/edge_server.py](web/edge_server.py) | Edge-приложение из снапшота (`create_edge_app`) и раннер `python -m web.edge_server`. |
+| [web/edge_ingest.py](web/edge_ingest.py) | `POST /internal/snapshot` — приём снапшота (HMAC, timestamp ±300 с, размер, версия). |
+| [web/edge_push.py](web/edge_push.py) | Edge push-proxy: `vapid-public-key` локально, `subscribe`/`unsubscribe` → origin. |
+| [frontend/](frontend/) | Публичный сайт: Svelte 5 + Vite PWA (сборка → `frontend/dist`). |
+| [deploy/edge/](deploy/edge/) | Caddy, systemd, `install.sh`, `edge.env.example`, `README.md`. |
+| [docs/EDGE.md](docs/EDGE.md) | Эксплуатация edge: DNS, NTP, переменные окружения, чек-лист развёртывания. |
 | [logs/](logs/) | Лог-файлы (ротируемые): `bot.log`, `admin.log`, stdout. |
 | [data/](data/) | JSON база и кэш-файлы. |
 | [cache/](cache/) | Зарезервировано; `CACHE_PATH` объявлен в конфиге, но не используется сервисами. |
@@ -439,6 +453,10 @@ ADMIN_LOG_FILE=./logs/admin.log
 
 ### 13.1 Публичный сайт: origin/edge (деплой)
 
+> ✅ **MVP реализован 2026-10-05 (план W1–W31).** Паритет с оригиналом Nikasoft
+> (W32–W41) — запланирован ([roadmap.md](roadmap.md) §4.1). Отметка деплоя:
+> сотрудник и дата — «(указываются при деплое)».
+
 Публичный сайт расписания (без входа) обслуживает отдельный **edge-сервер в
 Москве**; бот с данными и push остаётся на **origin (Германия)**. Origin
 публикует снапшот расписания на edge (`EDGE_INGEST_URL`, HMAC + timestamp), edge
@@ -521,6 +539,8 @@ ADMIN_LOG_FILE=./logs/admin.log
 > - **Инструменты/тесты**: pytest (514 тестов: юнит + интеграционные моки), покрытие 67%, ruff (чистый), mypy (0 ошибок на 141 файле), CI (зелёный, матрица 3.11/3.12/3.13, coverage-порог 60%), `requirements-dev.txt`.
 
 > ✅ **План [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) выполнен 17.09.2026** (T1–T45). Добавлено: починен CI (`conftest`), widget API + HMAC/IDOR/XSS, PWA-иконки, корректные напоминания/дайджесты (замены, переносы, `current_school`), надёжность рассылок (baseline после доставки, тихие часы, атомарные кэши), вынос I/O из event loop, rate limiting, SW-гигиена, валидация конфига, `manage.sh`, FSM/callback UX, дедуп замен per-замена, `JobQueue`, `UserRepository`, `AppConfig`, алертинг админам, офлайн-WebApp.
+
+> ✅ **MVP публичного сайта выполнен 2026-10-05** (план [2026-10-02-public-schedule-site.md](docs/superpowers/plans/2026-10-02-public-schedule-site.md), W1–W31): снапшот origin→edge (HMAC + timestamp), edge-сервер (ingest, публичный read-only API, `/healthz`), Web Push (VAPID), Svelte-PWA (расписание, поиск, свободные кабинеты, share-ссылки, офлайн), `deploy/edge/` (Caddy + systemd) и CI-джоба `frontend`. Паритет с оригиналом Nikasoft (W32–W41) — запланирован ([roadmap.md](roadmap.md) §4.1).
 
 ### 16.1 Открытый техдолг (P2)
 

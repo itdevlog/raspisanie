@@ -1,7 +1,8 @@
 # Публичный сайт расписания — план реализации
 
 **Дата:** 2 октября 2026
-**Статус:** ⏳ запланировано (ни одна задача не начата)
+**Статус:** ✅ MVP (W1–W31) реализован 2026-10-05; ⏳ паритет (W32–W41) — запланировано
+**Деплой:** сотрудник — «(указывается при деплое)», дата — «(указывается при деплое)»
 **Спека:** [docs/superpowers/specs/2026-09-24-public-schedule-site-design.md](../specs/2026-09-24-public-schedule-site-design.md)
 **Стиль:** как T1–T45 в [DEVELOPMENT_PLAN.md](../../../DEVELOPMENT_PLAN.md) — фазы, сквозные ID, файлы и критерии готовности.
 **Нумерация:** `W1…W41` (Website), чтобы не путаться с закрытыми `T1–T45`:
@@ -62,7 +63,7 @@
 
 ## Фаза 1 — Конфиг, снапшот, хранилище (фундамент)
 
-- [ ] **W1. Расширить `AppConfig` edge/snapshot/push-полями.** Добавить в `AppConfig.from_env()`
+- [x] **W1. Расширить `AppConfig` edge/snapshot/push-полями.** Добавить в `AppConfig.from_env()`
   и фасад `Config` (UPPER_CASE): `EDGE_HOST` (127.0.0.1), `EDGE_PORT` (8090),
   `SNAPSHOT_PATH` (./data/snapshot.json), `SNAPSHOT_MAX_AGE` (7200),
   `SNAPSHOT_MAX_BYTES` (20 MiB, положительный int), `SNAPSHOT_MAX_RETRIES` (3, ≥1 —
@@ -74,7 +75,7 @@
   В `.env.example` пометить edge-only поля.
   *Файлы: config/config.py, .env.example, tests/test_app_config.py, tests/test_config_validation.py.*
 
-- [ ] **W2. Модуль снапшота `services/snapshot.py`.** Формат v1
+- [x] **W2. Модуль снапшота `services/snapshot.py`.** Формат v1
   `{version, generated_at, schools, schools_config}` с константой `SNAPSHOT_VERSION = 1`;
   функции `build_snapshot(schools_data, schools_config, now=None)` (проставляет `version`),
   `serialize_snapshot(snapshot) -> bytes` (компактный UTF-8, `ensure_ascii=False`),
@@ -86,7 +87,7 @@
   не публикуются (W4) и отвергаются на edge (W9).
   *Файлы: services/snapshot.py, tests/test_snapshot_format.py.*
 
-- [ ] **W3. Хранилище снапшота на edge `services/snapshot_store.py`.** Класс
+- [x] **W3. Хранилище снапшота на edge `services/snapshot_store.py`.** Класс
   `SnapshotStore(path, max_age)`: `load()` со старта, `apply(payload)` под `threading.RLock`
   (применяет только `version == SNAPSHOT_VERSION`, иначе не подменяет данные),
   `schools_data`, `schools_config`, `generated_at`, `version`, `age_seconds()`, `is_stale`.
@@ -95,7 +96,7 @@
 
 ## Фаза 2 — Экспорт снапшота на origin
 
-- [ ] **W4. `services/snapshot_exporter.py` — публикация на edge.** `httpx.Client` POST на
+- [x] **W4. `services/snapshot_exporter.py` — публикация на edge.** `httpx.Client` POST на
   `EDGE_INGEST_URL` с заголовками `X-Snapshot-Signature` (HMAC-SHA256 сырого тела, hex) и
   `X-Snapshot-Timestamp` (unix seconds). Тело — `serialize_snapshot`; если размер превышает
   `SNAPSHOT_MAX_BYTES` — не публиковать, залогировать и вернуть `False`; большие тела сжимать
@@ -104,7 +105,7 @@
   `snapshot_published` / `snapshot_publish_errors`. *Файлы: services/snapshot_exporter.py,
   tests/test_snapshot_export.py.*
 
-- [ ] **W5. Публикация в `BackgroundUpdater`.** Вызвать экспортёр в `_perform_update`
+- [x] **W5. Публикация в `BackgroundUpdater`.** Вызвать экспортёр в `_perform_update`
   **после выхода из `async with self._update_lock`** (у `_perform_update_locked` нет
   возвращаемого признака успеха) и **только если** `new_schools_data` непустой; свежие
   `schools_data` + `schools_config` берутся из `bot_data`. Синхронный `publish` вызывать
@@ -112,21 +113,21 @@
   цикл обновления; повторяющиеся сбои — через существующий `_alert_repeated_error` (антиспам).
   *Файлы: core/background_updater.py, tests/test_background_updater_snapshot.py.*
 
-- [ ] **W6. Публикация при старте и регистрация сервисов.** В `setup_services()` создать
+- [x] **W6. Публикация при старте и регистрация сервисов.** В `setup_services()` создать
   `SnapshotExporter` (по `Config`) и положить в `bot_data`; в `_post_init` опубликовать
   снапшот после первичной загрузки `schools_data` (она синхронна и идёт до event loop —
   `load_schools_data()`), вызовом через `asyncio.to_thread`, чтобы не блокировать loop.
   Если `EDGE_INGEST_URL` пуст — сервис выключен, в логи info.
   *Файлы: bot.py, tests/test_startup_snapshot.py.*
 
-- [ ] **W7. Ручное обновление админа тоже публикует снапшот.** После успешного
+- [x] **W7. Ручное обновление админа тоже публикует снапшот.** После успешного
   admin-refresh (существующий flow) вызвать `snapshot_exporter.publish(...)`, чтобы
   ручная правка сразу доезжала до edge. *Файлы: handlers/callbacks/admin_callbacks.py,
   tests/test_admin_refresh_invalidation.py.*
 
 ## Фаза 3 — Edge-сервер (ingest + публичный API)
 
-- [ ] **W8. Переиспользовать `create_app` на edge.** Параметризовать `create_app`:
+- [x] **W8. Переиспользовать `create_app` на edge.** Параметризовать `create_app`:
   `schools_config` из `services` (fallback на импорт `SCHOOLS_CONFIG`), `static_dir`
   (default `web/static`), флаг `enable_telegram_routes` (для edge — off: без `/api/me`,
   `/api/widget`), health-провайдер для доп. полей. **Rate-limit должен группировать по
@@ -136,7 +137,7 @@
   *Файлы: web/api.py, web/rate_limit.py (при необходимости), tests/test_webapp_api.py,
   tests/test_rate_limit.py.*
 
-- [ ] **W9. Ingest-эндпоинт `POST /internal/snapshot`.** Отдельный роутер
+- [x] **W9. Ingest-эндпоинт `POST /internal/snapshot`.** Отдельный роутер
   `web/edge_ingest.py`: читает сырое тело (с декомпрессией gzip), проверяет размер
   (`SNAPSHOT_MAX_BYTES` → `413`), `X-Snapshot-Signature` (`hmac.compare_digest`),
   `X-Snapshot-Timestamp` (±300 с) и `version == SNAPSHOT_VERSION`; при ошибке —
@@ -144,13 +145,13 @@
   ответ `{ok: true}`. Роутер вне rate-limit middleware (тот смотрит только `/api/`).
   *Файлы: web/edge_ingest.py, tests/test_edge_ingest.py.*
 
-- [ ] **W10. Edge-приложение и раннер `web/edge_server.py`.** `create_edge_app(store)` =
+- [x] **W10. Edge-приложение и раннер `web/edge_server.py`.** `create_edge_app(store)` =
   `create_app` c `schools_config` из снапшота, `enable_telegram_routes=False`, статика
   собранного фронтенда; ingest-роутер; `GET /api/schools` берёт активные школы из
   `schools_config` снапшота. `python -m web.edge_server` поднимает uvicorn на
   `EDGE_HOST:EDGE_PORT`. *Файлы: web/edge_server.py, tests/test_edge_app.py.*
 
-- [ ] **W11. `/healthz` с возрастом снапшота.** На edge `GET /healthz` →
+- [x] **W11. `/healthz` с возрастом снапшота.** На edge `GET /healthz` →
   `{status, snapshot_age_seconds, generated_at, version, schools_count}`; `status` =
   `ok`/`stale` по `SNAPSHOT_MAX_AGE`. Origin **не видит** возраст на edge, поэтому алертит
   админов при **провале публикации** (W4/W5); edge-порог — информативный (мониторинг/UI).
@@ -158,7 +159,7 @@
 
 ## Фаза 4 — Web Push (backend origin)
 
-- [ ] **W12. Хранилище подписок `services/push_store.py`.** Коллекция FileDB
+- [x] **W12. Хранилище подписок `services/push_store.py`.** Коллекция FileDB
   `web_push_subscriptions` (`endpoint` уникален, `keys`, `school_id`, `kind`, `name`,
   `created_at`): `upsert` (по `endpoint` через `update_one(..., upsert=True)`),
   `remove_by_endpoint`, `find_matching(school_id, kind, name)`,
@@ -167,19 +168,19 @@
   MVP создаёт только `kind='class'` (фронтенд предлагает opt-in класса); `kind`/`name`
   оставлены под будущие entity-подписки. *Файлы: services/push_store.py, tests/test_push_store.py.*
 
-- [ ] **W13. `services/push_service.py` — отправка.** Читает VAPID из конфига;
+- [x] **W13. `services/push_service.py` — отправка.** Читает VAPID из конфига;
   `send_exchange_notifications(subscriptions, title, body, url)` через `pywebpush.webpush`
   в `asyncio.to_thread`; ответы `404/410` удаляют мёртвую подписку; payload
   `{title, body, url}`. Ключи для ECE — `pywebpush` + `cryptography` в `requirements.txt`.
   *Файлы: services/push_service.py, requirements.txt, tests/test_push_service.py.*
 
-- [ ] **W14. Генерация VAPID-пары.** Модуль/CLI
+- [x] **W14. Генерация VAPID-пары.** Модуль/CLI
   (`python -m services.push_keys`) печатает `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`
   (base64url, P-256) и безопасно подсказывает записать их в `.env`; опциональная
   команда `./manage.sh vapid`. *Файлы: services/push_keys.py, manage.sh,
   tests/test_push_keys.py.*
 
-- [ ] **W15. Публичное push-API origin.** `POST /api/push/subscribe` и
+- [x] **W15. Публичное push-API origin.** `POST /api/push/subscribe` и
   `POST /api/push/unsubscribe`, защищены `X-Edge-Auth` (`compare_digest`); при
   несовпадении — `403`. Валидация подписки; включены, только если заданы VAPID-ключи и
   `EDGE_AUTH_SECRET`. Дополнительно ограничить частоту subscribe (переиспользовать
@@ -187,7 +188,7 @@
   `/api/push/vapid-public-key` на origin не обязателен (публичный — на edge).
   *Файлы: web/push_api.py, web/api.py, tests/test_push_api.py.*
 
-- [ ] **W16. Отправка push при заменах.** В `BackgroundUpdater._check_exchange_updates`
+- [x] **W16. Отправка push при заменах.** В `BackgroundUpdater._check_exchange_updates`
   после Telegram-рассылки вызвать push для подписок класса-источника замен
   (`find_matching(school_id, 'class', class_name)`); URL ведёт на share-страницу класса.
   Entity-push (teacher/room) в MVP не рассылаем — фронтенд таких подписок не создаёт
@@ -196,7 +197,7 @@
 
 ## Фаза 5 — Edge push-proxy
 
-- [ ] **W17. Push-маршруты на edge.** `GET /api/push/vapid-public-key` отдаёт локально
+- [x] **W17. Push-маршруты на edge.** `GET /api/push/vapid-public-key` отдаёт локально
   `VAPID_PUBLIC_KEY`; `POST /api/push/subscribe|unsubscribe` проксирует на
   `EDGE_ORIGIN_URL` с заголовком `X-Edge-Auth` через `httpx`, пробрасывая статус/тело.
   Ограничение на размер тела и таймаут; маршруты под общим `/api/` rate-limit
@@ -205,53 +206,53 @@
 
 ## Фаза 6 — Фронтенд Svelte PWA
 
-- [ ] **W18. Каркас Svelte 5 + Vite + TS.** Каталог `frontend/`, сборка в `frontend/dist`
+- [x] **W18. Каркас Svelte 5 + Vite + TS.** Каталог `frontend/`, сборка в `frontend/dist`
   (потребляется edge), `package.json` (`dev`/`build`/`test`), tsconfig, линт/формат;
   `node_modules/`/`dist/` в `.gitignore`. *Файлы: frontend/**, .gitignore.*
 
-- [ ] **W19. API-клиент и stores.** Типизированный клиент публичных маршрутов
+- [x] **W19. API-клиент и stores.** Типизированный клиент публичных маршрутов
   (`/api/schools`, `/classes|teachers|rooms`, `/schedule/...`, `/search`, `/free-rooms`),
   store выбранной школы/класса в `localStorage`, TZ-корректное «сегодня» (по серверу).
   *Файлы: frontend/src/lib/**, tests (vitest).*
 
-- [ ] **W20. Экраны расписания.** Главная (выбор школы, «сегодня» для сохранённого
+- [x] **W20. Экраны расписания.** Главная (выбор школы, «сегодня» для сохранённого
   класса); расписание: сегодня/завтра/неделя, вкладки класс/учитель/кабинет, подсветка
   замен и отмен, каникулы/переносы. *Файлы: frontend/src/routes/**, tests.*
 
-- [ ] **W21. Поиск и свободные кабинеты.** Поиск учителей/кабинетов и «свободные
+- [x] **W21. Поиск и свободные кабинеты.** Поиск учителей/кабинетов и «свободные
   кабинеты» без `window.prompt` (inline-выбор урока), как в Mini App. *Файлы:
   frontend/src/**, tests.*
 
-- [ ] **W22. Share-ссылки и маршрутизация.** `/s/{school}/{kind}/{name}?date=…`
+- [x] **W22. Share-ссылки и маршрутизация.** `/s/{school}/{kind}/{name}?date=…`
   открывает нужный экран; history + SPA-fallback на edge (см. W26). *Файлы:
   frontend/src/**, deploy/edge/Caddyfile.*
 
-- [ ] **W23. PWA: push opt-in, офлайн, SW.** Кнопка «Включить уведомления» → permission →
+- [x] **W23. PWA: push opt-in, офлайн, SW.** Кнопка «Включить уведомления» → permission →
   `pushManager.subscribe` (ключ с `/api/push/vapid-public-key`) → POST на edge; офлайн-
   индикатор и TTL-кэш расписания (логику `web/static/service-worker.js` переиспользовать);
   manifest + иконки. *Файлы: frontend/**, frontend/public/**.*
 
-- [ ] **W24. Telegram-интеграция.** Определять Telegram WebApp, учитывать тему/BackButton
+- [x] **W24. Telegram-интеграция.** Определять Telegram WebApp, учитывать тему/BackButton
   при наличии SDK; «Открыть в Telegram» — deep link `t.me/<bot>?start=…`; в обычном
   браузере всё работает без SDK. *Файлы: frontend/src/**, tests.*
 
-- [ ] **W25. Тесты фронтенда.** vitest для stores/утилит/API-клиента; `npm run build` как
+- [x] **W25. Тесты фронтенда.** vitest для stores/утилит/API-клиента; `npm run build` как
   обязательная проверка. *Файлы: frontend/**, package.json.*
 
 ## Фаза 7 — Деплой edge
 
-- [ ] **W26. `deploy/edge/`.** `Caddyfile` (домен `.ru`, авто-TLS, `try_files`/SPA-fallback,
+- [x] **W26. `deploy/edge/`.** `Caddyfile` (домен `.ru`, авто-TLS, `try_files`/SPA-fallback,
   прокси на `127.0.0.1:EDGE_PORT`, статика `frontend/dist`), systemd-юнит,
   `install.sh` (Caddy, venv, **установка Node 20 LTS**, если его нет — nodesource/nvm, либо
   доставка собранного `frontend/dist` из CI; затем `npm ci && npm run build`, каталог
   снапшота, сервис). Без этого шага сборка на чистом Debian-хосте не пройдёт.
   *Файлы: deploy/edge/**.*
 
-- [ ] **W27. Команда `./manage.sh edge`.** Делегирует в `deploy/edge/install.sh`,
+- [x] **W27. Команда `./manage.sh edge`.** Делегирует в `deploy/edge/install.sh`,
   добавляется в `cmd_help` и `doctor` (подсказка для edge-хоста); проходит `shellcheck`.
   *Файлы: manage.sh, tests (shellcheck в CI).*
 
-- [ ] **W28. DNS/`.env`/окружения.** Документировать A-запись `.ru` → московский сервер
+- [x] **W28. DNS/`.env`/окружения.** Документировать A-запись `.ru` → московский сервер
   (+ NTP на обоих хостах — от него зависит допуск ±300 с), origin-переменные (VAPID,
   `EDGE_INGEST_*`, `EDGE_AUTH_SECRET`, `WEBAPP_URL` → `.ru`, `SNAPSHOT_MAX_RETRIES`) и
   edge-переменные (`EDGE_*`, `SNAPSHOT_PATH`, `SNAPSHOT_MAX_AGE`, `SNAPSHOT_MAX_BYTES`,
@@ -260,17 +261,17 @@
 
 ## Фаза 8 — Документация и CI
 
-- [ ] **W29. CI: frontend-джоба.** Отдельный job `frontend` (`actions/setup-node` 20,
+- [x] **W29. CI: frontend-джоба.** Отдельный job `frontend` (`actions/setup-node` 20,
   `npm ci`, `npm run test`, `npm run build`) рядом с backend; backend-матрица не меняется.
   Кэш npm. *Файлы: .github/workflows/ci.yml.*
 
-- [ ] **W30. End-to-end тест контракта origin→edge.** Прогнать `build_snapshot` →
+- [x] **W30. End-to-end тест контракта origin→edge.** Прогнать `build_snapshot` →
   HMAC → ingest (через `TestClient`/мок httpx) → отдача расписания edge-приложением;
   проверить отклонение просроченного timestamp, битой подписи, неподдерживаемого `version`
   и тела сверх `SNAPSHOT_MAX_BYTES`, а также приём gzip. *Файлы:
   tests/test_snapshot_e2e.py.*
 
-- [ ] **W31. Документация и статусы.** Обновить `WIKI.md`, `README.md`, `CHANGELOG.md`,
+- [x] **W31. Документация и статусы.** Обновить `WIKI.md`, `README.md`, `CHANGELOG.md`,
   `roadmap.md`; проставить статус спеки и плана; отметить сотрудника/дату деплоя.
   *Файлы: WIKI.md, README.md, CHANGELOG.md, roadmap.md.*
 
@@ -348,16 +349,16 @@
 
 ## Порядок работ (соответствие спеке §12)
 
-1. Спека и план — ✅ спека, ⏳ этот план.
-2. W1–W3 — конфиг и снапшот.
-3. W4–W7 — экспорт снапшота на origin.
-4. W8–W11 — edge-сервер (ingest + API).
-5. W12–W16 — Web Push backend.
-6. W17 — push-proxy на edge.
-7. W18–W25 — фронтенд Svelte PWA.
-8. W26–W28 — деплой `deploy/edge/`.
-9. W29–W31 — CI и документация.
-10. W32–W41 — паритет с оригиналом Nikasoft (опционально, после MVP).
+1. Спека и план — ✅ спека утверждена, ✅ этот план (MVP W1–W31 закрыт 2026-10-05).
+2. ✅ W1–W3 — конфиг и снапшот.
+3. ✅ W4–W7 — экспорт снапшота на origin.
+4. ✅ W8–W11 — edge-сервер (ingest + API).
+5. ✅ W12–W16 — Web Push backend.
+6. ✅ W17 — push-proxy на edge.
+7. ✅ W18–W25 — фронтенд Svelte PWA.
+8. ✅ W26–W28 — деплой `deploy/edge/`.
+9. ✅ W29–W31 — CI и документация.
+10. ⏳ W32–W41 — паритет с оригиналом Nikasoft (опционально, после MVP).
 
 ## Границы работы
 

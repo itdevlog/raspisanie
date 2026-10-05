@@ -2,7 +2,7 @@
 
 > Всё исправленное убрано отсюда и перенесено в [CHANGELOG.md](CHANGELOG.md).
 
-> 🌐 **Публичный сайт расписания (основная оставшаяся работа).** Спека — [docs/superpowers/specs/2026-09-24-public-schedule-site-design.md](docs/superpowers/specs/2026-09-24-public-schedule-site-design.md); план реализации (W1–W41: базовый MVP W1–W31 + паритет с оригиналом Nikasoft W32–W41) — [docs/superpowers/plans/2026-10-02-public-schedule-site.md](docs/superpowers/plans/2026-10-02-public-schedule-site.md). Ни одна задача ещё не начата.
+> ✅ **Публичный сайт расписания — MVP готов (W1–W31, 2026-10-05).** Спека — [docs/superpowers/specs/2026-09-24-public-schedule-site-design.md](docs/superpowers/specs/2026-09-24-public-schedule-site-design.md); план реализации (W1–W41) — [docs/superpowers/plans/2026-10-02-public-schedule-site.md](docs/superpowers/plans/2026-10-02-public-schedule-site.md). Реализованы снапшот origin→edge (HMAC + timestamp), edge-сервер (ingest, публичный read-only API, `/healthz`), Web Push, Svelte-PWA, `deploy/edge/` и CI. Осталась **фаза 9 — паритет с оригиналом Nikasoft (W32–W41)** (календарь месяца, смена/группы/метод-час, поиск классов и т.п.). Документация — [WIKI.md](WIKI.md) §13.1, [docs/EDGE.md](docs/EDGE.md), [deploy/edge/README.md](deploy/edge/README.md).
 
 > ✅ **17.09 (полное выполнение [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md), 31 коммит `e8bf2a9..44ffc37`):** закрыты все существенные пункты T1–T45. CI впервые зелёный (ранее 23/23 красных); 514 тестов, покрытие 67%, ruff/mypy чистые. Ключевое: CI (`conftest`), widget API + HMAC/IDOR + XSS, PWA-иконки, напоминания/дайджесты с заменами и переносами, надёжность рассылок (baseline после доставки, тихие часы, атомарные кэши), вынос I/O из event loop, rate limiting, SW-гигиена, валидация конфига, `manage.sh`, FSM/callback UX, дедуп замен per-замена, `JobQueue`, `UserRepository`, `AppConfig`, алертинг админам, офлайн-WebApp. **Единственный parked — T42** (`FileDB` deferred-write/SQLite). Действия при деплое: `pip install -r requirements.txt` (apscheduler) и правка живого `.env`. Подробности — в [CHANGELOG.md](CHANGELOG.md).
 
@@ -72,6 +72,25 @@
 7. **Структура handlers** — builders клавиатур вынести в `handlers/keyboards.py`; зависимости прокидывать одним `Services`-объектом вместо повторов `context.bot_data.get(...)`.
 
 > Осталось из архитектурных: переход на `ConversationHandler` (§2), единый `render.py`/`HTML` (§4), `keyboards.py` + `Services`-объект (§7), инъекция часов (clock).
+
+---
+
+## 4.1. 🌐 Публичный сайт — паритет с оригиналом Nikasoft (W32–W41)
+
+MVP публичного сайта (W1–W31) реализован 2026-10-05 — см. план
+[docs/superpowers/plans/2026-10-02-public-schedule-site.md](docs/superpowers/plans/2026-10-02-public-schedule-site.md)
+и [CHANGELOG.md](CHANGELOG.md). Осталась **фаза 9** плана (не начата):
+
+- **W32.** Типы и метаданные школы (`SchoolData`, `city`/`updated`/`homepage_url`/`features` в `/api/schools`).
+- **W33.** День: смена, учебный период, группы, метод-час (payload `get_day`).
+- **W34.** Неделя Пн–Сб по `WEEKDAYNUM` (Telegram-формат не трогаем).
+- **W35.** Календарь месяца (API `…/calendar`).
+- **W36.** Текущий/следующий урок (публичный API `…/now`).
+- **W37.** Поиск классов (route `/search` + `classes`).
+- **W38–W40.** Фронтенд: календарь месяца, главная/избранное, смена/группы/метод-час.
+- **W41.** Паритет: e2e на реальном снапшоте `school_133` + документация.
+
+Телеграм-формат сообщений и поведение бота при паритете **не меняются** (только публичный API/фронтенд).
 
 ---
 

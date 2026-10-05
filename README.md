@@ -3,7 +3,7 @@
 [![CI](https://github.com/itdevlog/raspisanie/actions/workflows/ci.yml/badge.svg)](https://github.com/itdevlog/raspisanie/actions/workflows/ci.yml)
 ![coverage](https://img.shields.io/badge/coverage-61%25-yellowgreen)
 
-Современный асинхронный Telegram-бот для просмотра расписания и автоматических уведомлений о заменах. Работает на **python-telegram-bot v22.8**, тянет данные из системы **Nikasoft (Ника-Люкс)**, отслеживает изменения в реальном времени и присылает push-уведомления подписанным пользователям. Дополнительно поднимает **Mini App** — веб-версию расписания (FastAPI + Telegram WebApp).
+Современный асинхронный Telegram-бот для просмотра расписания и автоматических уведомлений о заменах. Работает на **python-telegram-bot v22.8**, тянет данные из системы **Nikasoft (Ника-Люкс)**, отслеживает изменения в реальном времени и присылает push-уведомления подписанным пользователям. Дополнительно поднимает **Mini App** — веб-версию расписания (FastAPI + Telegram WebApp) и **публичный сайт расписания** (Svelte PWA на отдельном `.ru`-домене, гео-разделение origin→edge, Web Push).
 
 Поддерживает **несколько школ**, кэширование, локальную JSON-БД, фоновое обновление, **веб-расписание** и полноценный админ-панель с интерактивными кнопками.
 
@@ -27,6 +27,7 @@
 - 👑 **Админ-панель** — статус школ, принудительное обновление, статистика пользователей, `/check_exchanges`.
 - 📊 **Мониторинг статуса** — команда `/status` показывает актуальность данных по каждой школе (иконка ✅/⚠️/🔴 «Устарело»).
 - 🌐 **Mini App — веб-версия расписания (Telegram Web App)** — FastAPI-сервер в процессе бота: расписание классов/преподавателей/кабинетов, свободные кабинеты, поиск; вход по подписи `initData`.
+- 🚀 **Публичный сайт расписания (Svelte PWA)** — без входа, на отдельном `.ru`-домене: расписание, поиск, свободные кабинеты, share-ссылки `/s/…`, офлайн-режим и **Web Push** о заменах; мобильное PWA с установкой на домашний экран.
 - 🔍 **Умный поиск** — учителя/кабинеты по имени с пагинацией, кнопками «Обновить»/«Отмена».
 - 📋 **CopyTextButton** — кнопка «Скопировать» к расписанию на день (до 256 символов).
 - 🔄 **Inline-режим** — `@bot 9а` в любом чате отдаёт расписание (включается через @BotFather `/setinline`).
@@ -42,6 +43,8 @@
 | Фреймворк | [python-telegram-bot v22.8](https://github.com/python-telegram-bot/python-telegram-bot) (async API, `Application.builder()`, `Defaults`, `AIORateLimiter`) |
 | HTTP/парсинг | `httpx` (загрузка JS-файлов Nikasoft, `data_loader`), `re` |
 | Веб / Mini App | `fastapi` + `uvicorn` (Telegram WebApp, REST API, `/healthz`) |
+| Публичный сайт | Svelte 5 + Vite + TypeScript (PWA); edge-сервер FastAPI из снапшота; Caddy (авто-TLS) + systemd |
+| Web Push | `pywebpush` + `cryptography` (VAPID), Service Worker |
 | БД | Локальная JSON-БД `FileDB` (потокобезопасная, атомарная и долговечная запись: `fsync` + `.bak`) |
 | Часовой пояс | `zoneinfo` (stdlib) / `TIMEZONE` (`.env`, по умолчанию `Asia/Yekaterinburg` = UTC+5) |
 | Конфигурация | `python-dotenv` |
@@ -73,12 +76,17 @@ raspisanie/
 │   ├── common/messaging.py      # Нарезка ≤4096, safe-edit, логи ошибок
 │   └── common/requires_school.py# Декоратор @requires_school
 ├── services/                    # Бизнес-логика (расписание, замены, уведомления)
-├── web/                         # Mini App: FastAPI API, HMAC-авторизация, статика
-│   ├── api.py                   # /api/* и /healthz
+├── web/                         # Mini App + edge: FastAPI API, HMAC-авторизация, статика
+│   ├── api.py                   # /api/* и /healthz (общий create_app для origin и edge)
 │   ├── auth.py                  # валидация initData (Telegram WebApp)
 │   ├── server.py                # uvicorn в общем event loop бота
-│   └── static/                  # фронтенд (vanilla JS + Telegram WebApp SDK)
-├── data/                        # database.json, exchange_cache.json, notifications_cache.json
+│   ├── edge_server.py           # edge-приложение из снапшота (create_edge_app)
+│   ├── edge_ingest.py           # POST /internal/snapshot (HMAC + timestamp)
+│   ├── edge_push.py             # push-proxy edge → origin (X-Edge-Auth)
+│   └── static/                  # Mini App фронтенд (vanilla JS + Telegram WebApp SDK)
+├── frontend/                    # Публичный сайт: Svelte 5 + Vite PWA (сборка → frontend/dist)
+├── deploy/edge/                 # Caddy, systemd, install.sh, edge.env.example, README
+├── data/                        # database.json, exchange_cache.json, notifications_cache.json, snapshot.json
 ├── logs/                        # bot.log (ротация 5МБ×3), admin.log
 └── tests/                       # 346 pytest (юнит + интеграционные моки)
 ```
@@ -288,6 +296,49 @@ cd /opt/peakflow && ./manage.sh caddy
 - `python bot.py` — бот **и** веб-сервер (порт `WEBAPP_PORT`/`8080`) в одном event loop.
 - `GET /healthz` — проверка живости; `GET /api/schools`, `/api/{school}/schedule/{class|teacher|room}/{name}` — REST API Mini App.
 - Пользовательские данные фронтенда подписаны: сервер валидирует Telegram `initData` (HMAC) и не доверяет неподписанным запросам.
+
+---
+
+## 🌍 Публичный сайт (origin → edge)
+
+Публичный (без входа) мобильный сайт расписания на отдельном `.ru`-домене —
+**гео-разделение**: бот и отправка Web Push остаются на **origin** (Германия,
+текущий сервер), а публичный сайт обслуживает **edge** (Москва, Debian) из
+локальной копии данных.
+
+```
+Origin (Германия): бот + Nikasoft + ExchangeDetector + Web Push
+        │  POST /internal/snapshot  (JSON, HMAC-SHA256 + X-Snapshot-Timestamp)
+        ▼
+Edge (Москва): Caddy (.ru, авто-TLS) → FastAPI (read-only API) + Svelte PWA
+        ▲  push-API проксируется обратно на origin (X-Edge-Auth)
+   Интернет / пользователи в РФ
+```
+
+- **Снапшот** (`services/snapshot.py`) публикуется origin'ом в `EDGE_INGEST_URL`
+  раз в цикл обновления, при старте и после ручного admin-refresh. Edge принимает
+  его на `POST /internal/snapshot` только при валидной подписи, timestamp ±300 с
+  и совпадении `version`.
+- **Устойчивость к деградации канала**: edge отвечает из последней копии даже при
+  устаревшем снапшоте, показывая возраст данных; `GET /healthz` отдаёт
+  `{status, snapshot_age_seconds, generated_at, version, schools_count}`.
+- **Фронтенд** (`frontend/`) — Svelte 5 + Vite + TypeScript PWA: расписание
+  класса/учителя/кабинета (сегодня/завтра/неделя), поиск, свободные кабинеты,
+  share-ссылки `/s/{school}/{kind}/{name}?date=…` (History-роутинг + SPA-fallback),
+  офлайн-индикатор и **опция Web Push о заменах** (VAPID через edge).
+- **Docker/hosting**: Caddy (авто-TLS) + systemd; разворачивание —
+  `deploy/edge/install.sh` или `sudo EDGE_DOMAIN=<домен> ./manage.sh edge`.
+
+> 🔐 Секреты (`EDGE_INGEST_SECRET`, `EDGE_AUTH_SECRET`, `VAPID_PRIVATE_KEY`) — только
+> в `.env`/`/etc/raspisanie-edge.env`, в репозиторий не коммитятся. NTP обязателен
+> на **обоих** хостах (допуск часов ±300 с).
+
+> 📌 **Деплой**: сотрудник и дата развёртывания — «(указываются при деплое)».
+> Полное руководство — [docs/EDGE.md](docs/EDGE.md), заметки по edge-хосту —
+> [deploy/edge/README.md](deploy/edge/README.md).
+
+> ⏳ **Статус**: MVP публичного сайта (план W1–W31) реализован 2026-10-05; паритет
+> с оригиналом Nikasoft (W32–W41) — запланирован ([roadmap.md](roadmap.md) §4.1).
 
 ---
 

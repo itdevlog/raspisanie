@@ -3,6 +3,57 @@
 История исправлений Telegram-бота расписания. Хронологический порядок (новое — вверху).
 «Что осталось сделать» — см. [roadmap.md](roadmap.md).
 
+## 05.10.2026
+
+### Публичный сайт расписания — MVP (план `2026-10-02-public-schedule-site`, W1–W31)
+
+Завершён базовый MVP публичного (без входа) мобильного сайта расписания на отдельном
+`.ru`-домене: **origin (Германия)** публикует снапшот, **edge (Москва)** отдаёт сайт из
+локальной копии. Поведение Telegram-бота не менялось (кроме хуков снапшота и Web Push).
+Плата за паритет с оригиналом Nikasoft (W32–W41) → [roadmap.md](roadmap.md) §4.1.
+
+#### Конфиг, снапшот, хранилище (W1–W3)
+
+- **W1.** `AppConfig`/`Config` расширены edge/snapshot/push-полями (`EDGE_*`, `SNAPSHOT_*`, `VAPID_*`).
+- **W2.** `services/snapshot.py` — формат v1 (`version`, `generated_at`, `schools`, `schools_config`), сериализация, HMAC-подпись (`compare_digest`), атомарная запись.
+- **W3.** `services/snapshot_store.py` — потокобезопасное хранилище на edge (`apply`/`load`, `age_seconds`, `is_stale`).
+
+#### Публикация снапшота на origin (W4–W7)
+
+- **W4.** `services/snapshot_exporter.py` — `POST` на `EDGE_INGEST_URL` с `X-Snapshot-Signature`/`X-Snapshot-Timestamp`, gzip, ретраи, лимит `SNAPSHOT_MAX_BYTES`.
+- **W5–W7.** Публикация из `BackgroundUpdater._perform_update` (через `asyncio.to_thread`), при старте и из ручного admin-refresh.
+
+#### Edge-сервер (W8–W11)
+
+- **W8.** `create_app` параметризован (`schools_config`, `static_dir`, `enable_telegram_routes`, health-провайдер); rate-limit группирует по реальному IP из `X-Forwarded-For` доверенного прокси.
+- **W9.** `web/edge_ingest.py` — `POST /internal/snapshot`: размер → `413`, HMAC, timestamp ±300 с, `version`; запись атомарна.
+- **W10.** `web/edge_server.py` — `create_edge_app` + `python -m web.edge_server` (uvicorn).
+- **W11.** `GET /healthz` на edge с возрастом снапшота (`ok`/`stale` по `SNAPSHOT_MAX_AGE`).
+
+#### Web Push (W12–W17)
+
+- **W12.** `services/push_store.py` — коллекция `web_push_subscriptions` (валидация endpoint/keys, upsert, `remove_dead`, `cleanup_stale`).
+- **W13.** `services/push_service.py` — отправка через `pywebpush` в `to_thread`, удаление мёртвых подписок по `404/410`.
+- **W14.** Генерация VAPID-пары (`python -m services.push_keys`).
+- **W15.** Публичное push-API origin (`/api/push/subscribe|unsubscribe`), защищено `X-Edge-Auth` + rate-limit.
+- **W16.** Push при заменах в `BackgroundUpdater._check_exchange_updates` (подписки класса, ссылка на share-страницу).
+- **W17.** `web/edge_push.py` — `vapid-public-key` локально и прокси push на origin.
+
+#### Фронтенд Svelte PWA (W18–W25)
+
+- **W18–W25.** Каркас Svelte 5 + Vite + TS, типизированный API-клиент и stores, экраны расписания (сегодня/завтра/неделя, вкладки класс/учитель/кабинет), поиск и свободные кабинеты, share-ссылки `/s/…` + History-роутинг + SPA-fallback, PWA (push opt-in, офлайн, Service Worker), Telegram-интеграция, vitest + `npm run verify`.
+
+#### Деплой edge и CI (W26–W30)
+
+- **W26–W28.** `deploy/edge/` (Caddy, systemd, `install.sh`, `edge.env.example`), `./manage.sh edge`, документация DNS/NTP/переменных — [docs/EDGE.md](docs/EDGE.md).
+- **W29.** CI-джоба `frontend` (Node 20, `npm ci/test/build`).
+- **W30.** e2e-тест контракта origin→edge (`tests/test_snapshot_e2e.py`): HMAC, timestamp, `version`, размер, gzip.
+
+#### Документация и статусы (W31)
+
+- Обновлены [WIKI.md](WIKI.md) (§13.1), [README.md](README.md), [roadmap.md](roadmap.md) (§4.1), [CHANGELOG.md](CHANGELOG.md); спека и план отмечены как реализованные по MVP (W1–W31), паритет W32–W41 — запланирован.
+- **Отметка деплоя**: сотрудник и дата указываются при развёртывании (placeholders в плане/спеке) — здесь реальное имя не фиксируется.
+
 ## 17.09.2026
 
 ### Полное выполнение [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) (T1–T45)
