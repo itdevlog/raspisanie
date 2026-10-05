@@ -114,7 +114,8 @@
   $effect(() => {
     const container =
       typeof navigator === 'undefined' ? undefined : navigator.serviceWorker;
-    return watchServiceWorkerCache(container, (value) => {      fromCache = value;
+    return watchServiceWorkerCache(container, (value) => {
+      fromCache = value;
     });
   });
 

@@ -14,7 +14,7 @@
 // No secrets live here: this only reads public UI/theme data from the WebApp
 // object. `initData` is used solely as a presence signal, never sent anywhere.
 
-import { buildViewPath, type Route } from './route';
+import type { Route } from './route';
 import type { ScheduleKind } from './api/types';
 
 /**
@@ -110,7 +110,7 @@ export function buildStartPayload(target: TelegramShareTarget): string | null {
   const parts = [
     's',
     encodeStartSegment(target.school),
-    KIND_TOKENS[target.kind] ?? KIND_TOKENS.class,
+    KIND_TOKENS[target.kind],
     encodeStartSegment(target.name),
   ];
   const date = encodeStartDate(target.date);
@@ -310,11 +310,6 @@ export function initTelegramTheme(env: TelegramEnv, target: ThemeTarget): () => 
   return () => webApp.offEvent?.('themeChanged', apply);
 }
 
-/** Minimal location surface the BackButton uses to return to the app root. */
-export interface BackNavigationTarget {
-  location: { href: string };
-}
-
 /**
  * Wire the Telegram BackButton to app navigation.
  *
@@ -357,9 +352,4 @@ export function initTelegramWebApp(env: TelegramEnv, target: ThemeTarget): () =>
   env.webApp.expand?.();
   env.webApp.ready?.();
   return initTelegramTheme(env, target);
-}
-
-/** Where a BackButton click navigates (Home), for callers that need a plain path. */
-export function telegramBackTarget(): string {
-  return buildViewPath({ view: 'home' });
 }
