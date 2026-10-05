@@ -13,11 +13,13 @@ Nikasoft `school_133` (формы подтверждены в W33–W37):
 Реального снапшота `school_133` в репозитории нет, поэтому фикстура
 **представительная** (см. отчёт W41). Сетевых запросов тест не делает.
 
-Отдельно проверяется мандат W33: имена групп, которые строит текущий
-index-путь (``_get_schedule_data``/``_apply_exchange`` теряют ключ ``g``), равны
-тому, что дал бы реальный division-ключ ``g``. Инвариант реальной выгрузки —
+Отдельно проверяется мандат W33: имена групп строит реальный division-ключ
+``g`` — ``_get_schedule_data`` и rebuild'еры teacher/room сохраняют ``g``
+аддитивно (без ``g`` остаётся index-fallback). Инвариант реальной выгрузки —
 ``g == ['0', '1']`` по порядку у каждой многозаписной ячейки, ячеек без ``g`` с
-несколькими записями нет.
+несколькими записями нет. Отдельный тест с переставленным ``g`` (``['1','0']``)
+доказывает, что explicit-путь достижим в проде (а не только через прямой
+``_lessons_payload``).
 """
 from datetime import datetime
 
@@ -230,13 +232,13 @@ def test_fixture_multi_entry_cells_carry_ordered_g():
         assert cell.get('g') == [str(i) for i in range(length)]
 
 
-def test_groups_index_path_equals_explicit_division_key():
-    """W33/W41: index-путь API даёт те же имена, что реальный ключ `g`."""
+def test_groups_api_path_equals_explicit_division_key():
+    """W33/W41: путь API теперь несёт реальный ключ `g` и даёт те же имена."""
     school = _school_133()
     cell = school['CLASS_SCHEDULE']['5']['012']['101']
     assert cell['g'] == ['0', '1']
 
-    # Путь API: `_get_schedule_data` теряет `g`, группы берутся по индексу.
+    # Путь API: `_get_schedule_data` сохраняет `g`, группы строятся по нему.
     day = _client(school).get(
         '/api/school_133/schedule/class/5а?date=07.09.2026').json()
     api_groups = [item['groups'] for item in day['lessons'][0]['items']]
@@ -253,12 +255,25 @@ def test_groups_index_path_equals_explicit_division_key():
     assert api_groups == explicit_groups == ['Группа 1', 'Группа 2']
 
 
-def test_groups_index_equivalence_survives_exchange():
-    """`g` теряется в `_get_schedule_data` ещё до замены — путь остаётся эквивалентным.
+def test_reordered_division_key_reorders_api_groups():
+    """W41: переставленный `g` (``['1','0']``) реально управляет именами групп.
 
-    `_apply_exchange` лишь копирует `data` (в котором `g` уже отсутствует),
-    поэтому после применения замены имена групп по-прежнему строятся по индексу
-    и совпадают с тем, что дал бы реальный ключ `g`.
+    До фикса `_get_schedule_data` терял `g`, и API всегда строил группы по
+    индексу; теперь explicit-путь достижим в проде, поэтому это настоящий
+    guard, а не самоссылочное сравнение index-пути.
+    """
+    school = _school_133()
+    school['CLASS_SCHEDULE']['5']['012']['101']['g'] = ['1', '0']
+    day = _client(school).get(
+        '/api/school_133/schedule/class/5а?date=07.09.2026').json()
+    groups = [item['groups'] for item in day['lessons'][0]['items']]
+    assert groups == ['Группа 2', 'Группа 1']
+
+
+def test_groups_division_key_survives_exchange():
+    """`g` доезжает до payload и после замены: `_apply_exchange` копирует `data`.
+
+    Поэтому имена групп после замены совпадают с explicit-ключом `g`.
     """
     school = _school_133()
     school['CLASS_EXCHANGE'] = {'012': {'07.09.2026': {

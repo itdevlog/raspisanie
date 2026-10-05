@@ -221,7 +221,7 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
 
     @app.get('/api/{school_id}/schedule/{kind}/{name}/calendar')
     async def schedule_calendar(school_id: str, kind: str, name: str,
-                                year: int = Query(ge=2020),
+                                year: int = Query(ge=2020, le=9999),
                                 month: int = Query(ge=1, le=12)):
         """Календарь месяца: `{days: [...]}` (та же форма, что у `/week`)."""
         svc = _service_for(kind, _school_or_404(services, school_id))

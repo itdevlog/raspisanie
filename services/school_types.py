@@ -76,9 +76,12 @@ class SchoolData(TypedDict, total=False):
     # Число учебных дней в неделе и номер первого урока.
     WEEKDAYNUM: int
     FIRSTLESSONNUM: int
-    # class_id -> номер курса; class_id -> division -> название группы.
+    # class_id -> номер курса; division -> название группы.
+    # Реальная выгрузка school_133 — плоский ``{'0': 'Группа 1', ...}``; в
+    # некоторых выгрузках вложен по периодам (``{period_id: {division: name}}``).
+    # `_group_names` обрабатывает обе формы, поэтому тип — объединение.
     CLASS_COURSES: dict[str, int]
-    CLASSGROUPS: dict[str, dict[str, str]]
+    CLASSGROUPS: dict[str, str] | dict[str, dict[str, str]]
     # class_id -> номер второй смены (структура выгрузки Nikasoft).
     CLASS_SHIFT: dict
     # Флаги отображения разделов (паритет с оригинальным сайтом).

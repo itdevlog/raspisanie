@@ -174,6 +174,18 @@ def test_item_groups_uses_explicit_division_key():
     assert items[1]['groups'] == 'Группа 1'
 
 
+def test_get_day_uses_explicit_division_key_not_index():
+    """W41: `g` не теряется в `_get_schedule_data` — переставленный `g` управляет именами."""
+    school = _school()
+    # Переставляем реальный division-ключ: index-путь дал бы «1», «2» по порядку.
+    school['CLASS_SCHEDULE']['p1']['c1']['101']['g'] = ['1', '0']
+    svc = ScheduleService(school)
+    day = svc.get_day('5а', _monday())
+    items = day['lessons'][0]['items']
+    assert items[0]['groups'] == 'Группа 2'
+    assert items[1]['groups'] == 'Группа 1'
+
+
 def test_is_method_hour_flag():
     svc = ScheduleService(_school())
     day = svc.get_day('5а', _monday())

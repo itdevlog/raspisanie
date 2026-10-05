@@ -189,6 +189,13 @@ def test_month_route_year_before_2020_is_422():
     assert resp.status_code == 422
 
 
+def test_month_route_year_above_9999_is_422_not_500():
+    """W41 fix: `year=10000` раньше падал ValueError в datetime -> 500; теперь 422."""
+    resp = _client(_school()).get(
+        '/api/school_133/schedule/class/5а/calendar?year=10000&month=1')
+    assert resp.status_code == 422
+
+
 def test_month_route_month_zero_is_422():
     resp = _client(_school()).get(
         '/api/school_133/schedule/class/5а/calendar?year=2026&month=0')

@@ -149,11 +149,14 @@ class RoomService(BaseScheduleService):
 
                     # Проверяем, есть ли этот кабинет в уроке
                     if 'r' in raw_lesson_data and room_id in raw_lesson_data['r']:
-                        # Глубокая копия данных урока, чтобы замены не мутировали исходное расписание
+                        # Глубокая копия данных урока, чтобы замены не мутировали исходное расписание.
+                        # `g` (division-ключ) сохраняем аддитивно (см. `_lessons_payload`).
+                        raw_g = raw_lesson_data.get('g')
                         lesson_data = {
                             's': list(raw_lesson_data.get('s', [])),
                             't': list(raw_lesson_data.get('t', [])),
-                            'r': list(raw_lesson_data.get('r', []))
+                            'r': list(raw_lesson_data.get('r', [])),
+                            'g': list(raw_g) if isinstance(raw_g, list) else [],
                         }
                         raw_class_name = self.school_data.get('CLASSES', {}).get(class_id, 'Неизвестно')
                         # Используем ЧИСТОЕ имя класса для поиска замен: эскапирование

@@ -209,11 +209,16 @@ class ScheduleService(BaseScheduleService):
                 key = f"{week_num}{key}"
 
             if key in class_schedule:
-                # Глубокая копия данных урока, чтобы замены не мутировали исходное расписание
+                # Глубокая копия данных урока, чтобы замены не мутировали исходное расписание.
+                # `g` (division-ключ) сохраняем аддитивно: он задаёт реальные имена
+                # групп; если его нет/он не список — `_lessons_payload` откатится на индекс.
+                raw = class_schedule[key]
+                raw_g = raw.get('g')
                 lesson_data = {
-                    's': list(class_schedule[key].get('s', [])),
-                    't': list(class_schedule[key].get('t', [])),
-                    'r': list(class_schedule[key].get('r', []))
+                    's': list(raw.get('s', [])),
+                    't': list(raw.get('t', [])),
+                    'r': list(raw.get('r', [])),
+                    'g': list(raw_g) if isinstance(raw_g, list) else [],
                 }
                 schedule.append({
                     'lesson_num': lesson_num,
