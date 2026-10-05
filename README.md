@@ -340,8 +340,8 @@ Edge (Москва): Caddy (.ru, авто-TLS) → FastAPI (read-only API) + Sve
 > Полное руководство — [docs/EDGE.md](docs/EDGE.md), заметки по edge-хосту —
 > [deploy/edge/README.md](deploy/edge/README.md).
 
-> ⏳ **Статус**: MVP публичного сайта (план W1–W31) реализован 2026-10-05; паритет
-> с оригиналом Nikasoft (W32–W41) — запланирован ([roadmap.md](roadmap.md) §4.1).
+> ✅ **Статус**: MVP публичного сайта (план W1–W31) и паритет с оригиналом
+> Nikasoft (W32–W41) реализованы 2026-10-05 ([roadmap.md](roadmap.md) §4.1).
 
 ---
 

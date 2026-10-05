@@ -20,7 +20,6 @@ index-путь (``_get_schedule_data``/``_apply_exchange`` теряют ключ
 несколькими записями нет.
 """
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
@@ -28,8 +27,6 @@ import web.api as api_module
 from config.config import get_timezone
 from services.schedule_service import ScheduleService
 from web.api import create_app
-
-TZ = ZoneInfo('Asia/Yekaterinburg')
 
 _WEEKDAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница',
              'Суббота', 'Воскресенье']
@@ -93,11 +90,6 @@ def _client(school=None, schools_config=None):
     if schools_config is not None:
         services['schools_config'] = schools_config
     return TestClient(create_app(services))
-
-
-def _monday():
-    """07.09.2026 — понедельник (день 1)."""
-    return datetime(2026, 9, 7, 10, 0, tzinfo=TZ)
 
 
 def _freeze_now(monkeypatch, hour, minute):
@@ -262,7 +254,12 @@ def test_groups_index_path_equals_explicit_division_key():
 
 
 def test_groups_index_equivalence_survives_exchange():
-    """`_apply_exchange` тоже теряет `g` — index-путь остаётся эквивалентным."""
+    """`g` теряется в `_get_schedule_data` ещё до замены — путь остаётся эквивалентным.
+
+    `_apply_exchange` лишь копирует `data` (в котором `g` уже отсутствует),
+    поэтому после применения замены имена групп по-прежнему строятся по индексу
+    и совпадают с тем, что дал бы реальный ключ `g`.
+    """
     school = _school_133()
     school['CLASS_EXCHANGE'] = {'012': {'07.09.2026': {
         '1': {'s': ['s1', 's2'], 't': ['t1', 't2'], 'r': ['r1', 'r2']},
