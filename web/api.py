@@ -206,7 +206,10 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
     async def schedule_week(school_id: str, kind: str, name: str, offset: int = Query(0, ge=-2, le=2)):
         svc = _service_for(kind, _school_or_404(services, school_id))
         try:
-            return {'days': await run_in_threadpool(svc.get_week, name, offset)}
+            return {
+                'days': await run_in_threadpool(svc.get_week, name, offset),
+                'weekday_num': svc.weekday_num,
+            }
         except EntityNotFoundError as e:
             raise HTTPException(404, e.message) from e
 

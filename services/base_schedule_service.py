@@ -267,11 +267,21 @@ class BaseScheduleService:
             })
         return lessons
 
+    @property
+    def weekday_num(self) -> int:
+        """Число учебных дней в неделе из WEEKDAYNUM (default 5, clamp 1..6)."""
+        raw = self.school_data.get('WEEKDAYNUM', 5)
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            value = 5
+        return max(1, min(6, value))
+
     def _week_dates(self, week_offset: int, today: datetime | None = None) -> list[datetime]:
-        """Список дат Пн-Пт указанной недели."""
+        """Даты учебных дней указанной недели (Пн + weekday_num дней)."""
         today = today or datetime.now(self.moscow_tz)
         monday = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
-        return [monday + timedelta(days=d) for d in range(5)]
+        return [monday + timedelta(days=d) for d in range(self.weekday_num)]
 
     def get_next_lesson(self, schedule_data: list[dict], date: datetime,
                         now: datetime | None = None) -> dict | None:
