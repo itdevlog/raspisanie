@@ -147,12 +147,39 @@ export function parseLocation(location: { pathname: string; search?: string } | 
 }
 
 /**
+ * Percent-encode one path segment exactly like Python's
+ * `urllib.parse.quote(s, safe='')`.
+ *
+ * `encodeURIComponent` is close but leaves `! ' ( ) *` literal, whereas
+ * Python's `quote` (whose unreserved set is `A-Za-z0-9_.-~`) encodes them as
+ * `%21 %27 %28 %29 %2A`. Everything else matches: `encodeURIComponent` already
+ * encodes the same set and also leaves `~` literal. We post-encode only those
+ * five extra characters so the frontend link is byte-identical to the string
+ * produced by `core/background_updater.py::build_class_share_url`.
+ */
+const PYTHON_EXTRA_UNRESERVED = /[!'()*]/g;
+
+/** Unicode code point → `%XX`/`%XXXX` (uppercase hex), matching Python's `quote`. */
+function pythonPercentEscape(ch: string): string {
+  return Array.from(ch)
+    .map((c) => `%${c.codePointAt(0)!.toString(16).toUpperCase().padStart(2, '0')}`)
+    .join('');
+}
+
+/** Encode a path segment byte-for-byte identically to `urllib.parse.quote(s, safe='')`. */
+export function quoteLikePython(value: string): string {
+  return encodeURIComponent(value).replace(PYTHON_EXTRA_UNRESERVED, pythonPercentEscape);
+}
+
+/**
  * Build the share path for a class/teacher/room — byte-for-byte the same scheme
- * as W16's `build_class_share_url` (`quote(value, safe='')` ==
- * `encodeURIComponent(value)`).
+ * as W16's `build_class_share_url`, which uses `quote(value, safe='')` for the
+ * school and name segments and `date.strftime('%d.%m.%Y')` (DD.MM.YYYY) for the
+ * date.
  *
  * `date` is optional `DD.MM.YYYY`; omitted when null (server then uses its
- * own "today"). `school`/`name` are encoded, `kind` is a fixed safe token.
+ * own "today"). `school`/`name` are encoded with {@link quoteLikePython},
+ * `kind` is a fixed safe token.
  */
 export function buildSharePath(
   school: string,
@@ -160,7 +187,7 @@ export function buildSharePath(
   name: string,
   date?: string | null,
 ): string {
-  const base = `${SCHEDULE_PREFIX}${encodeURIComponent(school)}/${kind}/${encodeURIComponent(name)}`;
+  const base = `${SCHEDULE_PREFIX}${quoteLikePython(school)}/${kind}/${quoteLikePython(name)}`;
   return date ? `${base}?date=${encodeURIComponent(date)}` : base;
 }
 

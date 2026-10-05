@@ -3,8 +3,9 @@
 // Share-link building/copying for the schedule screen. The URL scheme is the
 // single source of truth shared with the W16 push notification builder
 // (`core/background_updater.py::build_class_share_url`): the produced path is
-// `/s/{school}/{kind}/{name}?date=DD.MM.YYYY` with `encodeURIComponent` on
-// school/name and `DD.MM.YYYY` for the date.
+// `/s/{school}/{kind}/{name}?date=DD.MM.YYYY` with Python-equivalent
+// percent-encoding on school/name (`quoteLikePython`) and `DD.MM.YYYY` for the
+// date.
 //
 // This module is DOM-touching (clipboard/`navigator.share`) but every effect is
 // injectable, so it is unit-testable without a real browser.

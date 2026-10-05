@@ -6,19 +6,23 @@ import {
   isScheduleKind,
   parseLocation,
   parsePath,
+  quoteLikePython,
   type Route,
 } from './route';
+import { pythonBuildClassShareUrl } from '../test-helpers';
 
 /**
- * Round-trip against W16's producer.
+ * Mirror of W16's producer.
  *
  * `core/background_updater.py::build_class_share_url` builds exactly:
  *   f"{base}/s/{quote(school, safe='')}/class/{quote(name, safe='')}?date={dd.mm.YYYY}"
- * `quote(x, safe='')` is percent-encoding equivalent to `encodeURIComponent`,
- * so mirroring it here proves the parser/builder agree with push notifications.
+ * Python's `quote(safe='')` encodes `!'()*` that `encodeURIComponent` leaves
+ * literal, so the mirror goes through {@link quoteLikePython}. The live
+ * cross-language check lives in share.test.ts, which runs the real Python
+ * function; this mirror is only for constructing producer-shaped inputs.
  */
 function w16BuildClassSharePath(school: string, name: string, date: string): string {
-  const quote = (value: string) => encodeURIComponent(value);
+  const quote = (value: string) => quoteLikePython(value);
   return `/s/${quote(school)}/class/${quote(name)}?date=${date}`;
 }
 
@@ -119,6 +123,27 @@ describe('route parsing (W16 round-trip)', () => {
       kind: 'class',
       name: '101/102',
       date: null,
+    });
+  });
+
+  it('is byte-identical to the real Python producer and parses its output', () => {
+    const school = 'school_133';
+    const name = "5А (№1) !'* — смена";
+    const path = buildSharePath(school, 'class', name, '07.09.2026');
+    const python = pythonBuildClassShareUrl(
+      'https://rasp.example.ru',
+      school,
+      name,
+      '07.09.2026',
+    );
+    // `python` is absolute; compare the full frontend URL to it, and the path too.
+    expect(python).toContain(path);
+    expect(parsePath(path)).toEqual({
+      view: 'schedule',
+      school,
+      kind: 'class',
+      name,
+      date: '07.09.2026',
     });
   });
 });

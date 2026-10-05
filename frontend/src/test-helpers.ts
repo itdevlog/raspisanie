@@ -3,6 +3,9 @@
 // Shared fixtures/fakes for the W20 screen tests. Not a `*.test.ts` file, so
 // Vitest does not collect it as a suite.
 
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { vi } from 'vitest';
 import type { ScheduleApiClient } from './lib/api/client';
 import type { DaySchedule, School } from './lib/api/types';
@@ -127,4 +130,39 @@ export function makeRouter(
   env: BrowserEnv = makeFakeEnv().env,
 ): { router: RouteStore; env: BrowserEnv } {
   return { router: createRouteStore(env), env };
+}
+
+/**
+ * Real cross-language oracle: run the actual Python producer
+ * `core/background_updater.py::build_class_share_url` and return its output.
+ *
+ * The name/school are passed as base64 to avoid shell-quoting surprises, and the
+ * repo root is derived from this file's location so the call works regardless of
+ * the test's CWD. `date` is `DD.MM.YYYY` (the producer's API format). This is
+ * deliberately a live call (not a mirrored constant) so the frontend builder is
+ * checked against the producer, not a fake.
+ */
+export function pythonBuildClassShareUrl(
+  base: string,
+  school: string,
+  name: string,
+  date: string,
+): string {
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const script = [
+    'import base64, sys',
+    'from datetime import datetime',
+    'sys.path.insert(0, sys.argv[1])',
+    'from core.background_updater import build_class_share_url',
+    'b64 = lambda s: base64.b64decode(s).decode("utf-8")',
+    'out = build_class_share_url(b64(sys.argv[2]), b64(sys.argv[3]), b64(sys.argv[4]),',
+    '                            datetime.strptime(sys.argv[5], "%d.%m.%Y"))',
+    'sys.stdout.write(out)',
+  ].join('\n');
+  const b64 = (s: string) => Buffer.from(s, 'utf-8').toString('base64');
+  return execFileSync(
+    'python3',
+    ['-c', script, repoRoot, b64(base), b64(school), b64(name), date],
+    { encoding: 'utf-8' },
+  ).trim();
 }

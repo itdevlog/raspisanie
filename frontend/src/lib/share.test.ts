@@ -5,23 +5,45 @@ import {
   shareScheduleFor,
   type ShareNavigator,
 } from './share';
+import { quoteLikePython } from './route';
+import { pythonBuildClassShareUrl } from '../test-helpers';
 
-/** Mirror of W16's producer (see route.test.ts for the rationale). */
-function w16BuildClassShareUrl(base: string, school: string, name: string, date: string): string {
-  const quote = (value: string) => encodeURIComponent(value);
-  return `${base.replace(/\/+$/, '')}/s/${quote(school)}/class/${quote(name)}?date=${date}`;
-}
-
+/**
+ * The W16 producer is the source of truth; these cases hit the REAL Python
+ * function via {@link pythonBuildClassShareUrl} rather than a JS mirror that
+ * could drift (e.g. `encodeURIComponent` leaves `!'()*` literal while Python's
+ * `quote(safe='')` encodes them).
+ */
 describe('buildShareUrl', () => {
-  it('agrees byte-for-byte with the W16 push-notification builder', () => {
+  it.each([
+    '5А (№1)',
+    "5А !'* (№1) — смена",
+    '5А / 6Б',
+    '10 Б «инженерный»',
+    'Иванов И.И.',
+  ])('is byte-identical to the real Python build_class_share_url for %j', (name) => {
     const origin = 'https://rasp.example.ru';
     const school = 'school_133';
-    const name = '5А (№1)';
     const date = '07.09.2026';
 
-    expect(buildShareUrl(origin, school, 'class', name, date)).toBe(
-      w16BuildClassShareUrl(origin, school, name, date),
-    );
+    const python = pythonBuildClassShareUrl(origin, school, name, date);
+    const frontend = buildShareUrl(origin, school, 'class', name, date);
+
+    // Guard against a vacuous oracle that returned nothing.
+    expect(python).toContain('/s/school_133/class/');
+    expect(frontend).toBe(python);
+  });
+
+  it('encodes the same characters Python quote(safe="") encodes', () => {
+    // `encodeURIComponent` leaves these literal; Python percent-encodes them.
+    expect(quoteLikePython("!'()*")).toBe('%21%27%28%29%2A');
+    expect(quoteLikePython('5А (№1)')).toBe('5%D0%90%20%28%E2%84%961%29');
+  });
+
+  it('round-trips through decodeURIComponent', () => {
+    for (const name of ['5А (№1)', "5А !'* (№1) — смена", 'Иванов И.И.', '101/102']) {
+      expect(decodeURIComponent(quoteLikePython(name))).toBe(name);
+    }
   });
 
   it('strips a trailing slash on the origin and omits the date when null', () => {
@@ -116,7 +138,12 @@ describe('shareScheduleFor', () => {
     );
 
     expect(result.url).toBe(
-      w16BuildClassShareUrl('https://rasp.example.ru', 'gym1', '5А', '05.10.2026'),
+      pythonBuildClassShareUrl(
+        'https://rasp.example.ru',
+        'gym1',
+        '5А',
+        '05.10.2026',
+      ),
     );
     expect(share).toHaveBeenCalledWith(
       expect.objectContaining({ url: result.url, text: '5А' }),
