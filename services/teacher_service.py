@@ -111,7 +111,7 @@ class TeacherService(BaseScheduleService):
         if not eff_period_id:
             raise PeriodNotFoundError()
 
-        if date.isoweekday() > 5 and not self._get_holiday_info(date):
+        if date.isoweekday() > self.weekday_num and not self._get_holiday_info(date):
             payload['weekend'] = True
             return payload
 

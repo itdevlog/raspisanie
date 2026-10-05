@@ -9,7 +9,9 @@ from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
+from services.room_service import RoomService
 from services.schedule_service import ScheduleService
+from services.teacher_service import TeacherService
 from web.api import create_app
 
 TZ = ZoneInfo('Asia/Yekaterinburg')
@@ -104,6 +106,38 @@ def test_get_week_six_days_for_six_day_school():
     days = svc.get_week('5а', 0, today=_monday())
     assert len(days) == 6
     assert days[-1]['date'] == '12.09.2026'
+    # суббота — учебный день: не выходной, уроки на месте
+    saturday = days[5]
+    assert saturday['weekend'] is False
+    assert len(saturday['lessons']) == 1
+    assert saturday['lessons'][0]['items'][0]['subject'] == 'Математика'
+
+
+def test_get_day_saturday_is_school_day_for_six_day_school():
+    svc = ScheduleService(_school(WEEKDAYNUM=6))
+    saturday = datetime(2026, 9, 12, 10, 0, tzinfo=TZ)
+    day = svc.get_day('5а', saturday)
+    assert day['weekend'] is False
+    assert len(day['lessons']) == 1
+
+
+def test_get_day_saturday_is_weekend_for_five_day_school():
+    svc = ScheduleService(_school())
+    saturday = datetime(2026, 9, 12, 10, 0, tzinfo=TZ)
+    day = svc.get_day('5а', saturday)
+    assert day['weekend'] is True
+    assert day['lessons'] == []
+
+
+def test_get_day_saturday_school_day_for_teacher_and_room():
+    saturday = datetime(2026, 9, 12, 10, 0, tzinfo=TZ)
+    school = _school(WEEKDAYNUM=6)
+    teacher_day = TeacherService(school).get_day('Иванов', saturday)
+    room_day = RoomService(school).get_day('101', saturday)
+    assert teacher_day['weekend'] is False
+    assert len(teacher_day['lessons']) == 1
+    assert room_day['weekend'] is False
+    assert len(room_day['lessons']) == 1
 
 
 # --- route /week -----------------------------------------------------------
@@ -120,6 +154,11 @@ def test_week_route_six_day_weekday_num():
         '/api/school_133/schedule/class/5а/week?offset=0').json()
     assert body['weekday_num'] == 6
     assert len(body['days']) == 6
+    saturday = body['days'][5]
+    assert saturday['day_name'] == 'Суббота'
+    assert saturday['weekend'] is False
+    assert len(saturday['lessons']) == 1
+    assert saturday['lessons'][0]['items'][0]['subject'] == 'Математика'
 
 
 # --- Telegram-формат не меняется -------------------------------------------

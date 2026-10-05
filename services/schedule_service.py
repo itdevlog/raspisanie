@@ -146,7 +146,7 @@ class ScheduleService(BaseScheduleService):
         if not eff_period_id:
             raise PeriodNotFoundError()
 
-        if date.isoweekday() > 5 and not self._get_holiday_info(date):
+        if date.isoweekday() > self.weekday_num and not self._get_holiday_info(date):
             payload['weekend'] = True
             return payload
 
@@ -160,7 +160,7 @@ class ScheduleService(BaseScheduleService):
 
     def get_week(self, class_name: str, week_offset: int = 0,
                  today: datetime | None = None) -> list[dict]:
-        """5 структурных payload'ов Пн-Пт; дни вне периода — с no_period."""
+        """Структурные payload'ы учебных дней недели (weekday_num); дни вне периода — с no_period."""
         from services.schedule_exceptions import PeriodNotFoundError
 
         class_id = self._find_class_id(class_name)
