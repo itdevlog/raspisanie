@@ -808,6 +808,29 @@ cmd_doctor() {
         fi
     fi
 
+    # Edge-хост (публичный сайт, W26/W27): подсказка, не ошибка — doctor
+    # диагностирует и бот, и edge. Проверяем приметы edge-развёртывания.
+    if [[ -f /etc/systemd/system/raspisanie-edge.service ]]; then
+        ok "Edge: сервис raspisanie-edge установлен"
+        if command -v caddy >/dev/null 2>&1; then
+            ok "Edge: Caddy установлен ($(caddy version 2>/dev/null | head -1))"
+        else
+            warn "Edge: Caddy не установлен — запустите: sudo EDGE_DOMAIN=домен ./manage.sh edge"
+        fi
+        if command -v node >/dev/null 2>&1; then
+            ok "Edge: Node $(node --version 2>/dev/null) (нужен для сборки фронтенда)"
+        else
+            warn "Edge: Node не найден — переустановите: sudo EDGE_DOMAIN=домен ./manage.sh edge"
+        fi
+        if systemctl is-active --quiet raspisanie-edge 2>/dev/null; then
+            ok "Edge: сервис raspisanie-edge активен"
+        else
+            warn "Edge: сервис raspisanie-edge не активен — проверьте: journalctl -u raspisanie-edge -n 50 --no-pager"
+        fi
+    else
+        dim "Edge-хост не настроен. Установка публичного сайта: sudo EDGE_DOMAIN=домен ./manage.sh edge"
+    fi
+
     echo
     if (( errors > 0 )); then
         fail "Проблем: ${errors}. Исправьте и повторите: ./manage.sh doctor"
@@ -974,6 +997,32 @@ cmd_vapid() {
         || die "Не удалось сгенерировать VAPID-пару"
 }
 
+# --- edge (публичный сайт: Caddy + edge-сервер) --------------------------------
+cmd_edge() {
+    # Делегирует в deploy/edge/install.sh (W26): ставит Caddy, Node, venv, собирает
+    # фронтенд и поднимает systemd-сервис raspisanie-edge. EDGE_DOMAIN обязателен —
+    # без реального домена установщик завершится ошибкой. env пробрасываем как есть.
+    local installer="${SCRIPT_DIR}/deploy/edge/install.sh"
+    [[ -f "$installer" ]] \
+        || die "Не найден ${installer} — обновите репозиторий: ./manage.sh update"
+
+    if [[ -z "${EDGE_DOMAIN:-}" ]]; then
+        die "EDGE_DOMAIN не задан. Укажите реальный .ru-домен этого хоста, например:
+  sudo EDGE_DOMAIN=raspisanie.example.ru ./manage.sh edge"
+    fi
+
+    info "Установка edge-сервера публичного сайта (домен ${EDGE_DOMAIN})"
+    info "Для выпуска сертификата нужны открытые порты 80/443 и A-запись домена на этот сервер."
+    run_root env \
+        "EDGE_DOMAIN=${EDGE_DOMAIN}" \
+        "EDGE_PORT=${EDGE_PORT:-8090}" \
+        "EDGE_USER=${EDGE_USER:-raspisanie}" \
+        "EDGE_DIR=${EDGE_DIR:-/opt/raspisanie}" \
+        "EDGE_ENV_FILE=${EDGE_ENV_FILE:-/etc/raspisanie-edge.env}" \
+        "EDGE_SNAPSHOT_DIR=${EDGE_SNAPSHOT_DIR:-/var/lib/raspisanie-edge}" \
+        bash "$installer"
+}
+
 # --- uninstall -----------------------------------------------------------------
 cmd_uninstall() {
     echo "${C_WARN}Внимание: это остановит бота${C_OFF}"
@@ -1042,6 +1091,8 @@ cmd_help() {
   caddy       HTTPS для Mini App: ставит Caddy, берёт домен из WEBAPP_URL,
               выпускает Let's Encrypt сертификат и проксирует на бота
   vapid       Печать VAPID-пары для Web Push (впишите значения в .env)
+  edge        Публичный сайт (edge-хост): Caddy + edge-сервер, авто-TLS.
+              ОБЯЗАТЕЛЬНО EDGE_DOMAIN: sudo EDGE_DOMAIN=домен ./manage.sh edge
   uninstall   Остановка + удаление сервиса и Caddy-фрагмента (с вопросами)
   help        Эта справка
 
@@ -1147,6 +1198,7 @@ main() {
         doctor)    cmd_doctor ;;
         caddy)     cmd_caddy ;;
         vapid)     cmd_vapid ;;
+        edge)      cmd_edge ;;
         uninstall) cmd_uninstall ;;
         help|-h|--help|"") cmd_help ;;
         *) die "Неизвестная команда: '${cmd}'. Смотрите: ./manage.sh help" ;;
