@@ -143,28 +143,28 @@ edge — `deploy/edge/edge.env.example` (копируется в `/etc/raspisani
 
 ---
 
-## 6. Известное ограничение: origin пока не регистрирует `/api/push/*`
+## 6. Web Push: как устроено
 
-**Статус: отложено (follow-up W15).** В продакшене origin **не сохраняет**
-push-подписки, хотя edge исправно проксирует запросы.
+origin **регистрирует** публичные маршруты `/api/push/subscribe` и
+`/api/push/unsubscribe`, когда заданы VAPID-ключи и `EDGE_AUTH_SECRET`
+(`web/api.py`). `PushSubscriptionStore` (`services/push_store.py`) создаётся из
+`FileDB` бота в `bot.py::setup_services` и передаётся в `create_app(...)` из
+`web/server.py::run_webapp` через `bot_data['push_store']`. Подписки хранятся в
+коллекции `web_push_subscriptions`.
 
-Причина: `web/server.py::run_webapp` вызывает `create_app(services)` **без**
-`push_store`. В `web/api.py` маршруты origin включаются только при
-`push_store is not None` (плюс заданные VAPID-ключи и `EDGE_AUTH_SECRET`). Пока
-`PushSubscriptionStore` не создан из `FileDB` бота и не передан в `create_app`,
-у origin нет маршрутов `/api/push/subscribe` и `/api/push/unsubscribe`.
+Поток подписки:
 
-Что это значит для эксплуатации:
+- браузер отправляет только тело JSON на **edge** `/api/push/subscribe`
+  (секрет в клиенте не хранится);
+- edge-прокси (`web/edge_push.py`) добавляет заголовок `X-Edge-Auth` и
+  проксирует запрос на origin `{EDGE_ORIGIN_URL}/api/push/...`;
+- origin проверяет `X-Edge-Auth` и сохраняет подписку;
+- `GET /api/push/vapid-public-key` отдаётся **edge** локально из
+  `VAPID_PUBLIC_KEY` (origin такого маршрута не имеет);
+- per-client rate-limit `/api/push/*` живёт на **edge** (origin вызывается
+  единственным peer-IP — edge — поэтому лимит там схлопнулся бы в одну корзину).
 
-- `POST /api/push/subscribe` через edge-прокси вернёт `404` (на origin нет такого
-  маршрута), подписка **не сохранится**;
-- `/api/push/vapid-public-key` на **edge** работает (отдаётся локально из
-  `VAPID_PUBLIC_KEY`) — им пользуется фронтенд;
-- Telegram-уведомления о заменах работают как раньше и от этого не зависят.
-
-Follow-up: создать `PushSubscriptionStore` (W12, `services/push_store.py`) поверх
-`FileDB` бота; **проводка отложена на W15** — передать его в `create_app(...)` из
-`run_webapp` (сейчас вызывается `create_app(services)` без `push_store`).
+Telegram-уведомления о заменах работают как раньше и от этого не зависят.
 
 ---
 
@@ -181,7 +181,7 @@ Follow-up: создать `PushSubscriptionStore` (W12, `services/push_store.py`
 - [ ] Перед сборкой фронтенда задана `VITE_TELEGRAM_BOT` (иначе кнопка скрыта).
 - [ ] Проверка: `curl -sf https://<домен>/healthz` (возраст снапшота) и
       `curl -sf https://<домен>/api/push/vapid-public-key`.
-- [ ] ⚠️ `POST /api/push/subscribe` сейчас ожидаемо возвращает `404` (origin не
-      сохраняет подписки, follow-up W15, см. §6). Зелёный чек-лист ≠ Web Push
-      полностью работает: фронтенд и `vapid-public-key` живы, но сохранение
-      подписок на origin ещё не подключено.
+- [ ] Проверка Web Push: `curl -sf https://<домен>/api/push/vapid-public-key`
+      возвращает `{"key": ...}`; тестовая подписка (кнопка «Включить
+      уведомления») сохраняется и видна на origin в коллекции
+      `web_push_subscriptions`.

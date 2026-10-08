@@ -480,10 +480,11 @@ ADMIN_LOG_FILE=./logs/admin.log
   `SNAPSHOT_MAX_BYTES` (origin — лимит публикации, edge — лимит приёма).
 - **Build-time фронтенда**: `VITE_TELEGRAM_BOT` — имя бота для кнопки «Открыть в
   Telegram»; если не задана при сборке, кнопка скрыта.
-- ⚠️ **Отложено (follow-up W15)**: origin пока не регистрирует `/api/push/*` —
-  `web/server.py::run_webapp` вызывает `create_app(services)` без `push_store`.
-  Подписки через edge-прокси не сохраняются до создания `PushSubscriptionStore`
-  из `FileDB` бота. Telegram-уведомления работают как раньше.
+- **Web Push**: origin регистрирует `/api/push/*` при заданных VAPID-ключах и
+  `EDGE_AUTH_SECRET`; `PushSubscriptionStore` передаётся в `create_app` из
+  `run_webapp` (`bot_data['push_store']`), подписки хранятся в
+  `web_push_subscriptions`. Edge проксирует запросы, добавляя `X-Edge-Auth`;
+  per-client rate-limit живёт на edge. Telegram-уведомления не затронуты.
 
 Полный справочник — [docs/EDGE.md](docs/EDGE.md); развёртывание edge —
 [deploy/edge/README.md](deploy/edge/README.md); команда `sudo EDGE_DOMAIN=домен ./manage.sh edge`.
@@ -511,7 +512,7 @@ ADMIN_LOG_FILE=./logs/admin.log
 | Битый `database.json` перезатирался пустым при первой записи | — **исправлено 11.09**: сохраняется копия `.corrupt` (с ротацией `.corrupt.N`) | [database/file_db.py](database/file_db.py) |
 | Поиск учителя/кабинета выдавал чужого | Индексы поиска применялись к полному списку; кириллица в `callback_data` >64 байт — **исправлено 11.09** | [handlers/callbacks/teacher_callbacks.py](handlers/callbacks/teacher_callbacks.py), [handlers/callbacks/room_callbacks.py](handlers/callbacks/room_callbacks.py) |
 | Ingest снапшота возвращает `422` | Часы origin/edge расходятся >±300 с (нет NTP) | [web/edge_ingest.py](web/edge_ingest.py), `timedatectl status` на обоих хостах (`docs/EDGE.md` §3) |
-| `https://<домен>/api/push/subscribe` → `404` | Origin не подключил `push_store` (отложено W15) | [web/server.py](web/server.py) `run_webapp`, `docs/EDGE.md` §6 |
+| `https://<домен>/api/push/subscribe` → `404` | Push не сконфигурирован: на origin не заданы VAPID-ключи или `EDGE_AUTH_SECRET` (маршрут не регистрируется) | [web/api.py](web/api.py) `create_app`, [web/server.py](web/server.py) `run_webapp`, `docs/EDGE.md` §6 |
 
 ---
 

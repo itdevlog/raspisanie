@@ -36,7 +36,7 @@
 - **W12.** `services/push_store.py` — коллекция `web_push_subscriptions` (валидация endpoint/keys, upsert, `remove_dead`, `cleanup_stale`).
 - **W13.** `services/push_service.py` — отправка через `pywebpush` в `to_thread`, удаление мёртвых подписок по `404/410`.
 - **W14.** Генерация VAPID-пары (`python -m services.push_keys`).
-- **W15.** Публичное push-API origin (`/api/push/subscribe|unsubscribe`), защищено `X-Edge-Auth` + rate-limit. ⚠️ проводка `push_store` в `run_webapp` отложена — в продакшене origin пока не регистрирует `/api/push/*` (см. [docs/EDGE.md](docs/EDGE.md) §6 / [WIKI.md](WIKI.md) §13.1).
+- **W15.** Публичное push-API origin (`/api/push/subscribe|unsubscribe`), защищено `X-Edge-Auth`. Проводка `push_store` в `run_webapp` добавлена в финальном ревью MVP — origin регистрирует маршруты при заданных VAPID-ключах и `EDGE_AUTH_SECRET` (см. [docs/EDGE.md](docs/EDGE.md) §6).
 - **W16.** Push при заменах в `BackgroundUpdater._check_exchange_updates` (подписки класса, ссылка на share-страницу).
 - **W17.** `web/edge_push.py` — `vapid-public-key` локально и прокси push на origin.
 

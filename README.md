@@ -325,10 +325,8 @@ Edge (Москва): Caddy (.ru, авто-TLS) → FastAPI (read-only API) + Sve
 - **Фронтенд** (`frontend/`) — Svelte 5 + Vite + TypeScript PWA: расписание
   класса/учителя/кабинета (сегодня/завтра/неделя), поиск, свободные кабинеты,
   share-ссылки `/s/{school}/{kind}/{name}?date=…` (History-роутинг + SPA-fallback),
-  офлайн-индикатор и **опция Web Push о заменах** (VAPID через edge).
-  > ⚠️ push-контур собран, но проводка origin `push_store` в `run_webapp` —
-  > follow-up: origin пока не регистрирует `/api/push/*` (см.
-  > [docs/EDGE.md](docs/EDGE.md) §6 / [WIKI.md](WIKI.md) §13.1).
+  офлайн-индикатор и **опция Web Push о заменах** (VAPID через edge; origin
+  сохраняет подписки при заданных VAPID-ключах и `EDGE_AUTH_SECRET`).
 - **Docker/hosting**: Caddy (авто-TLS) + systemd; разворачивание —
   `deploy/edge/install.sh` или `sudo EDGE_DOMAIN=<домен> ./manage.sh edge`.
 
