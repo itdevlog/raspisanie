@@ -241,10 +241,17 @@ install_caddyfile() {
         | run_root tee /etc/systemd/system/caddy.service.d/edge.conf >/dev/null
 
     run_root cp "$CADDYFILE_SRC" "$CADDYFILE_DST"
-    # Готовим каталог логов до старта Caddy.
+    # Готовим каталог и файл логов до старта Caddy. Файл создаём заранее от
+    # пользователя caddy: `caddy validate` ниже выполняется от root и иначе
+    # создал бы его как root:root 0600, после чего сервис Caddy (User=caddy)
+    # не смог бы писать в лог и падал с «permission denied».
     run_root install -d -o caddy -g caddy -m 0755 /var/log/caddy
+    run_root install -o caddy -g caddy -m 0640 /dev/null /var/log/caddy/edge-access.log
     run_root caddy validate --config "$CADDYFILE_DST" --adapter caddyfile \
         || die "Caddyfile некорректен: ${CADDYFILE_DST}"
+    # Страховка: если validate всё же пересоздал файл от root — выравниваем владельца.
+    run_root chown caddy:caddy /var/log/caddy/edge-access.log
+    run_root chmod 0640 /var/log/caddy/edge-access.log
     ok "Caddyfile установлен и провалидирован (домен ${EDGE_DOMAIN}, порт ${EDGE_PORT})"
 }
 
