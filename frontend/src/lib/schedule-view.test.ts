@@ -11,6 +11,7 @@ import {
   isSecondShift,
   itemSubjectLabel,
   KIND_LABELS,
+  KIND_PLURAL_LABELS,
   LESSONS_PER_DAY,
   lessonNumbers,
   lessonStatusLabel,
@@ -59,6 +60,12 @@ describe('schedule-view helpers', () => {
     expect(KIND_LABELS.teacher).toBe('Учитель');
     expect(KIND_LABELS.room).toBe('Кабинет');
     expect(entityHeading('room', '101')).toBe('Кабинет 101');
+  });
+
+  it('labels every entity kind in the plural (kind tab bar / list headings)', () => {
+    expect(KIND_PLURAL_LABELS.class).toBe('Классы');
+    expect(KIND_PLURAL_LABELS.teacher).toBe('Учителя');
+    expect(KIND_PLURAL_LABELS.room).toBe('Кабинеты');
   });
 
   it('classifies day state with vacation/weekend/no_period precedence', () => {

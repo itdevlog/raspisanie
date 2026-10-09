@@ -1,14 +1,12 @@
 <script lang="ts">
-  // W21 «Поиск и свободные кабинеты» screen.
+  // «Свободные кабинеты» screen.
   //
-  // Hosts two tools that build on the W19 data layer:
-  //   * teacher/room search (`client.search`) — clicking a result selects the
-  //     entity and jumps to its schedule (W20 selection store + navigation);
-  //   * free rooms for a chosen lesson (`client.getFreeRooms`) — the lesson is
-  //     picked with an inline selector, never `window.prompt`.
+  // The teacher/room/class search now lives inside the per-kind lists (see
+  // `routes/Home.svelte`), so this screen hosts only the free-rooms tool:
+  // `client.getFreeRooms` for an inline-selected lesson. The lesson is picked
+  // with a selector, never `window.prompt`.
   //
-  // Dates come from the server-today store, never the browser clock. The search
-  // input is debounced so a fast typist does not fire a request per keystroke.
+  // Dates come from the server-today store, never the browser clock.
   import {
     api as defaultApi,
     selection as defaultSelection,
@@ -16,12 +14,9 @@
     createAsync,
     type FreeRoomsResponse,
     type ScheduleApiClient,
-    type ScheduleKind,
-    type SearchResponse,
     type SelectionStore,
     type TodayStore,
   } from '../lib';
-  import SearchPanel from '../components/SearchPanel.svelte';
   import FreeRooms from '../components/FreeRooms.svelte';
   import StateNotice from '../components/StateNotice.svelte';
 
@@ -29,30 +24,19 @@
     client?: ScheduleApiClient;
     selection?: SelectionStore;
     today?: TodayStore;
-    /** Jump to an entity's schedule (typically the Schedule tab). */
-    onOpenSchedule?: () => void;
+    /** Return to the list view (the kind tab bar's landing screen). */
+    onBack?: () => void;
   }
   let {
     client = defaultApi,
     selection = defaultSelection,
     today = defaultToday,
-    onOpenSchedule,
+    onBack,
   }: Props = $props();
 
-  const SEARCH_DEBOUNCE_MS = 300;
-  const MIN_QUERY_LENGTH = 1;
   const DEFAULT_LESSON = 1;
 
-  let query = $state('');
   let lesson = $state(DEFAULT_LESSON);
-
-  const searchResource = createAsync<SearchResponse>(async () => {
-    const schoolId = selection.schoolId;
-    if (!schoolId || query.trim().length < MIN_QUERY_LENGTH) {
-      return { classes: [], teachers: [], rooms: [] };
-    }
-    return client.search(schoolId, query.trim());
-  });
 
   const freeRoomsResource = createAsync<FreeRoomsResponse>(async () => {
     const schoolId = selection.schoolId;
@@ -61,28 +45,6 @@
     }
     const date = today.today || undefined;
     return client.getFreeRooms(schoolId, lesson, date);
-  });
-
-  function handleQueryChange(next: string): void {
-    query = next;
-  }
-
-  function handleSelect(kind: ScheduleKind, name: string): void {
-    selection.selectEntity(kind, name);
-    onOpenSchedule?.();
-  }
-
-  // Debounce the query; re-runs whenever the raw text changes. The cleanup
-  // clears the pending timer so only the last keystroke triggers a request.
-  $effect(() => {
-    const current = query;
-    const schoolId = selection.schoolId;
-    if (!schoolId || current.trim().length < MIN_QUERY_LENGTH) {
-      searchResource.reset();
-      return;
-    }
-    const timer = setTimeout(() => void searchResource.load(), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
   });
 
   // Load free rooms whenever school/lesson changes and the server today is known.
@@ -102,29 +64,18 @@
       });
     }
   });
-
-  const searchHasQuery = $derived(query.trim().length >= MIN_QUERY_LENGTH);
 </script>
 
 <section class="tools">
-  <h2>Поиск и кабинеты</h2>
+  <button type="button" class="back nika-btn nika-btn-light" aria-label="К списку" onclick={() => onBack?.()}>
+    ← к списку
+  </button>
+
+  <h2>Свободные кабинеты</h2>
 
   {#if !selection.schoolId}
-    <StateNotice title="Школа не выбрана" detail="Сначала выберите школу на главной." />
+    <StateNotice title="Школа не выбрана" detail="Сначала выберите школу в списке." />
   {:else}
-    <SearchPanel
-      classes={searchResource.data?.classes ?? []}
-      teachers={searchResource.data?.teachers ?? []}
-      rooms={searchResource.data?.rooms ?? []}
-      status={searchResource.status}
-      error={searchResource.error}
-      hasQuery={searchHasQuery}
-      onQueryChange={handleQueryChange}
-      onSelect={handleSelect}
-    />
-
-    <hr />
-
     <FreeRooms
       date={today.today || null}
       {lesson}
@@ -141,16 +92,15 @@
     text-align: left;
   }
 
+  .back {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
+  }
+
   h2 {
     font-size: var(--text-2xl);
     font-weight: 700;
     letter-spacing: -0.02em;
     margin: 0 0 var(--space-5);
-  }
-
-  hr {
-    margin: var(--space-5) 0;
-    border: none;
-    border-top: 1px solid var(--color-border);
   }
 </style>

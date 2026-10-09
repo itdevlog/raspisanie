@@ -13,6 +13,16 @@ export const KIND_LABELS: Record<ScheduleKind, string> = {
 };
 
 /**
+ * Plural labels for the schedule entity kinds — used by the global kind tab
+ * bar and the per-kind list headings («Классы» / «Учителя» / «Кабинеты»).
+ */
+export const KIND_PLURAL_LABELS: Record<ScheduleKind, string> = {
+  class: 'Классы',
+  teacher: 'Учителя',
+  room: 'Кабинеты',
+};
+
+/**
  * Highest supported lesson number. Mirrors the server's `LESSONSINDAY`
  * default (12) and the API's `free-rooms` `lesson` range (1..12).
  */

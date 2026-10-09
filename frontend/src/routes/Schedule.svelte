@@ -40,12 +40,10 @@
     type FavoritesStore,
     type PushResult,
     type ScheduleApiClient,
-    type ScheduleKind,
     type SelectionStore,
     type TodayStore,
     type WeekScheduleResponse,
   } from '../lib';
-  import EntityPicker from '../components/EntityPicker.svelte';
   import FavoriteButton from '../components/FavoriteButton.svelte';
   import OpenInTelegram from '../components/OpenInTelegram.svelte';
   import { untrack } from 'svelte';
@@ -64,6 +62,8 @@
     pinnedDate?: string | null;
     /** Raised when a calendar day is opened; the shell can sync the URL. */
     onOpenDay?: (date: string) => void;
+    /** Return to the list view (the kind tab bar's landing screen). */
+    onBack?: () => void;
     /** Browser origin used when building the share link; defaults to `location`. */
     origin?: string;
     /** Injectable navigator for tests; defaults to the global `navigator`. */
@@ -91,6 +91,7 @@
     favorites = defaultFavorites,
     pinnedDate = null,
     onOpenDay,
+    onBack,
     origin = typeof window === 'undefined' ? '' : window.location.origin,
     navigatorLike = undefined,
     connectivity = typeof window === 'undefined' ? undefined : connectivityEnv(),
@@ -165,21 +166,6 @@
     });
   });
 
-  // Names for the active kind within the selected school.
-  const namesResource = createAsync<string[]>(async () => {
-    const schoolId = selection.schoolId;
-    if (!schoolId) {
-      return [];
-    }
-    if (selection.kind === 'class') {
-      return (await client.getClasses(schoolId)).classes;
-    }
-    if (selection.kind === 'teacher') {
-      return (await client.getTeachers(schoolId)).teachers;
-    }
-    return (await client.getRooms(schoolId)).rooms;
-  });
-
   // Day payload for the current day cursor; unused for week/month. A date
   // pinned by a share link (`?date=`) seeds the cursor, otherwise the server's
   // today is the baseline.
@@ -217,7 +203,6 @@
     return client.getCalendar(schoolId, selection.kind, name, cursor.year, cursor.month);
   });
 
-  const kindNamesKey = $derived(`${selection.schoolId ?? ''}|${selection.kind}`);
   const bodyKey = $derived(
     `${selection.schoolId ?? ''}|${selection.kind}|${selection.name ?? ''}|${period}|${weekOffset}|${dayDate ?? ''}|${
       period === 'month' ? `${monthCursor?.year ?? ''}|${monthCursor?.month ?? ''}` : ''
@@ -233,14 +218,6 @@
         monthCursor = { year: parsed.year, month: parsed.month };
       }
     }
-  });
-
-  // Reload the name list whenever the school/kind changes.
-  $effect(() => {
-    // Reading the key here registers the reactive dependency; `void` keeps the
-    // statement an expression without changing behavior.
-    void kindNamesKey;
-    void namesResource.load();
   });
 
   // Reload today from the server so "сегодня" is authoritative on entry.
@@ -268,16 +245,6 @@
       void dayResource.load();
     }
   });
-
-  function handleKindChange(kind: ScheduleKind) {
-    noPeriodDate = null;
-    selection.selectKind(kind);
-  }
-
-  function handleNameChange(name: string) {
-    noPeriodDate = null;
-    selection.selectEntity(selection.kind, name);
-  }
 
   // W39: favorite toggle for the shown class/teacher/room.
   const isFavorite = $derived(
@@ -452,28 +419,15 @@
 </script>
 
 <section class="schedule">
+  <button type="button" class="back nika-btn nika-btn-light" aria-label="К списку" onclick={() => onBack?.()}>
+    ← к списку
+  </button>
+
   <h2>Расписание{selection.name ? ` ${selection.name}` : ''}</h2>
 
   {#if !selection.schoolId}
-    <StateNotice title="Школа не выбрана" detail="Сначала выберите школу на главной." />
+    <StateNotice title="Школа не выбрана" detail="Сначала выберите школу в списке." />
   {:else}
-    <EntityPicker
-      kind={selection.kind}
-      name={selection.name}
-      names={namesResource.data ?? []}
-      disabled={namesResource.isLoading}
-      onKindChange={handleKindChange}
-      onNameChange={handleNameChange}
-    />
-
-    {#if namesResource.status === 'error'}
-      <StateNotice
-        tone="error"
-        title="Не удалось загрузить список"
-        detail={namesResource.error ?? ''}
-      />
-    {/if}
-
     {#if offline}
       <p class="offline" data-tone={offline.tone} role="status">
         <strong>{offline.title}</strong>
@@ -628,6 +582,11 @@
 <style>
   .schedule {
     text-align: left;
+  }
+
+  .back {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
   }
 
   h2 {

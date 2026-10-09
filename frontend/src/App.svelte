@@ -1,7 +1,13 @@
 <script lang="ts">
-  // W22: app shell now driven by the History-API router. The URL mirrors the
-  // W16 share scheme (`/s/{school}/{kind}/{name}?date=…`), so a deep link opens
-  // the right screen and back/forward work. Nav tabs push history entries.
+  // App shell driven by the History-API router. The URL mirrors the share
+  // scheme (`/s/{school}/{kind}/{name}?date=…`), so a deep link opens the right
+  // screen and back/forward work.
+  //
+  // Navigation model: the entity KIND is the top-level navigation — a global
+  // tab bar («Классы» / «Учителя» / «Кабинеты») under the blue header, like the
+  // original site's separate «школьники» / «учителя» sections. Switching a kind
+  // selects it and returns to the LIST view; the chosen name lives in the list,
+  // not in a picker on the schedule screen.
   //
   // A `router` prop is injectable so tests can drive navigation with a fake
   // browser env; production uses the default `route` store.
@@ -18,6 +24,7 @@
     telegramEnv,
     initTelegramWebApp,
     initTelegramBackButton,
+    KIND_PLURAL_LABELS,
     type SchoolsResponse,
     type TelegramEnv,
     type RouteStore,
@@ -48,6 +55,9 @@
     telegram = typeof window === 'undefined' ? { webApp: undefined } : telegramEnv(),
     themeTarget = typeof document === 'undefined' ? undefined : document.documentElement,
   }: Props = $props();
+
+  /** The three entity kinds, in the order shown in the global tab bar. */
+  const KINDS: ScheduleKind[] = ['class', 'teacher', 'room'];
 
   // Parse the initial location and subscribe to popstate (back/forward).
   $effect(() => {
@@ -124,12 +134,23 @@
   }
 
   /**
-   * Open a specific entity picked on Home: adopt it into the selection store
-   * and jump to its schedule (encoded in the URL via `openSchedule`).
+   * Open a specific entity picked in the list: adopt it into the selection
+   * store and jump to its schedule (encoded in the URL via `openSchedule`).
    */
   function openEntity(kind: ScheduleKind, name: string): void {
     selection.selectEntity(kind, name);
     openSchedule();
+  }
+
+  /**
+   * Global kind switch: make `kind` active and, from any non-list screen, return
+   * to the list so the user can pick a name for the new kind.
+   */
+  function handleKindChange(kind: ScheduleKind): void {
+    selection.selectKind(kind);
+    if (router.route.view !== 'home') {
+      router.goTo('home');
+    }
   }
 
   /**
@@ -145,8 +166,21 @@
     router.navigate({ view: 'schedule', school, kind: selection.kind, name, date });
   }
 
-  const view = $derived(router.route.view);
-  const pinnedDate = $derived(router.route.view === 'schedule' ? router.route.date : null);
+  const currentRoute = $derived(router.route);
+  const view = $derived(currentRoute.view);
+  const pinnedDate = $derived(currentRoute.view === 'schedule' ? currentRoute.date : null);
+  // A schedule view is only meaningful when the URL actually carries an entity.
+  // A bare `/schedule` (no entity) falls back to the list instead of a broken
+  // screen.
+  const showSchedule = $derived(
+    currentRoute.view === 'schedule' &&
+      currentRoute.school !== null &&
+      currentRoute.name !== null,
+  );
+
+  function goHome(): void {
+    router.goTo('home');
+  }
 </script>
 
 <main>
@@ -159,48 +193,26 @@
     {/if}
   </header>
 
-  <nav aria-label="Разделы">
-    <button
-      type="button"
-      class="tab nika-btn nika-btn-blue"
-      class:is-active={view === 'home'}
-      aria-current={view === 'home' ? 'page' : undefined}
-      onclick={() => router.goTo('home')}
-    >
-      Главная
-    </button>
-    <button
-      type="button"
-      class="tab nika-btn nika-btn-blue"
-      class:is-active={view === 'schedule'}
-      aria-current={view === 'schedule' ? 'page' : undefined}
-      onclick={openSchedule}
-    >
-      Расписание
-    </button>
-    <button
-      type="button"
-      class="tab nika-btn nika-btn-blue"
-      class:is-active={view === 'tools'}
-      aria-current={view === 'tools' ? 'page' : undefined}
-      onclick={() => router.goTo('tools')}
-    >
-      Поиск
-    </button>
-  </nav>
+  <!-- Global kind tab bar: the top-level navigation, mirroring the original
+       site's separate «школьники» / «учителя» sections. -->
+  <div class="kind-tabs" role="tablist" aria-label="Разделы">
+    {#each KINDS as kind (kind)}
+      <button
+        type="button"
+        role="tab"
+        aria-selected={selection.kind === kind}
+        class="tab nika-btn nika-btn-blue"
+        class:is-active={selection.kind === kind}
+        onclick={() => handleKindChange(kind)}
+      >
+        {KIND_PLURAL_LABELS[kind]}
+      </button>
+    {/each}
+  </div>
 
-  {#if view === 'home'}
-    <Home
-      {client}
-      {selection}
-      {today}
-      {favorites}
-      {strikeoutFreeLsn}
-      onOpenSchedule={openSchedule}
-      onOpenEntity={openEntity}
-      onOpenFreeRooms={() => router.goTo('tools')}
-    />
-  {:else if view === 'schedule'}
+  {#if view === 'tools'}
+    <Tools {client} {selection} {today} onBack={goHome} />
+  {:else if showSchedule}
     <Schedule
       {client}
       {selection}
@@ -209,9 +221,17 @@
       {pinnedDate}
       {strikeoutFreeLsn}
       onOpenDay={openDay}
+      onBack={goHome}
     />
   {:else}
-    <Tools {client} {selection} {today} onOpenSchedule={openSchedule} />
+    <Home
+      {client}
+      {selection}
+      {today}
+      {favorites}
+      onOpenEntity={openEntity}
+      onOpenFreeRooms={() => router.goTo('tools')}
+    />
   {/if}
 </main>
 
@@ -246,8 +266,8 @@
     opacity: 0.95;
   }
 
-  /* Tab bar: the original navbar — blue tabs, active = pressed/highlight. */
-  nav {
+  /* Kind tab bar: the original navbar — blue tabs, active = pressed/highlight. */
+  .kind-tabs {
     display: flex;
     gap: var(--space-1);
     margin: 0 calc(-1 * var(--space-4)) var(--space-5);

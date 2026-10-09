@@ -71,31 +71,6 @@ describe('Schedule screen', () => {
     );
   });
 
-  it('switches between class / teacher / room and reloads the name list', async () => {
-    const client = makeClient();
-    const selection = makeSelection();
-    selection.selectSchool('gym1');
-    selection.selectEntity('class', '5А');
-    const today = makeToday('05.10.2026');
-
-    const { getByRole, findByText } = render(Schedule, {
-      props: { client, selection, today },
-    });
-
-    await waitFor(() => expect(client.getClasses).toHaveBeenCalledWith('gym1'));
-
-    await fireEvent.click(getByRole('tab', { name: 'Учитель' }));
-    await waitFor(() => expect(client.getTeachers).toHaveBeenCalledWith('gym1'));
-    expect(await findByText('Иванов И.И.')).toBeTruthy();
-    // Switching kind must not carry the class name over to teachers.
-    expect(selection.kind).toBe('teacher');
-    expect(selection.name).toBeNull();
-
-    await fireEvent.click(getByRole('tab', { name: 'Кабинет' }));
-    await waitFor(() => expect(client.getRooms).toHaveBeenCalledWith('gym1'));
-    expect(await findByText('101')).toBeTruthy();
-  });
-
   it('loads the week payload for the "Неделя" tab', async () => {
     const client = makeClient({
       getWeek: vi.fn().mockResolvedValue({ days: [dayFor('05.10.2026'), dayFor('06.10.2026')] }),
@@ -612,14 +587,30 @@ describe('Schedule screen', () => {
       await fireEvent.click(getByRole('button', { name: /Иванов И\.И\./ }));
       expect(favorites.has('gym1', 'teacher', 'Иванов И.И.')).toBe(true);
 
-      await fireEvent.click(getByRole('tab', { name: 'Кабинет' }));
-      await waitFor(() => expect(client.getRooms).toHaveBeenCalledWith('gym1'));
-      await fireEvent.change(getByRole('combobox'), { target: { value: '101' } });
-
-      await waitFor(() => expect(selection.name).toBe('101'));
+      // The entity name is now chosen from the list; switching the shown entity
+      // reloads the schedule for the new kind/name.
+      selection.selectEntity('room', '101');
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'room', '101', '05.10.2026'),
+      );
       await fireEvent.click(getByRole('button', { name: /101/ }));
       expect(favorites.has('gym1', 'room', '101')).toBe(true);
     });
+  });
+
+  it('renders a «К списку» back control wired to onBack', async () => {
+    const client = makeClient();
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '5А');
+    const onBack = vi.fn();
+
+    const { getByRole } = render(Schedule, {
+      props: { client, selection, today: makeToday('05.10.2026'), onBack },
+    });
+
+    await fireEvent.click(getByRole('button', { name: 'К списку' }));
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 
   // Swipe navigation: day cursor, week offset and month cursor.

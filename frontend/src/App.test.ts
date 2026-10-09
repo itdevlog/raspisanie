@@ -17,61 +17,72 @@ describe('App shell', () => {
     localStorage.clear();
   });
 
-  it('renders the home screen with navigation by default', async () => {
+  it('renders the list view with the global kind tabs by default', async () => {
     const { router } = makeRouter();
     const { getByRole, findByText } = render(App, {
       props: { client: makeClient(), selection: makeSelection(), today: makeToday(), router },
     });
-    expect(getByRole('navigation', { name: 'Разделы' })).toBeTruthy();
-    expect(getByRole('button', { name: 'Главная' })).toBeTruthy();
+    expect(getByRole('tablist', { name: 'Разделы' })).toBeTruthy();
+    expect(getByRole('tab', { name: 'Классы' })).toBeTruthy();
+    expect(getByRole('tab', { name: 'Учителя' })).toBeTruthy();
+    expect(getByRole('tab', { name: 'Кабинеты' })).toBeTruthy();
     expect(await findByText('Гимназия №1')).toBeTruthy();
   });
 
-  it('switches to the schedule screen and keeps the URL in sync', async () => {
-    const fake = makeFakeEnv('/');
-    const router = createRouteStore(fake.env);
-    const { getByRole, findByText } = render(App, {
-      props: { client: makeClient(), selection: makeSelection(), today: makeToday(), router },
-    });
-    await waitFor(() => expect(router.started).toBe(true));
-
-    await fireEvent.click(getByRole('button', { name: 'Расписание' }));
-
-    expect(await findByText('Школа не выбрана')).toBeTruthy();
-    // Bare schedule view (no entity yet) keeps a clean, deep-linkable URL.
-    expect(fake.location.pathname).toBe('/schedule');
-  });
-
-  it('switches to the search & free-rooms screen', async () => {
+  it('switching a kind updates the list and clears the selected entity', async () => {
     const { router } = makeRouter();
-    const { getByRole, findByText } = render(App, {
-      props: { client: makeClient(), selection: makeSelection(), today: makeToday(), router },
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '5А');
+    const client = makeClient();
+
+    const { getByRole } = render(App, {
+      props: { client, selection, today: makeToday(), router },
     });
-    await waitFor(() => expect(getByRole('button', { name: 'Поиск' })).toBeTruthy());
 
-    await fireEvent.click(getByRole('button', { name: 'Поиск' }));
+    await fireEvent.click(getByRole('tab', { name: 'Учителя' }));
 
-    expect(await findByText('Поиск и кабинеты')).toBeTruthy();
+    await waitFor(() => expect(selection.kind).toBe('teacher'));
+    expect(selection.name).toBeNull();
+    await waitFor(() => expect(client.getTeachers).toHaveBeenCalledWith('gym1'));
   });
 
-  it('opens the free-rooms screen from the home button', async () => {
+  it('switching a kind from a schedule returns to the list', async () => {
+    const fake = makeFakeEnv('/s/gym1/class/5%D0%90');
+    const router = createRouteStore(fake.env);
+    const selection = makeSelection();
+
+    const { getByRole } = render(App, {
+      props: { client: makeClient(), selection, today: makeToday(), router },
+    });
+    await waitFor(() => expect(selection.name).toBe('5А'));
+
+    await fireEvent.click(getByRole('tab', { name: 'Учителя' }));
+
+    await waitFor(() => expect(fake.location.pathname).toBe('/'));
+    expect(selection.kind).toBe('teacher');
+    expect(selection.name).toBeNull();
+  });
+
+  it('opens the free-rooms screen from the «Кабинеты» list', async () => {
     const fake = makeFakeEnv('/');
     const router = createRouteStore(fake.env);
     const selection = makeSelection();
     selection.selectSchool('gym1');
 
-    const { findByRole, findByText } = render(App, {
+    const { getByRole, findByRole } = render(App, {
       props: { client: makeClient(), selection, today: makeToday(), router },
     });
     await waitFor(() => expect(router.started).toBe(true));
 
+    await fireEvent.click(getByRole('tab', { name: 'Кабинеты' }));
     await fireEvent.click(await findByRole('button', { name: 'Свободные кабинеты' }));
 
-    expect(await findByText('Поиск и кабинеты')).toBeTruthy();
+    expect(await findByRole('combobox', { name: 'Урок' })).toBeTruthy();
     expect(fake.location.pathname).toBe('/tools');
   });
 
-  it('opens a class picked on Home and syncs the URL', async () => {
+  it('opens a class picked on the list and syncs the URL', async () => {
     const fake = makeFakeEnv('/');
     const router = createRouteStore(fake.env);
     const selection = makeSelection();
@@ -85,8 +96,7 @@ describe('App shell', () => {
     });
     await waitFor(() => expect(router.started).toBe(true));
 
-    // The classes list is collapsed behind the big «Классы» button.
-    await fireEvent.click(await findByRole('button', { name: 'Классы' }));
+    // The class list is visible for the default «Классы» kind.
     await fireEvent.click(await findByRole('button', { name: '6Б' }));
 
     await waitFor(() => expect(selection.name).toBe('6Б'));
@@ -180,13 +190,29 @@ describe('App shell', () => {
     expect(queryByText('Отменён')).toBeNull();
   });
 
-  it('falls back to Home for an unknown deep link', async () => {
+  it('falls back to the list for an unknown deep link', async () => {
     const fake = makeFakeEnv('/s/gym1/magic/5%D0%90');
     const router = createRouteStore(fake.env);
     const { findByText } = render(App, {
       props: { client: makeClient(), selection: makeSelection(), today: makeToday(), router },
     });
     expect(await findByText('Гимназия №1')).toBeTruthy();
+  });
+
+  it('renders the list (not a broken schedule) for a bare /schedule URL', async () => {
+    const fake = makeFakeEnv('/schedule');
+    const router = createRouteStore(fake.env);
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    const client = makeClient();
+
+    const { findByRole } = render(App, {
+      props: { client, selection, today: makeToday(), router },
+    });
+
+    expect(await findByRole('tablist', { name: 'Разделы' })).toBeTruthy();
+    await waitFor(() => expect(client.getClasses).toHaveBeenCalledWith('gym1'));
+    expect(client.getDay).not.toHaveBeenCalled();
   });
 
   it('syncs the URL to a day opened from the month calendar', async () => {
@@ -215,18 +241,21 @@ describe('App shell', () => {
   describe('W24 Telegram WebApp', () => {
     it('works in a regular browser with no SDK (no crash, BackButton inert)', async () => {
       const { router } = makeRouter();
-      const { getByRole, findByText } = render(App, {
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      const { getByRole, findByRole } = render(App, {
         props: {
           client: makeClient(),
-          selection: makeSelection(),
+          selection,
           today: makeToday(),
           router,
           telegram: {},
         },
       });
-      // The app still renders and navigates without a Telegram SDK.
-      await fireEvent.click(getByRole('button', { name: 'Поиск' }));
-      expect(await findByText('Поиск и кабинеты')).toBeTruthy();
+      // The app still navigates without a Telegram SDK.
+      await fireEvent.click(getByRole('tab', { name: 'Кабинеты' }));
+      await fireEvent.click(await findByRole('button', { name: 'Свободные кабинеты' }));
+      expect(await findByRole('combobox', { name: 'Урок' })).toBeTruthy();
     });
 
     it('applies the SDK theme and shows the BackButton off Home', async () => {

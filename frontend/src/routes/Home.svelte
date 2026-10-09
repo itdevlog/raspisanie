@@ -1,35 +1,31 @@
 <script lang="ts">
-  // W20 Home screen; reworked into a favorites-first picker.
+  // List view — the default screen for the active entity KIND.
   //
-  // * school selector (from GET /api/schools);
-  // * school metadata: city, «Обновлено», link to the school site (gated by
-  //   `features.homepage`);
-  // * «Избранное» — the saved classes/teachers/rooms for the selected school,
-  //   grouped by kind, each tappable (opens the entity) with a remove control;
-  // * «Классы» and «Учителя» pickers (GET .../classes, .../teachers), the
-  //   teacher list with a client-side substring search;
-  // * a favorite toggle + compact «Сейчас» widget for the saved class;
-  // * shortcuts to the free-rooms screen and the full Schedule screen.
+  // The entity kind is chosen with the global tab bar (see `App.svelte`); this
+  // screen renders the active kind only:
+  //   * the school selector (GET /api/schools) and school metadata;
+  //   * «Избранное» — the saved names of the active kind, each tappable (opens
+  //     the entity) with a remove control;
+  //   * a client-side search input filtering the full list;
+  //   * the full name list (GET .../classes | .../teachers | .../rooms);
+  //   * a «Свободные кабинеты» shortcut for the «Кабинеты» kind;
+  //   * the school-site link and, for the saved class, the «Сейчас» widget.
   //
-  // The full day schedule lives on the Schedule screen; Home intentionally does
-  // not render it so the pickers stay above the fold.
-  //
-  // The `today` store is populated from the same `/api/schools` round-trip via
-  // `today.adopt(...)`, so no second request is needed.
+  // Tapping a name opens its schedule via `onOpenEntity(kind, name)`, wired by
+  // the shell to `selection.selectEntity(...)` + `openSchedule()`.
   import {
     api as defaultApi,
     selection as defaultSelection,
     serverToday as defaultToday,
     favorites as defaultFavorites,
     createAsync,
-    type ClassesResponse,
+    KIND_PLURAL_LABELS,
     type FavoritesStore,
     type NowResponse,
     type ScheduleApiClient,
     type ScheduleKind,
     type SchoolsResponse,
     type SelectionStore,
-    type TeachersResponse,
     type TodayStore,
   } from '../lib';
   import SchoolSelect from '../components/SchoolSelect.svelte';
@@ -42,38 +38,46 @@
     selection?: SelectionStore;
     today?: TodayStore;
     favorites?: FavoritesStore;
-    /** Navigate to the full schedule screen (generic tab action). */
-    onOpenSchedule?: () => void;
-    /** Navigate to the free-rooms screen. */
+    /** Navigate to the free-rooms screen (offered for the «Кабинеты» kind). */
     onOpenFreeRooms?: () => void;
     /**
      * Open a specific entity: select it and jump to its schedule. Wired by the
      * shell to `selection.selectEntity(...)` + `openSchedule()`.
      */
     onOpenEntity?: (kind: ScheduleKind, name: string) => void;
-    /**
-     * W41: `STRIKEOUT_FREE_LSN` for the selected school. Home no longer renders
-     * a lesson list (that moved to the Schedule screen), so the flag is unused
-     * here; it is kept in the prop contract for the shell, which still threads
-     * it down to Schedule.
-     */
-    strikeoutFreeLsn?: boolean;
   }
   let {
     client = defaultApi,
     selection = defaultSelection,
     today = defaultToday,
     favorites = defaultFavorites,
-    onOpenSchedule,
     onOpenFreeRooms,
     onOpenEntity,
   }: Props = $props();
 
-  let teacherQuery = $state('');
-  // The original home page is button-first: the «Классы» / «Учителя» pickers are
-  // collapsed behind large buttons and expand on demand.
-  let classesOpen = $state(false);
-  let teachersOpen = $state(false);
+  // Per-kind copy so the list reads naturally in each section.
+  const KIND_LOAD_ERROR: Record<ScheduleKind, string> = {
+    class: 'Ошибка загрузки классов',
+    teacher: 'Ошибка загрузки учителей',
+    room: 'Ошибка загрузки кабинетов',
+  };
+  const KIND_EMPTY: Record<ScheduleKind, string> = {
+    class: 'Классы не найдены',
+    teacher: 'Учителя не найдены',
+    room: 'Кабинеты не найдены',
+  };
+  const KIND_EMPTY_DETAIL: Record<ScheduleKind, string> = {
+    class: 'У школы нет списка классов.',
+    teacher: 'У школы нет списка учителей.',
+    room: 'У школы нет списка кабинетов.',
+  };
+  const KIND_SEARCH_PLACEHOLDER: Record<ScheduleKind, string> = {
+    class: 'Номер класса…',
+    teacher: 'Фамилия или имя…',
+    room: 'Номер кабинета…',
+  };
+
+  let query = $state('');
 
   const schoolsResource = createAsync<SchoolsResponse>(async () => {
     const response = await client.getSchools();
@@ -82,22 +86,19 @@
     return response;
   });
 
-  // Classes for the selected school (the picker list).
-  const classesResource = createAsync<ClassesResponse>(async () => {
+  // Names for the ACTIVE kind within the selected school.
+  const listResource = createAsync<string[]>(async () => {
     const schoolId = selection.schoolId;
     if (!schoolId) {
-      return { classes: [] };
+      return [];
     }
-    return client.getClasses(schoolId);
-  });
-
-  // Teachers for the selected school (searched client-side).
-  const teachersResource = createAsync<TeachersResponse>(async () => {
-    const schoolId = selection.schoolId;
-    if (!schoolId) {
-      return { teachers: [] };
+    if (selection.kind === 'class') {
+      return (await client.getClasses(schoolId)).classes;
     }
-    return client.getTeachers(schoolId);
+    if (selection.kind === 'teacher') {
+      return (await client.getTeachers(schoolId)).teachers;
+    }
+    return (await client.getRooms(schoolId)).rooms;
   });
 
   // W39: current/next lesson for the saved class, from GET .../now.
@@ -114,6 +115,8 @@
     return client.getNow(schoolId, 'class', name, date);
   });
 
+  const kind = $derived(selection.kind);
+
   /** The saved entity is a class (only then do we show the «Сейчас» widget). */
   const savedClass = $derived(
     selection.schoolId !== null && selection.kind === 'class' && selection.name !== null,
@@ -122,20 +125,21 @@
   const nowKey = $derived(
     `${selection.schoolId ?? ''}|${selection.kind}|${selection.name ?? ''}|${today.today}|${schoolsResource.status}`,
   );
+  const listKey = $derived(`${selection.schoolId ?? ''}|${selection.kind}`);
 
   $effect(() => {
     void schoolsResource.load();
   });
 
-  // Load the pickers whenever the selected school changes.
+  // Load the active kind's list whenever the selected school/kind changes, and
+  // drop any stale query so the new section starts from a clean filter.
   $effect(() => {
-    const schoolId = selection.schoolId;
-    if (!schoolId || schoolsResource.status !== 'ready') {
+    void listKey;
+    query = '';
+    if (!selection.schoolId || schoolsResource.status !== 'ready') {
       return;
     }
-    teacherQuery = '';
-    void classesResource.load();
-    void teachersResource.load();
+    void listResource.load();
   });
 
   $effect(() => {
@@ -149,8 +153,8 @@
     selection.selectSchool(schoolId);
   }
 
-  function handleTeacherInput(event: Event) {
-    teacherQuery = (event.currentTarget as HTMLInputElement).value;
+  function handleQueryInput(event: Event) {
+    query = (event.currentTarget as HTMLInputElement).value;
   }
 
   function openEntity(kind: ScheduleKind, name: string) {
@@ -172,32 +176,19 @@
     Boolean(selectedSchool?.homepage_url && (selectedSchool.features?.homepage ?? true)),
   );
 
-  // «Избранное» for the selected school, grouped by kind. Order mirrors the
-  // insertion order of the store within each kind.
-  const favoriteGroups = $derived.by(() => {
-    const items = selection.schoolId ? favorites.list(selection.schoolId) : [];
-    return [
-      { kind: 'class' as const, label: 'Классы', items: items.filter((f) => f.kind === 'class') },
-      {
-        kind: 'teacher' as const,
-        label: 'Учителя',
-        items: items.filter((f) => f.kind === 'teacher'),
-      },
-      { kind: 'room' as const, label: 'Кабинеты', items: items.filter((f) => f.kind === 'room') },
-    ];
-  });
+  // «Избранное» for the active kind (order mirrors the store's insertion order).
+  const favoriteItems = $derived(
+    selection.schoolId ? favorites.list(selection.schoolId, kind) : [],
+  );
 
-  const hasFavorites = $derived(favoriteGroups.some((group) => group.items.length > 0));
+  const allNames = $derived(listResource.data ?? []);
 
-  const classNames = $derived(classesResource.data?.classes ?? []);
-
-  const filteredTeachers = $derived.by(() => {
-    const all = teachersResource.data?.teachers ?? [];
-    const query = teacherQuery.trim().toLowerCase();
-    if (!query) {
-      return all;
+  const filteredNames = $derived.by(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) {
+      return allNames;
     }
-    return all.filter((teacher) => teacher.toLowerCase().includes(query));
+    return allNames.filter((name) => name.toLowerCase().includes(normalized));
   });
 
   const isFavorite = $derived(
@@ -233,164 +224,94 @@
     {/if}
 
     {#if !selection.schoolId}
-      <StateNotice tone="muted" title="Выберите школу" detail="Затем выберите класс или учителя." />
+      <StateNotice tone="muted" title="Выберите школу" detail="Затем выберите нужный раздел." />
     {:else}
-      {#if hasFavorites}
+      <h2 class="list-title">{KIND_PLURAL_LABELS[kind]}</h2>
+
+      {#if favoriteItems.length > 0}
         <section class="favorites" aria-labelledby="favorites-heading">
           <h3 id="favorites-heading">Избранное</h3>
-          {#each favoriteGroups as group (group.kind)}
-            {#if group.items.length > 0}
-              <div class="group">
-                <h4>{group.label}</h4>
-                <ul class="favorite-list">
-                  {#each group.items as favorite (favorite.name)}
-                    <li class="favorite-row">
-                      <button
-                        type="button"
-                        class="favorite-open nika-btn nika-btn-light"
-                        onclick={() => openEntity(group.kind, favorite.name)}
-                      >
-                        <span class="star" aria-hidden="true">★</span>
-                        <span class="favorite-name">{favorite.name}</span>
-                      </button>
-                      <button
-                        type="button"
-                        class="favorite-remove"
-                        aria-label={`Удалить из избранного: ${favorite.name}`}
-                        onclick={() => removeFavorite(group.kind, favorite.name)}
-                      >
-                        ×
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              </div>
-            {/if}
-          {/each}
+          <ul class="favorite-list">
+            {#each favoriteItems as favorite (favorite.name)}
+              <li class="favorite-row">
+                <button
+                  type="button"
+                  class="favorite-open nika-btn nika-btn-light"
+                  onclick={() => openEntity(kind, favorite.name)}
+                >
+                  <span class="star" aria-hidden="true">★</span>
+                  <span class="favorite-name">{favorite.name}</span>
+                </button>
+                <button
+                  type="button"
+                  class="favorite-remove"
+                  aria-label={`Удалить из избранного: ${favorite.name}`}
+                  onclick={() => removeFavorite(kind, favorite.name)}
+                >
+                  ×
+                </button>
+              </li>
+            {/each}
+          </ul>
         </section>
       {/if}
 
-      <div class="big-actions">
-        <button
-          type="button"
-          class="big nika-btn nika-btn-light nika-btn-block"
-          aria-expanded={classesOpen}
-          onclick={() => (classesOpen = !classesOpen)}
-        >
-          Классы
-        </button>
-        {#if classesOpen}
-          <section class="picker" aria-label="Классы">
-            {#if classesResource.status === 'error'}
-              <StateNotice
-                tone="error"
-                title="Ошибка загрузки классов"
-                detail={classesResource.error ?? ''}
-              />
-            {:else if classesResource.status === 'loading' || classesResource.status === 'idle'}
-              <p role="status">Загрузка классов…</p>
-            {:else if classNames.length === 0}
-              <StateNotice
-                tone="muted"
-                title="Классы не найдены"
-                detail="У школы нет списка классов."
-              />
-            {:else}
-              <ul class="chips">
-                {#each classNames as className (className)}
-                  <li class="chip">
-                    <button
-                      type="button"
-                      class="chip-open nika-btn nika-btn-light"
-                      onclick={() => openEntity('class', className)}
-                    >
-                      {className}
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          </section>
-        {/if}
+      <label class="field">
+        <span>Поиск</span>
+        <input
+          type="search"
+          placeholder={KIND_SEARCH_PLACEHOLDER[kind]}
+          autocomplete="off"
+          value={query}
+          oninput={handleQueryInput}
+        />
+      </label>
 
-        <button
-          type="button"
-          class="big nika-btn nika-btn-light nika-btn-block"
-          aria-expanded={teachersOpen}
-          onclick={() => (teachersOpen = !teachersOpen)}
-        >
-          Учителя
-        </button>
-        {#if teachersOpen}
-          <section class="picker" aria-label="Учителя">
-            {#if teachersResource.status === 'error'}
-              <StateNotice
-                tone="error"
-                title="Ошибка загрузки учителей"
-                detail={teachersResource.error ?? ''}
-              />
-            {:else if teachersResource.status === 'loading' || teachersResource.status === 'idle'}
-              <p role="status">Загрузка учителей…</p>
-            {:else if (teachersResource.data?.teachers.length ?? 0) === 0}
-              <StateNotice
-                tone="muted"
-                title="Учителя не найдены"
-                detail="У школы нет списка учителей."
-              />
-            {:else}
-              <label class="field">
-                <span>Поиск учителя</span>
-                <input
-                  type="search"
-                  placeholder="Фамилия или имя…"
-                  autocomplete="off"
-                  value={teacherQuery}
-                  oninput={handleTeacherInput}
-                />
-              </label>
-              {#if filteredTeachers.length === 0}
-                <p class="empty" role="status">Ничего не найдено</p>
-              {:else}
-                <ul class="chips">
-                  {#each filteredTeachers as teacher (teacher)}
-                    <li class="chip">
-                      <button
-                        type="button"
-                        class="chip-open nika-btn nika-btn-light"
-                        onclick={() => openEntity('teacher', teacher)}
-                      >
-                        {teacher}
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-            {/if}
-          </section>
-        {/if}
+      {#if listResource.status === 'error'}
+        <StateNotice
+          tone="error"
+          title={KIND_LOAD_ERROR[kind]}
+          detail={listResource.error ?? ''}
+        />
+      {:else if listResource.status === 'loading' || listResource.status === 'idle'}
+        <p role="status">Загрузка…</p>
+      {:else if allNames.length === 0}
+        <StateNotice tone="muted" title={KIND_EMPTY[kind]} detail={KIND_EMPTY_DETAIL[kind]} />
+      {:else if filteredNames.length === 0}
+        <p class="empty" role="status">Ничего не найдено</p>
+      {:else}
+        <ul class="chips">
+          {#each filteredNames as name (name)}
+            <li class="chip">
+              <button
+                type="button"
+                class="chip-open nika-btn nika-btn-light"
+                onclick={() => openEntity(kind, name)}
+              >
+                {name}
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
 
+      <div class="actions">
+        {#if kind === 'room'}
+          <button
+            type="button"
+            class="free-rooms nika-btn nika-btn-light"
+            onclick={() => onOpenFreeRooms?.()}
+          >
+            Свободные кабинеты
+          </button>
+        {/if}
         {#if showHomepageLink}
           <a
-            class="big nika-btn nika-btn-yellow nika-btn-block"
+            class="school-site nika-btn nika-btn-yellow"
             href={selectedSchool?.homepage_url ?? ''}
           >
             Школьный сайт
           </a>
-        {/if}
-      </div>
-
-      <div class="actions">
-        <button
-          type="button"
-          class="free-rooms nika-btn nika-btn-light"
-          onclick={() => onOpenFreeRooms?.()}
-        >
-          Свободные кабинеты
-        </button>
-        {#if onOpenSchedule}
-          <button type="button" class="primary nika-btn nika-btn-blue" onclick={onOpenSchedule}>
-            Открыть расписание
-          </button>
         {/if}
       </div>
 
@@ -412,18 +333,14 @@
     text-align: left;
   }
 
+  .list-title {
+    font-size: var(--text-xl);
+    margin: 0 0 var(--space-4);
+  }
+
   h3 {
     font-size: var(--text-lg);
     margin: 0 0 var(--space-3);
-  }
-
-  h4 {
-    font-size: var(--text-xs);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin: 0 0 var(--space-2);
-    color: var(--color-muted);
   }
 
   .school-meta {
@@ -437,14 +354,6 @@
 
   .favorites {
     margin-bottom: var(--space-5);
-  }
-
-  .group {
-    margin-bottom: var(--space-4);
-  }
-
-  .group:last-child {
-    margin-bottom: 0;
   }
 
   /* Favorites: large light pills with a yellow star on the left. */
@@ -500,23 +409,6 @@
     background: var(--color-cancel-soft);
   }
 
-  /* Button-first body: big «Классы» / «Учителя» / «Школьный сайт». */
-  .big-actions {
-    display: grid;
-    gap: var(--space-3);
-    margin-bottom: var(--space-4);
-  }
-
-  .big {
-    font-size: var(--text-base);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .picker {
-    margin: 0 0 var(--space-2);
-  }
-
   .chips {
     list-style: none;
     margin: 0;
@@ -539,7 +431,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-    margin-bottom: var(--space-3);
+    margin-bottom: var(--space-4);
     font-size: var(--text-sm);
     color: var(--color-muted);
   }
@@ -564,7 +456,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-3);
-    margin-bottom: var(--space-4);
+    margin: var(--space-4) 0;
   }
 
   [role='status'] {
