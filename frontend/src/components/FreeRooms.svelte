@@ -67,35 +67,41 @@
 
 <style>
   h3 {
-    font-size: 1rem;
-    margin: 0 0 0.35rem;
+    font-size: var(--text-lg);
+    margin: 0 0 var(--space-1);
   }
 
   .controls {
     display: flex;
     align-items: flex-end;
-    gap: 0.75rem;
-    margin-bottom: 0.5rem;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
   }
 
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
-    font-size: 0.85rem;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
   }
 
   select {
-    padding: 0.4rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    background: transparent;
-    color: inherit;
+    min-height: 44px;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
   }
 
   .date {
-    margin: 0 0 0.35rem;
-    opacity: 0.7;
+    margin: 0 0 var(--space-1);
+    color: var(--color-muted);
   }
 
   .rooms {
@@ -104,21 +110,22 @@
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
+    gap: var(--space-1);
   }
 
   .rooms li {
-    padding: 0.3rem 0.6rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
   }
 
   [role='status'] {
-    opacity: 0.7;
+    color: var(--color-muted);
   }
 
   .error {
-    color: #b00020;
+    color: var(--color-cancel);
     opacity: 1;
   }
 </style>

@@ -73,27 +73,29 @@
 
 <style>
   .lesson {
-    padding: 0.5rem 0.6rem;
-    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-    border-radius: 0.5rem;
-    margin-bottom: 0.4rem;
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: var(--space-2);
   }
 
   .lesson.exchange {
-    border-left: 4px solid #f0a000;
-    background: color-mix(in srgb, #f0a000 12%, transparent);
+    border-left: 4px solid var(--color-exchange);
+    background: var(--color-exchange-soft);
   }
 
   .lesson.cancelled {
-    border-left: 4px solid #b00020;
-    background: color-mix(in srgb, #b00020 10%, transparent);
+    border-left: 4px solid var(--color-cancel);
+    background: var(--color-cancel-soft);
     opacity: 0.85;
   }
 
   .head {
     display: flex;
     align-items: baseline;
-    gap: 0.5rem;
+    gap: var(--space-2);
   }
 
   .num {
@@ -106,7 +108,7 @@
 
   .badge {
     margin-left: auto;
-    font-size: 0.75rem;
+    font-size: var(--text-xs);
     text-transform: uppercase;
     letter-spacing: 0.02em;
   }
@@ -134,16 +136,16 @@
 
   .items {
     list-style: none;
-    margin: 0.25rem 0 0;
+    margin: var(--space-1) 0 0;
     padding: 0;
     display: grid;
-    gap: 0.15rem;
+    gap: var(--space-1);
   }
 
   .item {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: var(--space-2);
   }
 
   .subject {
@@ -152,8 +154,8 @@
 
   .meta {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-2);
     opacity: 0.75;
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 </style>

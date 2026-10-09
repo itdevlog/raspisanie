@@ -79,19 +79,19 @@
 
 <style>
   .day {
-    margin-bottom: 1rem;
+    margin-bottom: var(--space-4);
   }
 
   h3 {
-    font-size: 1rem;
-    margin: 0 0 0.35rem;
+    font-size: var(--text-lg);
+    margin: 0 0 var(--space-1);
   }
 
   .period,
   .shift {
-    margin: 0 0 0.35rem;
-    font-size: 0.85rem;
-    opacity: 0.75;
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
   }
 
   .lessons {

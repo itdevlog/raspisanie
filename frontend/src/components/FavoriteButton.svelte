@@ -29,22 +29,31 @@
 
 <style>
   .favorite {
-    margin-top: 0.75rem;
-    padding: 0.5rem 0.9rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    background: transparent;
-    color: inherit;
+    margin-top: var(--space-3);
+    min-height: 44px;
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
     cursor: pointer;
-    font-size: 1rem;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  .favorite:hover {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
   }
 
   .favorite.active {
-    border-color: #d4a017;
-    color: #a9780a;
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background: var(--color-accent-soft);
   }
 
   .star {
-    margin-right: 0.25rem;
+    margin-right: var(--space-1);
   }
 </style>

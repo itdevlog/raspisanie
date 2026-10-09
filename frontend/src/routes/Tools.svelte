@@ -142,13 +142,13 @@
   }
 
   h2 {
-    font-size: 1.25rem;
-    margin: 0 0 0.75rem;
+    font-size: var(--text-xl);
+    margin: 0 0 var(--space-3);
   }
 
   hr {
-    margin: 1rem 0;
+    margin: var(--space-4) 0;
     border: none;
-    border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+    border-top: 1px solid var(--color-border);
   }
 </style>

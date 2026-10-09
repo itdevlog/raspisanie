@@ -199,22 +199,41 @@
 
   nav {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--space-1);
     justify-content: center;
-    margin-bottom: 1rem;
+    margin-bottom: var(--space-4);
+    padding: var(--space-1);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
   }
 
   nav button {
-    padding: 0.4rem 0.8rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    flex: 1;
+    min-height: 40px;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
     background: transparent;
-    color: inherit;
+    color: var(--color-muted);
     cursor: pointer;
+    font-weight: 500;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  nav button:hover:not(.active) {
+    background: var(--color-surface-2);
+    color: var(--color-text);
   }
 
   nav button.active {
     font-weight: 700;
-    border-color: currentColor;
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
   }
 </style>

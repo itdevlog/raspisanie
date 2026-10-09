@@ -35,17 +35,26 @@
   .school {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
-    font-size: 0.85rem;
-    margin-bottom: 1rem;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    margin-bottom: var(--space-4);
   }
 
   select {
-    padding: 0.5rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    background: transparent;
-    color: inherit;
-    font-size: 1rem;
+    min-height: 44px;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  select:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
   }
 </style>

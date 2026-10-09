@@ -121,26 +121,36 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
-    font-size: 0.85rem;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
   }
 
   input {
-    padding: 0.5rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    background: transparent;
-    color: inherit;
-    font-size: 1rem;
+    min-height: 44px;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  input:hover {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
   }
 
   .group {
-    margin-top: 0.75rem;
+    margin-top: var(--space-3);
   }
 
   h4 {
-    font-size: 0.9rem;
-    margin: 0 0 0.35rem;
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-1);
+    color: var(--color-muted);
   }
 
   ul {
@@ -149,24 +159,35 @@
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
+    gap: var(--space-1);
   }
 
   li button {
-    padding: 0.35rem 0.7rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    background: transparent;
-    color: inherit;
+    min-height: 36px;
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
     cursor: pointer;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  li button:hover {
+    background: var(--color-accent-soft);
+    border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+    color: var(--color-accent);
   }
 
   [role='status'] {
-    opacity: 0.7;
+    color: var(--color-muted);
   }
 
   .error {
-    color: #b00020;
+    color: var(--color-cancel);
     opacity: 1;
   }
 </style>

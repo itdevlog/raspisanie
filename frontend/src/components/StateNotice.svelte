@@ -20,23 +20,28 @@
 
 <style>
   .notice {
-    margin: 0.5rem 0;
-    padding: 0.6rem 0.75rem;
-    border-radius: 0.5rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    margin: var(--space-2) 0;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
   }
 
   .muted {
-    opacity: 0.65;
+    color: var(--color-muted);
+    background: var(--color-surface-2);
   }
 
   .error {
-    color: #b00020;
+    color: var(--color-cancel);
+    background: var(--color-cancel-soft);
+    border-color: color-mix(in srgb, var(--color-cancel) 30%, transparent);
   }
 
   .detail {
     display: block;
-    margin-top: 0.15rem;
+    margin-top: var(--space-1);
     opacity: 0.8;
   }
 </style>

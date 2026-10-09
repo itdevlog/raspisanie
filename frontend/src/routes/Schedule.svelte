@@ -548,33 +548,44 @@
   }
 
   h2 {
-    font-size: 1.25rem;
-    margin: 0 0 0.75rem;
+    font-size: var(--text-xl);
+    margin: 0 0 var(--space-3);
   }
 
   .pinned {
-    margin: 0 0 0.5rem;
-    font-size: 0.9rem;
-    opacity: 0.8;
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
   }
 
   .week-nav {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
   }
 
   .week-nav button {
-    padding: 0.2rem 0.6rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    background: transparent;
-    color: inherit;
+    min-height: 40px;
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
     cursor: pointer;
-    font-size: 1.1rem;
+    font-size: var(--text-lg);
     line-height: 1;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  .week-nav button:hover:not(:disabled) {
+    background: var(--color-accent-soft);
+    border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+    color: var(--color-accent);
   }
 
   .week-nav button:disabled {
@@ -583,55 +594,75 @@
   }
 
   .week-label {
-    font-size: 0.9rem;
-    opacity: 0.8;
+    font-size: var(--text-sm);
+    color: var(--color-muted);
   }
 
   .share {
-    margin-top: 0.75rem;
-    padding: 0.5rem 0.9rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    background: transparent;
-    color: inherit;
+    margin-top: var(--space-3);
+    min-height: 44px;
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-accent);
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
     cursor: pointer;
-    font-size: 1rem;
+    font-weight: 600;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  .share:hover {
+    background: color-mix(in srgb, var(--color-accent) 88%, black);
   }
 
   .share-notice {
-    margin: 0.35rem 0 0;
-    font-size: 0.85rem;
-    opacity: 0.75;
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-sm);
+    color: var(--color-muted);
   }
 
   .offline {
-    margin: 0.5rem 0;
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.5rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    font-size: 0.9rem;
+    margin: var(--space-2) 0;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    font-size: var(--text-sm);
   }
 
   .offline[data-tone='offline'] {
-    color: #b00020;
+    color: var(--color-cancel);
+    background: var(--color-cancel-soft);
+    border-color: color-mix(in srgb, var(--color-cancel) 30%, transparent);
   }
 
   .offline-detail {
     display: block;
-    margin-top: 0.15rem;
+    margin-top: var(--space-1);
     opacity: 0.8;
   }
 
   .push {
-    margin-top: 0.75rem;
-    margin-left: 0.5rem;
-    padding: 0.5rem 0.9rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    background: transparent;
-    color: inherit;
+    margin-top: var(--space-3);
+    margin-left: var(--space-2);
+    min-height: 44px;
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
     cursor: pointer;
-    font-size: 1rem;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  .push:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
   }
 
   .push:disabled {
@@ -640,6 +671,6 @@
   }
 
   [role='status'] {
-    opacity: 0.7;
+    color: var(--color-muted);
   }
 </style>

@@ -57,38 +57,40 @@
 
 <style>
   .now {
-    margin-bottom: 1rem;
+    margin-bottom: var(--space-4);
   }
 
   h3 {
-    font-size: 1rem;
-    margin: 0 0 0.35rem;
+    font-size: var(--text-lg);
+    margin: 0 0 var(--space-1);
   }
 
   .lesson {
-    margin: 0.5rem 0;
-    padding: 0.6rem 0.75rem;
-    border-radius: 0.5rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    margin: var(--space-2) 0;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
   }
 
   .detail {
     display: block;
-    margin-top: 0.15rem;
+    margin-top: var(--space-1);
   }
 
   .hint {
     display: block;
-    margin-top: 0.15rem;
-    font-size: 0.85rem;
-    opacity: 0.75;
+    margin-top: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
   }
 
   [role='status'] {
-    opacity: 0.7;
+    color: var(--color-muted);
   }
 
   .lesson[role='status'] {
-    opacity: 1;
+    color: var(--color-text);
   }
 </style>

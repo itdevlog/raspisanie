@@ -181,7 +181,7 @@
     {:else if !hasSavedClass}
       <StateNotice tone="muted" title="Класс не сохранён" detail="Выберите класс в расписании." />
       {#if onOpenSchedule}
-        <button type="button" onclick={onOpenSchedule}>Открыть расписание</button>
+        <button type="button" class="primary" onclick={onOpenSchedule}>Открыть расписание</button>
       {/if}
     {:else}
       <NowWidget data={nowResource.data} status={nowResource.status} error={nowResource.error} />
@@ -206,7 +206,7 @@
       {/if}
 
       {#if onOpenSchedule}
-        <button type="button" onclick={onOpenSchedule}>Открыть расписание</button>
+        <button type="button" class="primary" onclick={onOpenSchedule}>Открыть расписание</button>
       {/if}
     {/if}
   {/if}
@@ -218,44 +218,63 @@
   }
 
   h2 {
-    font-size: 1.25rem;
-    margin: 0 0 0.75rem;
+    font-size: var(--text-xl);
+    margin: 0 0 var(--space-3);
   }
 
   h3 {
-    font-size: 1rem;
-    margin: 0.5rem 0 0.35rem;
+    font-size: var(--text-lg);
+    margin: var(--space-2) 0 var(--space-1);
   }
 
   .school-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
-    margin: -0.5rem 0 0.75rem;
-    font-size: 0.9rem;
-    opacity: 0.8;
+    gap: var(--space-3);
+    margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
   }
 
   .homepage {
-    color: inherit;
+    color: var(--color-link);
   }
 
   button {
-    margin-top: 0.75rem;
-    padding: 0.5rem 0.9rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    background: transparent;
-    color: inherit;
+    margin-top: var(--space-3);
+    min-height: 44px;
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
     cursor: pointer;
-    font-size: 1rem;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  button:hover {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+  }
+
+  button.primary {
+    background: var(--color-accent);
+    color: var(--color-accent-contrast);
+    border-color: var(--color-accent);
+    font-weight: 600;
+  }
+
+  button.primary:hover {
+    background: color-mix(in srgb, var(--color-accent) 88%, black);
   }
 
   .free-rooms {
-    margin-bottom: 0.75rem;
+    margin-bottom: var(--space-3);
   }
 
   [role='status'] {
-    opacity: 0.7;
+    color: var(--color-muted);
   }
 </style>

@@ -32,20 +32,26 @@
 
 <style>
   .open-telegram {
-    display: inline-block;
-    margin-top: 0.75rem;
-    margin-left: 0.5rem;
-    padding: 0.5rem 0.9rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    background: transparent;
-    color: inherit;
+    display: inline-flex;
+    align-items: center;
+    margin-top: var(--space-3);
+    margin-left: var(--space-2);
+    min-height: 44px;
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-link);
     cursor: pointer;
-    font-size: 1rem;
     text-decoration: none;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
   }
 
   .open-telegram:hover {
-    border-color: currentColor;
+    border-color: var(--color-accent);
+    background: var(--color-accent-soft);
   }
 </style>

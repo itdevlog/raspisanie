@@ -1,3 +1,12 @@
+/*
+ * Design tokens for the public schedule PWA.
+ *
+ * One semantic palette drives every component. The Telegram WebApp SDK sets
+ * `--tg-*` custom properties on `<html>` (see `src/lib/telegram.ts`); the
+ * surface/text/accent tokens below read those first and fall back to the
+ * built-in palette, so a Mini App inherits the client theme automatically while
+ * a regular browser gets the same coherent look.
+ */
 :root {
   color-scheme: light dark;
   font-family:
@@ -6,6 +15,76 @@
     'Segoe UI',
     Roboto,
     sans-serif;
+
+  /* Surfaces & text */
+  --color-bg: var(--tg-bg, #f5f6f8);
+  --color-surface: #ffffff;
+  --color-surface-2: #eef1f5;
+  --color-text: var(--tg-text, #16181d);
+  --color-muted: var(--tg-hint, #6b7280);
+  --color-border: #e2e5ea;
+
+  /* Accent */
+  --color-accent: var(--tg-button, #2563eb);
+  --color-accent-contrast: var(--tg-button-text, #ffffff);
+  --color-accent-soft: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  --color-link: var(--tg-link, #2563eb);
+
+  /* Semantic states */
+  --color-exchange: #b45309;
+  --color-exchange-soft: color-mix(in srgb, var(--color-exchange) 14%, transparent);
+  --color-cancel: #b91c1c;
+  --color-cancel-soft: color-mix(in srgb, var(--color-cancel) 12%, transparent);
+  --color-vacation: #15803d;
+  --color-vacation-soft: color-mix(in srgb, var(--color-vacation) 12%, transparent);
+  --color-free: var(--color-muted);
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(15, 17, 21, 0.06), 0 1px 3px rgba(15, 17, 21, 0.08);
+  --shadow-md: 0 4px 10px rgba(15, 17, 21, 0.1), 0 2px 4px rgba(15, 17, 21, 0.06);
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Type scale */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: var(--tg-bg, #0f1115);
+    --color-surface: #1a1d23;
+    --color-surface-2: #23272f;
+    --color-text: var(--tg-text, #e8eaed);
+    --color-muted: var(--tg-hint, #9aa0a6);
+    --color-border: #2f343c;
+
+    --color-exchange: #f59e0b;
+    --color-cancel: #f87171;
+    --color-vacation: #4ade80;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
@@ -13,10 +92,52 @@ body {
   min-height: 100vh;
   display: grid;
   place-items: center;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-base);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
 }
 
 #app {
   width: 100%;
   max-width: 40rem;
-  padding: 1.5rem;
+  padding: var(--space-4);
+}
+
+h1 {
+  font-size: var(--text-2xl);
+}
+
+h2 {
+  font-size: var(--text-xl);
+}
+
+h3 {
+  font-size: var(--text-lg);
+}
+
+a {
+  color: var(--color-link);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* Shared panel/card treatment. */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }

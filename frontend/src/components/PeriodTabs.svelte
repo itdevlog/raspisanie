@@ -33,22 +33,40 @@
 <style>
   .periods {
     display: flex;
-    gap: 0.25rem;
-    margin-bottom: 0.75rem;
+    gap: var(--space-1);
+    margin-bottom: var(--space-3);
+    padding: var(--space-1);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
   }
 
   .periods button {
     flex: 1;
-    padding: 0.4rem 0.6rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    border-radius: 0.4rem;
+    min-height: 40px;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
     background: transparent;
-    color: inherit;
+    color: var(--color-muted);
     cursor: pointer;
+    font-weight: 500;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  .periods button:hover:not(.active) {
+    background: var(--color-surface-2);
+    color: var(--color-text);
   }
 
   .periods button.active {
     font-weight: 700;
-    border-color: currentColor;
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
   }
 </style>

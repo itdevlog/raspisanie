@@ -64,37 +64,70 @@
 <style>
   .tabs {
     display: flex;
-    gap: 0.25rem;
-    margin-bottom: 0.5rem;
+    gap: var(--space-1);
+    margin-bottom: var(--space-3);
+    padding: var(--space-1);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
   }
 
   .tabs button {
     flex: 1;
-    padding: 0.4rem 0.6rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    border-radius: 0.4rem;
+    min-height: 40px;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
     background: transparent;
-    color: inherit;
+    color: var(--color-muted);
     cursor: pointer;
+    font-weight: 500;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  .tabs button:hover:not(.active) {
+    background: var(--color-surface-2);
+    color: var(--color-text);
   }
 
   .tabs button.active {
     font-weight: 700;
-    border-color: currentColor;
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
   }
 
   .field {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
-    font-size: 0.85rem;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
   }
 
   select {
-    padding: 0.4rem;
-    border-radius: 0.4rem;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    background: transparent;
-    color: inherit;
+    min-height: 44px;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
+  }
+
+  select:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+  }
+
+  select:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
 </style>
