@@ -175,7 +175,11 @@ class RoomService(BaseScheduleService):
                         class_lesson = self.exchange_service.apply_exchanges_to_schedule(class_name, class_lesson, date)
                         updated_lesson = class_lesson[0] if class_lesson else None
 
-                        if updated_lesson and not updated_lesson.get('is_cancelled'):
+                        if updated_lesson:
+                            # Отменённые уроки (CLASS_EXCHANGE 'F') сохраняем с
+                            # is_cancelled=True — иначе календарь месяца кабинета
+                            # не видит отмен (has_cancelled всегда False). Фронтенд
+                            # скрывает/зачёркивает их по STRIKEOUT_FREE_LSN.
                             schedule.append({
                                 'lesson_num': lesson_num,
                                 'class_name': class_name,

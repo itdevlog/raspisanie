@@ -140,6 +140,23 @@ def test_month_detects_exchange_and_cancelled():
     assert days['07.01.2026']['has_exchange'] is False
 
 
+def test_month_teacher_detects_cancelled_via_class_exchange():
+    """Отмена урока класса видна в календаре учителя (маркер «О»)."""
+    school = _school(CLASS_EXCHANGE={'c1': {'05.01.2026': {'1': {'s': 'F'}}}})
+    days = _by_date(TeacherService(school).get_month('Иванов', 2026, 1))
+    assert days['05.01.2026']['has_cancelled'] is True
+    assert days['05.01.2026']['lesson_count'] == 2  # урок 1 отменён, урок 2 остался
+
+
+def test_month_room_detects_cancelled_via_class_exchange():
+    """Отмена урока класса видна в календаре кабинета (маркер «О»)."""
+    school = _school(CLASS_EXCHANGE={'c1': {'05.01.2026': {'1': {'s': 'F'}}}})
+    days = _by_date(RoomService(school).get_month('101', 2026, 1))
+    assert days['05.01.2026']['has_cancelled'] is True
+    assert days['05.01.2026']['lesson_count'] == 1  # в кабинете 101 только урок 1
+    assert days['06.01.2026']['has_cancelled'] is False
+
+
 # --- дни вне периода --------------------------------------------------------
 
 def test_month_outside_period_is_no_period():
