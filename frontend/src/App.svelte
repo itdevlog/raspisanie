@@ -23,6 +23,7 @@
     type RouteStore,
     type FavoritesStore,
     type ScheduleApiClient,
+    type ScheduleKind,
     type SelectionStore,
     type TodayStore,
   } from './lib';
@@ -123,6 +124,15 @@
   }
 
   /**
+   * Open a specific entity picked on Home: adopt it into the selection store
+   * and jump to its schedule (encoded in the URL via `openSchedule`).
+   */
+  function openEntity(kind: ScheduleKind, name: string): void {
+    selection.selectEntity(kind, name);
+    openSchedule();
+  }
+
+  /**
    * W38: open a specific day from the month calendar. Encodes the date in the
    * same share scheme so the URL is deep-linkable and the back button works.
    */
@@ -175,6 +185,7 @@
       {favorites}
       {strikeoutFreeLsn}
       onOpenSchedule={openSchedule}
+      onOpenEntity={openEntity}
       onOpenFreeRooms={() => router.goTo('tools')}
     />
   {:else if view === 'schedule'}

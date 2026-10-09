@@ -71,6 +71,27 @@ describe('App shell', () => {
     expect(fake.location.pathname).toBe('/tools');
   });
 
+  it('opens a class picked on Home and syncs the URL', async () => {
+    const fake = makeFakeEnv('/');
+    const router = createRouteStore(fake.env);
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    const client = makeClient({
+      getClasses: vi.fn().mockResolvedValue({ classes: ['5А', '6Б'] }),
+    });
+
+    const { findByRole } = render(App, {
+      props: { client, selection, today: makeToday(), router },
+    });
+    await waitFor(() => expect(router.started).toBe(true));
+
+    await fireEvent.click(await findByRole('button', { name: '6Б' }));
+
+    await waitFor(() => expect(selection.name).toBe('6Б'));
+    expect(selection.kind).toBe('class');
+    expect(fake.location.pathname).toBe('/s/gym1/class/6%D0%91');
+  });
+
   it('opens a share deep link at the linked entity and date', async () => {
     // W16-shaped link: /s/{school}/class/{encoded name}?date=…
     const fake = makeFakeEnv('/s/gym1/class/5%D0%90?date=07.09.2026');
