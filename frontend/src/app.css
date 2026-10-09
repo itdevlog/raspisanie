@@ -1,53 +1,111 @@
 /*
  * Design tokens for the public schedule PWA.
  *
- * One semantic palette drives every component. The Telegram WebApp SDK sets
- * `--tg-*` custom properties on `<html>` (see `src/lib/telegram.ts`); the
- * surface/text/accent tokens below read those first and fall back to the
- * built-in palette, so a Mini App inherits the client theme automatically while
- * a regular browser gets the same coherent look.
+ * The LIGHT palette reproduces the original Nikasoft mobile site: the jQuery
+ * Mobile 1.3.2 theme plus its `m.schedule.css`. Every colour/radius below is
+ * taken verbatim from that source so the restyle is faithful.
+ *
+ * The Telegram WebApp SDK sets `--tg-*` custom properties on `<html>` (see
+ * `src/lib/telegram.ts`); the semantic surface/text/accent tokens read those
+ * first and fall back to the built-in palette, so a Mini App inherits the
+ * client theme automatically while a regular browser gets the original look.
  */
 :root {
   color-scheme: light dark;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+  font-family: Helvetica, Arial, 'Segoe UI', sans-serif;
 
+  /* ---- Nikasoft original palette ---------------------------------------- */
+  --nika-radius: 0.6em;
+
+  /* Header bar (jQM bar-a). */
+  --nika-header-border: #456f9a;
+  --nika-header-bg: #1e8bdc;
+  --nika-header-bg-image: linear-gradient(#1d88d7, #1e8de0);
+  --nika-header-text: #fff;
+  --nika-header-text-shadow: 0 1px 0 #3e6790;
+
+  /* Blue button / tab (jQM btn-a / navbar). */
+  --nika-btn-blue-border: #044062;
+  --nika-btn-blue-bg: #1e8bdc;
+  --nika-btn-blue-bg-image: linear-gradient(#25adff, #1668a5);
+  --nika-btn-blue-text: #fff;
+  --nika-btn-blue-text-shadow: 0 1px 0 #194b7e;
+
+  /* Light (default) button (jQM btn-c). */
+  --nika-btn-light-border: #bbb;
+  --nika-btn-light-bg: #fff;
+  --nika-btn-light-bg-image: linear-gradient(#fafafa, #f6f6f6);
+  --nika-btn-light-text: #333;
+  --nika-btn-light-text-shadow: 0 1px 0 #fff;
+
+  /* Yellow button (jQM btn-e) — «Школьный сайт» / favorite toggle. */
+  --nika-btn-yellow-border: #f7c942;
+  --nika-btn-yellow-bg: #fadb4e;
+  --nika-btn-yellow-bg-image: linear-gradient(#fceda7, #fbef7e);
+  --nika-btn-yellow-text: #333;
+  --nika-btn-yellow-text-shadow: 0 1px 0 #fff;
+
+  /* Pressed/highlight states: the gradients reversed + a touch darker. */
+  --nika-pressed-blue-image: linear-gradient(#1668a5, #25adff);
+  --nika-pressed-light-image: linear-gradient(#f6f6f6, #fafafa);
+  --nika-pressed-yellow-image: linear-gradient(#fbef7e, #fceda7);
+  --nika-shadow: 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(0, 0, 0, 0.15);
+
+  /* Lesson text colours (m.schedule.css). */
+  --lesson-num: #aaa;
+  --lesson-time: #008000;
+  --lesson-subject: #228;
+  --lesson-teacher: #266;
+  --lesson-room: #000;
+  --lesson-cancel: #d22;
+  --lesson-exchange: #d22;
+  --lesson-group: #00f;
+  --lesson-upk: #09c;
+  --lesson-free-teacher: #f96c04;
+
+  /* Month calendar (m.schedule.css). */
+  --cal-cell-border: #aaf;
+  --cal-cell-text: #555;
+  --cal-day-bg: #d7ebfa;
+  --cal-changed-bg: #ffd4d7;
+  --cal-method-bg: #fecba5;
+  --cal-today-border: #88c;
+  --cal-sat: #090;
+  --cal-sun: #c22;
+
+  /* ---- Semantic tokens used by the components --------------------------- */
   /* Surfaces & text */
-  --color-bg: var(--tg-bg, #f5f6f8);
+  --color-bg: var(--tg-bg, #eee);
   --color-surface: #ffffff;
-  --color-surface-2: #eef1f5;
-  --color-track: #e9edf2;
-  --color-text: var(--tg-text, #16181d);
-  --color-muted: var(--tg-hint, #6b7280);
-  --color-border: #e2e5ea;
+  --color-surface-2: #f6f6f6;
+  --color-track: #d9d9d9;
+  --color-text: var(--tg-text, #333333);
+  --color-muted: var(--tg-hint, #555555);
+  --color-border: #bbbbbb;
 
-  /* Accent */
-  --color-accent: var(--tg-button, #2563eb);
+  /* Accent → original blue */
+  --color-accent: var(--tg-button, #1e8bdc);
   --color-accent-contrast: var(--tg-button-text, #ffffff);
   --color-accent-soft: color-mix(in srgb, var(--color-accent) 12%, transparent);
-  --color-link: var(--tg-link, #2563eb);
+  --color-link: var(--tg-link, #1e8bdc);
 
-  /* Semantic states */
-  --color-exchange: #b45309;
+  /* Semantic states (original reds/greens) */
+  --color-exchange: #d22;
   --color-exchange-soft: color-mix(in srgb, var(--color-exchange) 14%, transparent);
-  --color-cancel: #b91c1c;
+  --color-cancel: #d22;
   --color-cancel-soft: color-mix(in srgb, var(--color-cancel) 12%, transparent);
-  --color-vacation: #15803d;
+  --color-vacation: #090;
   --color-vacation-soft: color-mix(in srgb, var(--color-vacation) 12%, transparent);
   --color-free: var(--color-muted);
 
-  /* Radius */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  /* Radius — the original pills use `.6em`. */
+  --radius-sm: 0.6em;
+  --radius-md: 0.6em;
+  --radius-lg: 0.6em;
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(15, 17, 21, 0.06), 0 1px 3px rgba(15, 17, 21, 0.08);
-  --shadow-md: 0 4px 10px rgba(15, 17, 21, 0.1), 0 2px 4px rgba(15, 17, 21, 0.06);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.18);
 
   /* Spacing */
   --space-1: 4px;
@@ -66,22 +124,31 @@
   --text-2xl: 24px;
 }
 
+/*
+ * Dark theme: a derivation of the original palette. The header/button
+ * gradients stay as-is (they read well on dark), only surfaces/text invert.
+ */
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: var(--tg-bg, #0f1115);
-    --color-surface: #1a1d23;
-    --color-surface-2: #23272f;
-    --color-track: #15181e;
+    --color-bg: var(--tg-bg, #17191c);
+    --color-surface: #24272b;
+    --color-surface-2: #2e3237;
+    --color-track: #1d2023;
     --color-text: var(--tg-text, #e8eaed);
-    --color-muted: var(--tg-hint, #9aa0a6);
-    --color-border: #2f343c;
+    --color-muted: var(--tg-hint, #a0a4a8);
+    --color-border: #3a3f44;
 
     --color-exchange: #f59e0b;
     --color-cancel: #f87171;
     --color-vacation: #4ade80;
 
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+    --cal-cell-text: #c9ccd0;
+    --cal-day-bg: #23303c;
+    --cal-changed-bg: #3a2628;
+    --cal-method-bg: #3a2f22;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -93,7 +160,7 @@ body {
   margin: 0;
   min-height: 100vh;
   display: grid;
-  place-items: center;
+  place-items: start center;
   background: var(--color-bg);
   color: var(--color-text);
   font-size: var(--text-base);
@@ -105,14 +172,13 @@ body {
 #app {
   width: 100%;
   max-width: 40rem;
-  padding: var(--space-5) var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-4) var(--space-6);
 }
 
 h1,
 h2,
 h3 {
   line-height: 1.25;
-  letter-spacing: -0.011em;
   text-wrap: balance;
 }
 
@@ -159,6 +225,87 @@ textarea {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   padding: var(--space-4);
+}
+
+/* ---- Original-style button helpers (global, opt-in) --------------------- */
+.nika-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  min-height: 44px;
+  padding: 0.55em 1em;
+  border-radius: var(--nika-radius);
+  font-weight: bold;
+  line-height: 1.2;
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: var(--nika-shadow);
+  transition:
+    filter 0.12s ease,
+    transform 0.05s ease;
+}
+
+.nika-btn:active {
+  transform: translateY(1px);
+  filter: brightness(0.94);
+}
+
+.nika-btn-block {
+  display: flex;
+  width: 100%;
+}
+
+.nika-btn-blue {
+  border: 1px solid var(--nika-btn-blue-border);
+  background: var(--nika-btn-blue-bg);
+  background-image: var(--nika-btn-blue-bg-image);
+  color: var(--nika-btn-blue-text);
+  text-shadow: var(--nika-btn-blue-text-shadow);
+}
+
+.nika-btn-light {
+  border: 1px solid var(--nika-btn-light-border);
+  background: var(--nika-btn-light-bg);
+  background-image: var(--nika-btn-light-bg-image);
+  color: var(--nika-btn-light-text);
+  text-shadow: var(--nika-btn-light-text-shadow);
+}
+
+.nika-btn-yellow {
+  border: 1px solid var(--nika-btn-yellow-border);
+  background: var(--nika-btn-yellow-bg);
+  background-image: var(--nika-btn-yellow-bg-image);
+  color: var(--nika-btn-yellow-text);
+  text-shadow: var(--nika-btn-yellow-text-shadow);
+}
+
+.nika-btn[aria-pressed='true'],
+.nika-btn.is-active {
+  background-image: var(--nika-pressed-blue-image);
+}
+
+.nika-btn-light[aria-pressed='true'],
+.nika-btn-light.is-active {
+  background-image: var(--nika-pressed-light-image);
+}
+
+.nika-btn-yellow[aria-pressed='true'],
+.nika-btn-yellow.is-active {
+  background-image: var(--nika-pressed-yellow-image);
+}
+
+/* Visually hidden helper for accessible-only text. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Calm, airy default for interactive controls; components refine as needed. */

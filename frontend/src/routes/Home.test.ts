@@ -94,7 +94,7 @@ describe('Home screen', () => {
       });
     }
 
-    it('shows city, «Обновлено» and the school-site link', async () => {
+    it('shows the city and the yellow school-site button', async () => {
       const selection = makeSelection();
       selection.selectSchool('gym1');
 
@@ -103,12 +103,12 @@ describe('Home screen', () => {
       });
 
       expect(await findByText('Москва')).toBeTruthy();
-      expect(await findByText('Обновлено 01.09.2026 10:00')).toBeTruthy();
-      const link = await findByRole('link', { name: 'Сайт школы' });
+      // «Обновлено» now lives in the App header, not on Home.
+      const link = await findByRole('link', { name: 'Школьный сайт' });
       expect(link.getAttribute('href')).toBe('https://gym1.example.ru');
     });
 
-    it('hides the site link when features.homepage is false', async () => {
+    it('hides the site button when features.homepage is false', async () => {
       const selection = makeSelection();
       selection.selectSchool('gym1');
 
@@ -121,10 +121,10 @@ describe('Home screen', () => {
       });
 
       expect(await findByText('Москва')).toBeTruthy();
-      expect(queryByRole('link', { name: 'Сайт школы' })).toBeNull();
+      expect(queryByRole('link', { name: 'Школьный сайт' })).toBeNull();
     });
 
-    it('hides the site link when there is no homepage_url', async () => {
+    it('hides the site button when there is no homepage_url', async () => {
       const selection = makeSelection();
       selection.selectSchool('gym1');
 
@@ -137,12 +137,12 @@ describe('Home screen', () => {
       });
 
       expect(await findByText('Москва')).toBeTruthy();
-      expect(queryByRole('link', { name: 'Сайт школы' })).toBeNull();
+      expect(queryByRole('link', { name: 'Школьный сайт' })).toBeNull();
     });
   });
 
   describe('favorites-first picker', () => {
-    it('lists classes and opens a class schedule', async () => {
+    it('expands «Классы» and opens a class schedule', async () => {
       const selection = makeSelection();
       selection.selectSchool('gym1');
       const onOpenEntity = vi.fn();
@@ -154,6 +154,8 @@ describe('Home screen', () => {
         props: { client, selection, today: makeToday(), onOpenEntity },
       });
 
+      // The list is collapsed behind the big «Классы» button by default.
+      await fireEvent.click(await findByRole('button', { name: 'Классы' }));
       await fireEvent.click(await findByRole('button', { name: '6Б' }));
       expect(onOpenEntity).toHaveBeenCalledWith('class', '6Б');
     });
@@ -170,6 +172,7 @@ describe('Home screen', () => {
         props: { client, selection, today: makeToday(), onOpenEntity },
       });
 
+      await fireEvent.click(await findByRole('button', { name: 'Учителя' }));
       const input = await findByRole('searchbox', { name: 'Поиск учителя' });
       expect(await findByRole('button', { name: 'Петров П.П.' })).toBeTruthy();
 
@@ -180,7 +183,7 @@ describe('Home screen', () => {
       expect(onOpenEntity).toHaveBeenCalledWith('teacher', 'Петров П.П.');
     });
 
-    it('shows deliberate error and empty states for the lists', async () => {
+    it('shows deliberate error and empty states for the collapsible lists', async () => {
       const selection = makeSelection();
       selection.selectSchool('gym1');
       const client = makeClient({
@@ -188,12 +191,15 @@ describe('Home screen', () => {
         getTeachers: vi.fn().mockResolvedValue({ teachers: [] }),
       });
 
-      const { findByText } = render(Home, {
+      const { findByText, findByRole } = render(Home, {
         props: { client, selection, today: makeToday() },
       });
 
+      await fireEvent.click(await findByRole('button', { name: 'Классы' }));
       expect(await findByText('Ошибка загрузки классов')).toBeTruthy();
       expect(await findByText('нет классов')).toBeTruthy();
+
+      await fireEvent.click(await findByRole('button', { name: 'Учителя' }));
       expect(await findByText('Учителя не найдены')).toBeTruthy();
     });
 

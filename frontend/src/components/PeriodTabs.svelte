@@ -22,7 +22,8 @@
       type="button"
       role="tab"
       aria-selected={value === option.id}
-      class:active={value === option.id}
+      class="period nika-btn nika-btn-blue"
+      class:is-active={value === option.id}
       onclick={() => onChange(option.id)}
     >
       {option.label}
@@ -31,6 +32,7 @@
 </div>
 
 <style>
+  /* Original two-tone segmented bar: blue tabs, active = pressed/highlight. */
   .periods {
     display: flex;
     gap: var(--space-1);
@@ -40,36 +42,10 @@
     border-radius: var(--radius-md);
   }
 
-  .periods button {
+  .period {
     flex: 1;
     min-height: 44px;
     padding: var(--space-2) var(--space-1);
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--color-muted);
-    cursor: pointer;
     font-size: var(--text-sm);
-    font-weight: 500;
-    transition:
-      background-color 0.15s,
-      color 0.15s,
-      box-shadow 0.15s,
-      transform 0.1s;
-  }
-
-  .periods button:hover:not(.active) {
-    color: var(--color-text);
-  }
-
-  .periods button:active {
-    transform: scale(0.98);
-  }
-
-  .periods button.active {
-    font-weight: 600;
-    background: var(--color-surface);
-    color: var(--color-accent);
-    box-shadow: var(--shadow-sm);
   }
 </style>

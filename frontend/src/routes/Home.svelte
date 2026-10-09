@@ -70,6 +70,10 @@
   }: Props = $props();
 
   let teacherQuery = $state('');
+  // The original home page is button-first: the «Классы» / «Учителя» pickers are
+  // collapsed behind large buttons and expand on demand.
+  let classesOpen = $state(false);
+  let teachersOpen = $state(false);
 
   const schoolsResource = createAsync<SchoolsResponse>(async () => {
     const response = await client.getSchools();
@@ -211,8 +215,6 @@
 </script>
 
 <section class="home">
-  <h2>Главная</h2>
-
   {#if schoolsResource.status === 'error'}
     <StateNotice tone="error" title="Ошибка загрузки школ" detail={schoolsResource.error ?? ''} />
   {:else if schoolsResource.status === 'loading' || schoolsResource.status === 'idle'}
@@ -224,17 +226,9 @@
       onChange={handleSchoolChange}
     />
 
-    {#if selectedSchool}
+    {#if selectedSchool?.city}
       <div class="school-meta">
-        {#if selectedSchool.city}
-          <span class="city">{selectedSchool.city}</span>
-        {/if}
-        {#if selectedSchool.updated}
-          <span class="updated">Обновлено {selectedSchool.updated}</span>
-        {/if}
-        {#if showHomepageLink}
-          <a class="homepage" href={selectedSchool.homepage_url}>Сайт школы</a>
-        {/if}
+        <span class="city">{selectedSchool.city}</span>
       </div>
     {/if}
 
@@ -242,25 +236,26 @@
       <StateNotice tone="muted" title="Выберите школу" detail="Затем выберите класс или учителя." />
     {:else}
       {#if hasFavorites}
-        <section class="picker favorites" aria-labelledby="favorites-heading">
+        <section class="favorites" aria-labelledby="favorites-heading">
           <h3 id="favorites-heading">Избранное</h3>
           {#each favoriteGroups as group (group.kind)}
             {#if group.items.length > 0}
               <div class="group">
                 <h4>{group.label}</h4>
-                <ul class="chips">
+                <ul class="favorite-list">
                   {#each group.items as favorite (favorite.name)}
-                    <li class="chip">
+                    <li class="favorite-row">
                       <button
                         type="button"
-                        class="chip-open"
+                        class="favorite-open nika-btn nika-btn-light"
                         onclick={() => openEntity(group.kind, favorite.name)}
                       >
-                        {favorite.name}
+                        <span class="star" aria-hidden="true">★</span>
+                        <span class="favorite-name">{favorite.name}</span>
                       </button>
                       <button
                         type="button"
-                        class="chip-remove"
+                        class="favorite-remove"
                         aria-label={`Удалить из избранного: ${favorite.name}`}
                         onclick={() => removeFavorite(group.kind, favorite.name)}
                       >
@@ -275,88 +270,127 @@
         </section>
       {/if}
 
-      <section class="picker" aria-labelledby="classes-heading">
-        <h3 id="classes-heading">Классы</h3>
-        {#if classesResource.status === 'error'}
-          <StateNotice
-            tone="error"
-            title="Ошибка загрузки классов"
-            detail={classesResource.error ?? ''}
-          />
-        {:else if classesResource.status === 'loading' || classesResource.status === 'idle'}
-          <p role="status">Загрузка классов…</p>
-        {:else if classNames.length === 0}
-          <StateNotice tone="muted" title="Классы не найдены" detail="У школы нет списка классов." />
-        {:else}
-          <ul class="chips">
-            {#each classNames as className (className)}
-              <li class="chip">
-                <button
-                  type="button"
-                  class="chip-open"
-                  onclick={() => openEntity('class', className)}
-                >
-                  {className}
-                </button>
-              </li>
-            {/each}
-          </ul>
+      <div class="big-actions">
+        <button
+          type="button"
+          class="big nika-btn nika-btn-light nika-btn-block"
+          aria-expanded={classesOpen}
+          onclick={() => (classesOpen = !classesOpen)}
+        >
+          Классы
+        </button>
+        {#if classesOpen}
+          <section class="picker" aria-label="Классы">
+            {#if classesResource.status === 'error'}
+              <StateNotice
+                tone="error"
+                title="Ошибка загрузки классов"
+                detail={classesResource.error ?? ''}
+              />
+            {:else if classesResource.status === 'loading' || classesResource.status === 'idle'}
+              <p role="status">Загрузка классов…</p>
+            {:else if classNames.length === 0}
+              <StateNotice
+                tone="muted"
+                title="Классы не найдены"
+                detail="У школы нет списка классов."
+              />
+            {:else}
+              <ul class="chips">
+                {#each classNames as className (className)}
+                  <li class="chip">
+                    <button
+                      type="button"
+                      class="chip-open nika-btn nika-btn-light"
+                      onclick={() => openEntity('class', className)}
+                    >
+                      {className}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </section>
         {/if}
-      </section>
 
-      <section class="picker" aria-labelledby="teachers-heading">
-        <h3 id="teachers-heading">Учителя</h3>
-        {#if teachersResource.status === 'error'}
-          <StateNotice
-            tone="error"
-            title="Ошибка загрузки учителей"
-            detail={teachersResource.error ?? ''}
-          />
-        {:else if teachersResource.status === 'loading' || teachersResource.status === 'idle'}
-          <p role="status">Загрузка учителей…</p>
-        {:else if (teachersResource.data?.teachers.length ?? 0) === 0}
-          <StateNotice
-            tone="muted"
-            title="Учителя не найдены"
-            detail="У школы нет списка учителей."
-          />
-        {:else}
-          <label class="field">
-            <span>Поиск учителя</span>
-            <input
-              type="search"
-              placeholder="Фамилия или имя…"
-              autocomplete="off"
-              value={teacherQuery}
-              oninput={handleTeacherInput}
-            />
-          </label>
-          {#if filteredTeachers.length === 0}
-            <p class="empty" role="status">Ничего не найдено</p>
-          {:else}
-            <ul class="chips">
-              {#each filteredTeachers as teacher (teacher)}
-                <li class="chip">
-                  <button
-                    type="button"
-                    class="chip-open"
-                    onclick={() => openEntity('teacher', teacher)}
-                  >
-                    {teacher}
-                  </button>
-                </li>
-              {/each}
-            </ul>
-          {/if}
+        <button
+          type="button"
+          class="big nika-btn nika-btn-light nika-btn-block"
+          aria-expanded={teachersOpen}
+          onclick={() => (teachersOpen = !teachersOpen)}
+        >
+          Учителя
+        </button>
+        {#if teachersOpen}
+          <section class="picker" aria-label="Учителя">
+            {#if teachersResource.status === 'error'}
+              <StateNotice
+                tone="error"
+                title="Ошибка загрузки учителей"
+                detail={teachersResource.error ?? ''}
+              />
+            {:else if teachersResource.status === 'loading' || teachersResource.status === 'idle'}
+              <p role="status">Загрузка учителей…</p>
+            {:else if (teachersResource.data?.teachers.length ?? 0) === 0}
+              <StateNotice
+                tone="muted"
+                title="Учителя не найдены"
+                detail="У школы нет списка учителей."
+              />
+            {:else}
+              <label class="field">
+                <span>Поиск учителя</span>
+                <input
+                  type="search"
+                  placeholder="Фамилия или имя…"
+                  autocomplete="off"
+                  value={teacherQuery}
+                  oninput={handleTeacherInput}
+                />
+              </label>
+              {#if filteredTeachers.length === 0}
+                <p class="empty" role="status">Ничего не найдено</p>
+              {:else}
+                <ul class="chips">
+                  {#each filteredTeachers as teacher (teacher)}
+                    <li class="chip">
+                      <button
+                        type="button"
+                        class="chip-open nika-btn nika-btn-light"
+                        onclick={() => openEntity('teacher', teacher)}
+                      >
+                        {teacher}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            {/if}
+          </section>
         {/if}
-      </section>
+
+        {#if showHomepageLink}
+          <a
+            class="big nika-btn nika-btn-yellow nika-btn-block"
+            href={selectedSchool?.homepage_url ?? ''}
+          >
+            Школьный сайт
+          </a>
+        {/if}
+      </div>
 
       <div class="actions">
-        <button type="button" class="free-rooms" onclick={() => onOpenFreeRooms?.()}>
+        <button
+          type="button"
+          class="free-rooms nika-btn nika-btn-light"
+          onclick={() => onOpenFreeRooms?.()}
+        >
           Свободные кабинеты
         </button>
         {#if onOpenSchedule}
-          <button type="button" class="primary" onclick={onOpenSchedule}>Открыть расписание</button>
+          <button type="button" class="primary nika-btn nika-btn-blue" onclick={onOpenSchedule}>
+            Открыть расписание
+          </button>
         {/if}
       </div>
 
@@ -378,19 +412,16 @@
     text-align: left;
   }
 
-  h2 {
-    font-size: var(--text-2xl);
-    margin: 0 0 var(--space-4);
-  }
-
   h3 {
     font-size: var(--text-lg);
     margin: 0 0 var(--space-3);
   }
 
   h4 {
-    font-size: var(--text-sm);
-    font-weight: 600;
+    font-size: var(--text-xs);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     margin: 0 0 var(--space-2);
     color: var(--color-muted);
   }
@@ -399,22 +430,13 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-3);
-    margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+    margin: 0 0 var(--space-4);
     font-size: var(--text-sm);
     color: var(--color-muted);
   }
 
-  .homepage {
-    color: var(--color-link);
-  }
-
-  .picker {
+  .favorites {
     margin-bottom: var(--space-5);
-  }
-
-  .picker + .picker {
-    padding-top: var(--space-5);
-    border-top: 1px solid var(--color-border);
   }
 
   .group {
@@ -423,6 +445,76 @@
 
   .group:last-child {
     margin-bottom: 0;
+  }
+
+  /* Favorites: large light pills with a yellow star on the left. */
+  .favorite-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .favorite-row {
+    display: flex;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+
+  .favorite-open {
+    flex: 1;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .star {
+    color: var(--nika-btn-yellow-bg);
+    font-size: var(--text-lg);
+    line-height: 1;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
+  }
+
+  .favorite-name {
+    flex: 1;
+  }
+
+  .favorite-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--nika-radius);
+    background: var(--color-surface);
+    color: var(--color-cancel);
+    font-size: var(--text-lg);
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: var(--nika-shadow);
+  }
+
+  .favorite-remove:hover {
+    background: var(--color-cancel-soft);
+  }
+
+  /* Button-first body: big «Классы» / «Учителя» / «Школьный сайт». */
+  .big-actions {
+    display: grid;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .big {
+    font-size: var(--text-base);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .picker {
+    margin: 0 0 var(--space-2);
   }
 
   .chips {
@@ -436,57 +528,11 @@
 
   .chip {
     display: inline-flex;
-    align-items: stretch;
-    border-radius: var(--radius-sm);
-    border: 1px solid transparent;
-    background: var(--color-surface-2);
-    overflow: hidden;
   }
 
   .chip-open {
-    min-height: 44px;
-    padding: var(--space-2) var(--space-3);
-    border: none;
-    background: transparent;
-    color: var(--color-text);
-    cursor: pointer;
-    transition:
-      background-color 0.15s,
-      color 0.15s,
-      transform 0.1s;
-  }
-
-  .chip-open:hover {
-    background: var(--color-accent-soft);
-    color: var(--color-accent);
-  }
-
-  .chip-open:active {
-    transform: scale(0.98);
-  }
-
-  .chip-remove {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 36px;
-    min-height: 44px;
-    padding: 0 var(--space-2);
-    border: none;
-    border-left: 1px solid var(--color-border);
-    background: transparent;
-    color: var(--color-muted);
-    cursor: pointer;
-    font-size: var(--text-lg);
-    line-height: 1;
-    transition:
-      background-color 0.15s,
-      color 0.15s;
-  }
-
-  .chip-remove:hover {
-    color: var(--color-cancel);
-    background: var(--color-cancel-soft);
+    font-size: var(--text-sm);
+    min-height: 40px;
   }
 
   .field {
@@ -519,40 +565,6 @@
     flex-wrap: wrap;
     gap: var(--space-3);
     margin-bottom: var(--space-4);
-  }
-
-  .actions button {
-    min-height: 44px;
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    color: var(--color-text);
-    cursor: pointer;
-    transition:
-      background-color 0.15s,
-      border-color 0.15s,
-      color 0.15s,
-      transform 0.1s;
-  }
-
-  .actions button:hover {
-    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
-  }
-
-  .actions button:active {
-    transform: scale(0.98);
-  }
-
-  .actions button.primary {
-    background: var(--color-accent);
-    color: var(--color-accent-contrast);
-    border-color: var(--color-accent);
-    font-weight: 600;
-  }
-
-  .actions button.primary:hover {
-    background: color-mix(in srgb, var(--color-accent) 88%, black);
   }
 
   [role='status'] {

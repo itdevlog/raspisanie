@@ -452,7 +452,7 @@
 </script>
 
 <section class="schedule">
-  <h2>Расписание</h2>
+  <h2>Расписание{selection.name ? ` ${selection.name}` : ''}</h2>
 
   {#if !selection.schoolId}
     <StateNotice title="Школа не выбрана" detail="Сначала выберите школу на главной." />
@@ -509,6 +509,7 @@
         <div class="week-nav">
           <button
             type="button"
+            class="nav-arrow nika-btn nika-btn-light"
             aria-label="Предыдущая неделя"
             disabled={!canGoPrevWeek}
             onclick={() => shiftWeek(-1)}
@@ -524,6 +525,7 @@
           </span>
           <button
             type="button"
+            class="nav-arrow nika-btn nika-btn-light"
             aria-label="Следующая неделя"
             disabled={!canGoNextWeek}
             onclick={() => shiftWeek(1)}
@@ -565,6 +567,7 @@
           <div class="day-nav">
             <button
               type="button"
+              class="nav-arrow nika-btn nika-btn-light"
               aria-label="Предыдущий день"
               disabled={!canGoPrevDay}
               onclick={() => shiftDay(-1)}
@@ -572,7 +575,14 @@
               ‹
             </button>
             <span class="day-label" role="status">{dayHeading(dayDate)}</span>
-            <button type="button" aria-label="Следующий день" onclick={() => shiftDay(1)}>›</button>
+            <button
+              type="button"
+              class="nav-arrow nika-btn nika-btn-light"
+              aria-label="Следующий день"
+              onclick={() => shiftDay(1)}
+            >
+              ›
+            </button>
           </div>
         {/if}
         {#if bodyStatus === 'error'}
@@ -591,7 +601,9 @@
         onToggle={handleToggleFavorite}
         label={selection.name ?? undefined}
       />
-      <button type="button" class="share" onclick={handleShare}>Поделиться</button>
+      <button type="button" class="share nika-btn nika-btn-blue" onclick={handleShare}>
+        Поделиться
+      </button>
       <OpenInTelegram target={telegramTarget} />
       {#if shareNotice}
         <p class="share-notice" role="status">{shareNotice}</p>
@@ -599,7 +611,7 @@
       {#if canUsePush && selection.kind === 'class'}
         <button
           type="button"
-          class="push"
+          class="push nika-btn nika-btn-light"
           disabled={pushState === 'busy'}
           onclick={isPushOn ? handleDisablePush : handleEnablePush}
         >
@@ -619,10 +631,11 @@
   }
 
   h2 {
-    font-size: var(--text-2xl);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    margin: 0 0 var(--space-5);
+    font-size: var(--text-xl);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin: 0 0 var(--space-4);
   }
 
   .pinned {
@@ -646,39 +659,16 @@
     margin-bottom: var(--space-4);
   }
 
-  .week-nav button,
-  .day-nav button {
-    min-height: 44px;
+  /* Round arrow buttons around the day/week cursor. */
+  .nav-arrow {
     min-width: 44px;
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    color: var(--color-text);
-    cursor: pointer;
-    font-size: var(--text-lg);
+    padding: 0;
+    border-radius: 50%;
+    font-size: var(--text-xl);
     line-height: 1;
-    transition:
-      background-color 0.15s,
-      border-color 0.15s,
-      color 0.15s,
-      transform 0.1s;
   }
 
-  .week-nav button:hover:not(:disabled),
-  .day-nav button:hover:not(:disabled) {
-    background: var(--color-accent-soft);
-    border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
-    color: var(--color-accent);
-  }
-
-  .week-nav button:active:not(:disabled),
-  .day-nav button:active:not(:disabled) {
-    transform: scale(0.96);
-  }
-
-  .week-nav button:disabled,
-  .day-nav button:disabled {
+  .nav-arrow:disabled {
     opacity: 0.4;
     cursor: default;
   }
@@ -690,9 +680,8 @@
 
   .day-label {
     font-size: var(--text-base);
-    font-weight: 600;
+    font-weight: bold;
     color: var(--color-text);
-    letter-spacing: -0.011em;
   }
 
   .loading {
@@ -704,27 +693,6 @@
 
   .share {
     margin-top: var(--space-4);
-    min-height: 44px;
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-accent);
-    background: var(--color-accent);
-    color: var(--color-accent-contrast);
-    cursor: pointer;
-    font-weight: 600;
-    transition:
-      background-color 0.15s,
-      border-color 0.15s,
-      color 0.15s,
-      transform 0.1s;
-  }
-
-  .share:hover {
-    background: color-mix(in srgb, var(--color-accent) 88%, black);
-  }
-
-  .share:active {
-    transform: scale(0.98);
   }
 
   .share-notice {
@@ -757,26 +725,6 @@
   .push {
     margin-top: var(--space-4);
     margin-left: var(--space-2);
-    min-height: 44px;
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    color: var(--color-text);
-    cursor: pointer;
-    transition:
-      background-color 0.15s,
-      border-color 0.15s,
-      color 0.15s,
-      transform 0.1s;
-  }
-
-  .push:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
-  }
-
-  .push:active:not(:disabled) {
-    transform: scale(0.98);
   }
 
   .push:disabled {

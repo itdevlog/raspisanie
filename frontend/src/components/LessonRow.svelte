@@ -61,9 +61,9 @@
           <span class="subject" class:method={item.is_method_hour}>{itemSubjectLabel(item)}</span>
           <span class="meta">
             {#if item.groups}<span class="group">{item.groups}</span>{/if}
-            {#if showTeacher && item.teacher}<span>{item.teacher}</span>{/if}
-            {#if showRoom && item.room}<span>каб. {item.room}</span>{/if}
-            {#if showClass && item.class_name}<span>{item.class_name}</span>{/if}
+            {#if showTeacher && item.teacher}<span class="teacher">{item.teacher}</span>{/if}
+            {#if showRoom && item.room}<span class="room">каб. {item.room}</span>{/if}
+            {#if showClass && item.class_name}<span class="class-name">{item.class_name}</span>{/if}
           </span>
         </li>
       {/each}
@@ -72,88 +72,70 @@
 {/if}
 
 <style>
+  /* Original lesson row: a plain white band with a thin separator, colour-coded
+     text (gray number, green time, blue subject, italic teacher, bold room). */
   .lesson {
-    padding: var(--space-3) var(--space-4);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-surface);
-    box-shadow: var(--shadow-sm);
-    margin-bottom: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--lesson-subject);
   }
 
   .lesson.exchange {
-    border-left: 3px solid var(--color-exchange);
+    color: var(--lesson-exchange);
   }
 
   .lesson.cancelled {
-    border-left: 3px solid var(--color-cancel);
+    color: var(--lesson-cancel);
   }
 
-  .lesson.exchange .badge {
-    color: var(--color-exchange);
-  }
-
-  .lesson.cancelled .badge {
-    color: var(--color-cancel);
-  }
-
-  .head {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .num {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.5rem;
-    height: 1.5rem;
-    border-radius: 999px;
-    background: var(--color-surface-2);
-    font-size: var(--text-sm);
-    font-weight: 700;
-    line-height: 1;
-  }
-
-  .time {
-    font-variant-numeric: tabular-nums;
-    color: var(--color-muted);
-    font-size: var(--text-sm);
-  }
-
-  .badge {
-    margin-left: auto;
-    font-size: var(--text-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .cancelled .subject {
+  .lesson.cancelled .subject {
     text-decoration: line-through;
-  }
-
-  .lesson.free {
-    opacity: 0.6;
   }
 
   .lesson.free .subject {
     text-decoration: line-through;
   }
 
-  .subject.method {
-    font-style: italic;
-    font-weight: 600;
+  .head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
   }
 
-  .group {
-    font-weight: 600;
+  .num {
+    display: inline-block;
+    min-width: 1.2em;
+    color: var(--lesson-num);
+    font-weight: bold;
+    line-height: 1;
+  }
+
+  .time {
+    font-variant-numeric: tabular-nums;
+    color: var(--lesson-time);
+    font-size: var(--text-sm);
+  }
+
+  .badge {
+    margin-left: auto;
+    font-size: var(--text-xs);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .lesson.exchange .badge {
+    color: var(--lesson-exchange);
+  }
+
+  .lesson.cancelled .badge {
+    color: var(--lesson-cancel);
   }
 
   .items {
     list-style: none;
-    margin: var(--space-2) 0 0;
+    margin: var(--space-1) 0 0;
     padding: 0;
     display: grid;
     gap: var(--space-1);
@@ -167,13 +149,37 @@
   }
 
   .subject {
-    font-weight: 500;
+    color: var(--lesson-subject);
+    font-weight: bold;
+  }
+
+  .subject.method {
+    font-style: italic;
   }
 
   .meta {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-2);
-    color: var(--color-muted);
     font-size: var(--text-sm);
+  }
+
+  .teacher {
+    color: var(--lesson-teacher);
+    font-style: italic;
+  }
+
+  .room {
+    color: var(--lesson-room);
+    font-weight: bold;
+  }
+
+  .class-name {
+    color: var(--lesson-subject);
+  }
+
+  .group {
+    color: var(--lesson-group);
+    font-weight: bold;
   }
 </style>

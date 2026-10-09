@@ -42,7 +42,8 @@
         type="button"
         role="tab"
         aria-selected={kind === k}
-        class:active={kind === k}
+        class="tab nika-btn nika-btn-blue"
+        class:is-active={kind === k}
         onclick={() => selectKind(k)}
       >
         {KIND_LABELS[k]}
@@ -71,37 +72,11 @@
     border-radius: var(--radius-md);
   }
 
-  .tabs button {
+  .tab {
     flex: 1;
     min-height: 44px;
     padding: var(--space-2) var(--space-3);
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--color-muted);
-    cursor: pointer;
     font-size: var(--text-sm);
-    font-weight: 500;
-    transition:
-      background-color 0.15s,
-      color 0.15s,
-      box-shadow 0.15s,
-      transform 0.1s;
-  }
-
-  .tabs button:hover:not(.active) {
-    color: var(--color-text);
-  }
-
-  .tabs button:active {
-    transform: scale(0.98);
-  }
-
-  .tabs button.active {
-    font-weight: 600;
-    background: var(--color-surface);
-    color: var(--color-accent);
-    box-shadow: var(--shadow-sm);
   }
 
   .field {

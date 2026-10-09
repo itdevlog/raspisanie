@@ -150,10 +150,20 @@
 </script>
 
 <main>
+  <!-- Persistent blue header bar, mirroring the original site: the selected
+       school name plus the «Обновлено» timestamp. -->
+  <header class="app-header">
+    <h1 class="app-header-title">{selectedSchool?.name ?? 'Расписание'}</h1>
+    {#if selectedSchool?.updated}
+      <p class="app-header-subtitle">Обновлено {selectedSchool.updated}</p>
+    {/if}
+  </header>
+
   <nav aria-label="Разделы">
     <button
       type="button"
-      class:active={view === 'home'}
+      class="tab nika-btn nika-btn-blue"
+      class:is-active={view === 'home'}
       aria-current={view === 'home' ? 'page' : undefined}
       onclick={() => router.goTo('home')}
     >
@@ -161,7 +171,8 @@
     </button>
     <button
       type="button"
-      class:active={view === 'schedule'}
+      class="tab nika-btn nika-btn-blue"
+      class:is-active={view === 'schedule'}
       aria-current={view === 'schedule' ? 'page' : undefined}
       onclick={openSchedule}
     >
@@ -169,7 +180,8 @@
     </button>
     <button
       type="button"
-      class:active={view === 'tools'}
+      class="tab nika-btn nika-btn-blue"
+      class:is-active={view === 'tools'}
       aria-current={view === 'tools' ? 'page' : undefined}
       onclick={() => router.goTo('tools')}
     >
@@ -208,45 +220,43 @@
     text-align: left;
   }
 
+  /* Full-bleed header bar in the original jQuery Mobile bar-a style. */
+  .app-header {
+    margin: 0 calc(-1 * var(--space-4)) var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--nika-header-border);
+    background: var(--nika-header-bg);
+    background-image: var(--nika-header-bg-image);
+    color: var(--nika-header-text);
+    text-shadow: var(--nika-header-text-shadow);
+  }
+
+  .app-header-title {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: bold;
+    line-height: 1.2;
+  }
+
+  .app-header-subtitle {
+    margin: 2px 0 0;
+    font-size: var(--text-sm);
+    font-style: italic;
+    font-weight: normal;
+    opacity: 0.95;
+  }
+
+  /* Tab bar: the original navbar — blue tabs, active = pressed/highlight. */
   nav {
     display: flex;
     gap: var(--space-1);
-    justify-content: center;
-    margin-bottom: var(--space-5);
-    padding: var(--space-1);
+    margin: 0 calc(-1 * var(--space-4)) var(--space-5);
+    padding: var(--space-1) var(--space-4);
     background: var(--color-track);
-    border-radius: var(--radius-md);
   }
 
-  nav button {
+  .tab {
     flex: 1;
-    min-height: 44px;
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius-sm);
-    border: none;
-    background: transparent;
-    color: var(--color-muted);
-    cursor: pointer;
-    font-weight: 500;
-    transition:
-      background-color 0.15s,
-      color 0.15s,
-      box-shadow 0.15s,
-      transform 0.1s;
-  }
-
-  nav button:hover:not(.active) {
-    color: var(--color-text);
-  }
-
-  nav button:active {
-    transform: scale(0.98);
-  }
-
-  nav button.active {
-    font-weight: 600;
-    background: var(--color-surface);
-    color: var(--color-accent);
-    box-shadow: var(--shadow-sm);
+    font-size: var(--text-sm);
   }
 </style>

@@ -83,10 +83,12 @@
   }
 
   h3 {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    letter-spacing: -0.011em;
+    font-size: var(--text-base);
+    font-weight: bold;
     margin: 0 0 var(--space-2);
+    padding-bottom: var(--space-1);
+    border-bottom: 2px solid var(--color-accent);
+    color: var(--color-accent);
   }
 
   .period {
@@ -98,7 +100,7 @@
   .shift {
     margin: 0 0 var(--space-1);
     font-size: var(--text-xs);
-    font-weight: 600;
+    font-weight: bold;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--color-muted);
@@ -106,7 +108,7 @@
 
   .lessons {
     list-style: none;
-    margin: var(--space-3) 0 0;
+    margin: var(--space-2) 0 0;
     padding: 0;
   }
 </style>

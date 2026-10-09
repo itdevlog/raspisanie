@@ -85,6 +85,8 @@ describe('App shell', () => {
     });
     await waitFor(() => expect(router.started).toBe(true));
 
+    // The classes list is collapsed behind the big «Классы» button.
+    await fireEvent.click(await findByRole('button', { name: 'Классы' }));
     await fireEvent.click(await findByRole('button', { name: '6Б' }));
 
     await waitFor(() => expect(selection.name).toBe('6Б'));

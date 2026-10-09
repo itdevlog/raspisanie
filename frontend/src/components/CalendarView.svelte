@@ -59,6 +59,9 @@
           class:no-period={cell.no_period}
           class:exchange={cell.has_exchange}
           class:cancelled={cell.has_cancelled}
+          class:has-lessons={cell.lesson_count > 0}
+          class:saturday={index % 7 === 5}
+          class:sunday={index % 7 === 6}
           class:today={today === cell.date}
           data-exchange={cell.has_exchange ? 'true' : undefined}
           data-cancelled={cell.has_cancelled ? 'true' : undefined}
@@ -88,13 +91,13 @@
 </section>
 
 <style>
+  /* Original month calendar: a tight bordered grid with colour-coded days. */
   .calendar {
     text-align: left;
     padding: var(--space-4);
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
   }
 
   .nav {
@@ -102,48 +105,46 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-3);
   }
 
   .nav h3 {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    letter-spacing: -0.011em;
+    font-size: var(--text-base);
+    font-weight: bold;
+    text-transform: uppercase;
     margin: 0;
+    color: var(--color-text);
   }
 
   .nav button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: 40px;
     min-width: 40px;
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-sm);
-    border: none;
-    background: var(--color-surface-2);
-    color: var(--color-muted);
+    padding: 0;
+    border: 1px solid var(--nika-btn-blue-border);
+    border-radius: 50%;
+    background: var(--nika-btn-blue-bg);
+    background-image: var(--nika-btn-blue-bg-image);
+    color: var(--nika-btn-blue-text);
+    text-shadow: var(--nika-btn-blue-text-shadow);
     cursor: pointer;
     font-size: var(--text-lg);
     line-height: 1;
-    transition:
-      background-color 0.15s,
-      border-color 0.15s,
-      color 0.15s,
-      transform 0.1s;
-  }
-
-  .nav button:hover {
-    background: var(--color-accent-soft);
-    color: var(--color-accent);
+    box-shadow: var(--nika-shadow);
   }
 
   .nav button:active {
-    transform: scale(0.96);
+    transform: translateY(1px);
+    filter: brightness(0.94);
   }
 
   .weekdays,
   .grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: var(--space-1);
+    gap: 0;
   }
 
   .weekdays {
@@ -153,9 +154,8 @@
   .weekdays span {
     text-align: center;
     font-size: var(--text-xs);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    color: var(--color-muted);
+    font-weight: bold;
+    color: var(--cal-cell-text);
   }
 
   .cell {
@@ -166,68 +166,67 @@
     justify-content: center;
     aspect-ratio: 1;
     padding: var(--space-1);
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--color-text);
+    border: 1px solid var(--cal-cell-border);
+    border-radius: 0;
+    background: var(--color-surface);
+    color: var(--cal-cell-text);
     cursor: pointer;
     font-size: var(--text-sm);
-    transition:
-      background-color 0.15s,
-      color 0.15s,
-      box-shadow 0.15s,
-      transform 0.1s;
+    font-weight: bold;
   }
 
   .cell:hover:not(.pad) {
     background: var(--color-accent-soft);
   }
 
-  .cell:active:not(.pad) {
-    transform: scale(0.96);
-  }
-
   .cell.pad {
+    border-color: transparent;
     background: transparent;
     cursor: default;
   }
 
-  .cell.weekend,
-  .cell.no-period {
-    opacity: 0.4;
+  .cell.has-lessons {
+    background: var(--cal-day-bg);
+  }
+
+  .cell.exchange,
+  .cell.cancelled {
+    background: var(--cal-changed-bg);
   }
 
   .cell.vacation {
     background: var(--color-vacation-soft);
   }
 
-  .cell.exchange {
-    box-shadow: inset 0 -2px 0 var(--color-exchange);
-  }
-
-  .cell.cancelled {
-    box-shadow: inset 0 -2px 0 var(--color-cancel);
+  .cell.weekend,
+  .cell.no-period {
+    opacity: 0.45;
   }
 
   .cell.today {
-    background: var(--color-accent-soft);
-    color: var(--color-accent);
-    font-weight: 600;
-    box-shadow: inset 0 0 0 2px var(--color-accent);
+    border: 3px solid var(--cal-today-border);
+  }
+
+  .cell.saturday {
+    color: var(--cal-sat);
+  }
+
+  .cell.sunday {
+    color: var(--cal-sun);
   }
 
   .marker {
     font-size: 10px;
-    font-weight: 700;
+    font-weight: bold;
     line-height: 1;
   }
 
   .marker-exchange {
-    color: var(--color-exchange);
+    color: var(--lesson-exchange);
   }
 
   .marker-cancelled {
-    color: var(--color-cancel);
+    color: var(--lesson-cancel);
   }
 
   .marker-vacation {

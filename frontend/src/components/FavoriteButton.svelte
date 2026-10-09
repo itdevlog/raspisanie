@@ -17,7 +17,7 @@
 
 <button
   type="button"
-  class="favorite"
+  class="favorite nika-btn nika-btn-yellow"
   class:active
   aria-pressed={active}
   aria-label={ariaLabel}
@@ -30,32 +30,6 @@
 <style>
   .favorite {
     margin-top: var(--space-4);
-    min-height: 44px;
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    color: var(--color-text);
-    cursor: pointer;
-    transition:
-      background-color 0.15s,
-      border-color 0.15s,
-      color 0.15s,
-      transform 0.1s;
-  }
-
-  .favorite:hover {
-    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
-  }
-
-  .favorite:active {
-    transform: scale(0.98);
-  }
-
-  .favorite.active {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
-    background: var(--color-accent-soft);
   }
 
   .star {
