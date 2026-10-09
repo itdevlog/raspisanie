@@ -175,6 +175,31 @@ export function makeRouter(env: BrowserEnv = makeFakeEnv().env): {
  * deliberately a live call (not a mirrored constant) so the frontend builder is
  * checked against the producer, not a fake.
  */
+/**
+ * Build a synthetic `TouchEvent`-shaped event with one touch point. jsdom has
+ * no real `TouchEvent`, so the `touches`/`changedTouches` lists are attached as
+ * own properties — exactly what {@link swipe} reads.
+ */
+function touchEvent(type: string, x: number, y: number): Event {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  const point = { clientX: x, clientY: y };
+  Object.defineProperty(event, 'touches', {
+    value: type === 'touchend' ? [] : [point],
+  });
+  Object.defineProperty(event, 'changedTouches', { value: [point] });
+  return event;
+}
+
+/**
+ * Drive a synthetic horizontal touch swipe (`touchstart` → `touchend`) on a
+ * node: `dx`/`dy` are the net displacement in px. Positive `dx` is a right
+ * swipe, negative a left swipe.
+ */
+export function fireSwipe(node: Element, dx: number, dy = 0): void {
+  node.dispatchEvent(touchEvent('touchstart', 0, 0));
+  node.dispatchEvent(touchEvent('touchend', dx, dy));
+}
+
 export function pythonBuildClassShareUrl(
   base: string,
   school: string,

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import Schedule from './Schedule.svelte';
 import {
+  fireSwipe,
   makeCalendar,
   makeCalendarDay,
   makeClient,
@@ -618,6 +619,122 @@ describe('Schedule screen', () => {
       await waitFor(() => expect(selection.name).toBe('101'));
       await fireEvent.click(getByRole('button', { name: /101/ }));
       expect(favorites.has('gym1', 'room', '101')).toBe(true);
+    });
+  });
+
+  // Swipe navigation: day cursor, week offset and month cursor.
+  describe('swipe navigation', () => {
+    function setup() {
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('class', '5А');
+      return selection;
+    }
+
+    it('renders a date + weekday heading for the day cursor', async () => {
+      const client = makeClient({ getDay: vi.fn().mockResolvedValue(dayFor('05.10.2026')) });
+      const { findByText } = render(Schedule, {
+        props: { client, selection: setup(), today: makeToday('05.10.2026') },
+      });
+
+      expect(await findByText('05.10.2026, Понедельник')).toBeTruthy();
+    });
+
+    it('swipes the day pane to the next/previous day, clamped at the baseline', async () => {
+      const client = makeClient({ getDay: vi.fn().mockResolvedValue(dayFor('05.10.2026')) });
+      const { container } = render(Schedule, {
+        props: { client, selection: setup(), today: makeToday('05.10.2026') },
+      });
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '05.10.2026'),
+      );
+
+      const pane = container.querySelector('.day-pane') as HTMLElement;
+      fireSwipe(pane, -60); // left → next day
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '06.10.2026'),
+      );
+
+      fireSwipe(pane, 60); // right → back to today
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '05.10.2026'),
+      );
+
+      // Already at the baseline: a right swipe is a no-op (no past days).
+      (client.getDay as ReturnType<typeof vi.fn>).mockClear();
+      fireSwipe(pane, 60);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(client.getDay).not.toHaveBeenCalled();
+    });
+
+    it('swipes the week pane to the next/previous week', async () => {
+      const client = makeClient({
+        getWeek: vi.fn().mockResolvedValue({ days: [dayFor('05.10.2026')] }),
+      });
+      const { getByRole, container } = render(Schedule, {
+        props: { client, selection: setup(), today: makeToday('05.10.2026') },
+      });
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+
+      await fireEvent.click(getByRole('tab', { name: 'Неделя' }));
+      await waitFor(() => expect(client.getWeek).toHaveBeenCalledWith('gym1', 'class', '5А', 0));
+
+      const pane = container.querySelector('.week-pane') as HTMLElement;
+      fireSwipe(pane, -60);
+      await waitFor(() => expect(client.getWeek).toHaveBeenCalledWith('gym1', 'class', '5А', 1));
+
+      fireSwipe(pane, 60);
+      await waitFor(() => expect(client.getWeek).toHaveBeenCalledWith('gym1', 'class', '5А', 0));
+    });
+
+    it('swipes the calendar grid to the next month', async () => {
+      const client = makeClient({
+        getCalendar: vi.fn().mockResolvedValue(makeCalendar([makeCalendarDay()])),
+      });
+      const { getByRole, container } = render(Schedule, {
+        props: { client, selection: setup(), today: makeToday('05.10.2026') },
+      });
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+
+      await fireEvent.click(getByRole('tab', { name: 'Месяц' }));
+      await waitFor(() =>
+        expect(client.getCalendar).toHaveBeenCalledWith('gym1', 'class', '5А', 2026, 10),
+      );
+
+      const grid = container.querySelector('.grid') as HTMLElement;
+      fireSwipe(grid, -60);
+      await waitFor(() =>
+        expect(client.getCalendar).toHaveBeenCalledWith('gym1', 'class', '5А', 2026, 11),
+      );
+
+      fireSwipe(grid, 60);
+      await waitFor(() =>
+        expect(client.getCalendar).toHaveBeenCalledWith('gym1', 'class', '5А', 2026, 10),
+      );
+    });
+
+    it('seeds the day cursor from a pinned date and swipes forward from it', async () => {
+      const client = makeClient({ getDay: vi.fn().mockResolvedValue(dayFor('07.09.2026')) });
+      const { container, findByText } = render(Schedule, {
+        props: {
+          client,
+          selection: setup(),
+          today: makeToday('05.10.2026'),
+          pinnedDate: '07.09.2026',
+        },
+      });
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '07.09.2026'),
+      );
+      expect(await findByText('Расписание на 07.09.2026')).toBeTruthy();
+
+      const pane = container.querySelector('.day-pane') as HTMLElement;
+      fireSwipe(pane, -60);
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '08.09.2026'),
+      );
+      // The pinned notice follows the cursor.
+      expect(await findByText('Расписание на 08.09.2026')).toBeTruthy();
     });
   });
 });

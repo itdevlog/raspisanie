@@ -7,6 +7,7 @@
   // is padded with blank cells by a clock-free UTC calculation.
   import type { CalendarResponse } from '../lib/api/types';
   import { calendarDayAriaLabel, dayNumber, monthGrid, monthLabel } from '../lib/calendar';
+  import { swipe } from '../lib/swipe';
 
   interface Props {
     month: CalendarResponse;
@@ -47,7 +48,7 @@
     {/each}
   </div>
 
-  <div class="grid">
+  <div class="grid" use:swipe={{ onLeft: onNextMonth, onRight: onPrevMonth }}>
     {#each cells as cell, index (cell ? cell.date : `pad-${index}`)}
       {#if cell}
         <button
@@ -106,6 +107,8 @@
 
   .nav h3 {
     font-size: var(--text-lg);
+    font-weight: 600;
+    letter-spacing: -0.011em;
     margin: 0;
   }
 
@@ -150,6 +153,8 @@
   .weekdays span {
     text-align: center;
     font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
     color: var(--color-muted);
   }
 

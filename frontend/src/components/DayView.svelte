@@ -79,18 +79,28 @@
 
 <style>
   .day {
-    margin-bottom: var(--space-6);
+    margin-bottom: var(--space-5);
   }
 
   h3 {
     font-size: var(--text-lg);
+    font-weight: 600;
+    letter-spacing: -0.011em;
     margin: 0 0 var(--space-2);
   }
 
-  .period,
-  .shift {
-    margin: 0 0 var(--space-2);
+  .period {
+    margin: 0 0 var(--space-1);
     font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+
+  .shift {
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
     color: var(--color-muted);
   }
 

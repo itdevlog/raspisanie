@@ -20,6 +20,8 @@
     favorites as defaultFavorites,
     createAsync,
     parseRuDate,
+    addDays,
+    dayHeading,
     shareSchedule,
     buildShareUrl,
     enablePush,
@@ -29,6 +31,7 @@
     offlineState,
     connectivityEnv,
     shiftMonth,
+    swipe,
     watchConnectivity,
     watchServiceWorkerCache,
     type CalendarResponse,
@@ -99,6 +102,10 @@
   }: Props = $props();
 
   let period = $state<Period>('today');
+  // Day cursor: offset from the baseline (server today, or a pinned share date).
+  // «Сегодня» = 0, «Завтра» = 1; swiping left/right moves it. Clamped at 0 so
+  // the day view never walks into the past before the baseline.
+  let dayOffset = $state(0);
   // W38 fix: `weekOffset` is mutable now that prev/next controls exist; the API
   // accepts `offset` in -2..2.
   let weekOffset = $state(0);
@@ -124,8 +131,18 @@
   let online = $state(true);
   let fromCache = $state(false);
 
+  // The day cursor's baseline: a pinned share date wins, otherwise server today.
+  const dayBase = $derived(shareDate ?? today.today);
+  // The date actually shown in day mode, derived from the baseline + offset.
+  const dayDate = $derived(dayBase ? addDays(dayBase, dayOffset) : null);
+  const canGoPrevDay = $derived(dayOffset > 0);
+
+  // Seed the day cursor from a pinned share date. A new pin (deep link) resets
+  // the cursor to that date; swiping does not touch `pinnedDate`, so it is not
+  // reset by the user's own navigation.
   $effect(() => {
     shareDate = pinnedDate;
+    dayOffset = 0;
   });
 
   // Track connectivity for the offline indicator; fires once with the current
@@ -163,15 +180,16 @@
     return (await client.getRooms(schoolId)).rooms;
   });
 
-  // Day payload for today/tomorrow; unused for the week period. A date pinned by
-  // a share link (`?date=`) takes precedence over the server's today.
+  // Day payload for the current day cursor; unused for week/month. A date
+  // pinned by a share link (`?date=`) seeds the cursor, otherwise the server's
+  // today is the baseline.
   const dayResource = createAsync<DaySchedule>(async () => {
     const schoolId = selection.schoolId;
     const name = selection.name;
     if (!schoolId || !name) {
       throw new Error('Выберите расписание');
     }
-    const date = shareDate ?? (period === 'tomorrow' ? today.tomorrow : today.today);
+    const date = dayDate;
     if (!date) {
       throw new Error('Не удалось определить дату');
     }
@@ -201,7 +219,7 @@
 
   const kindNamesKey = $derived(`${selection.schoolId ?? ''}|${selection.kind}`);
   const bodyKey = $derived(
-    `${selection.schoolId ?? ''}|${selection.kind}|${selection.name ?? ''}|${period}|${weekOffset}|${shareDate ?? ''}|${
+    `${selection.schoolId ?? ''}|${selection.kind}|${selection.name ?? ''}|${period}|${weekOffset}|${dayDate ?? ''}|${
       period === 'month' ? `${monthCursor?.year ?? ''}|${monthCursor?.month ?? ''}` : ''
     }`,
   );
@@ -246,7 +264,7 @@
       }
     } else if (period === 'week') {
       void weekResource.load();
-    } else if (!noPeriodDate && (shareDate || today.isLoaded)) {
+    } else if (!noPeriodDate && dayDate) {
       void dayResource.load();
     }
   });
@@ -276,10 +294,18 @@
     }
   }
 
-  /** Switching period tabs drops a pinned share date and uses server today. */
+  /**
+   * Switching period tabs drops a pinned share date and re-bases the day
+   * cursor: «Сегодня» → offset 0, «Завтра» → offset 1.
+   */
   function handlePeriodChange(next: Period) {
     noPeriodDate = null;
     shareDate = null;
+    if (next === 'today') {
+      dayOffset = 0;
+    } else if (next === 'tomorrow') {
+      dayOffset = 1;
+    }
     period = next;
   }
 
@@ -295,12 +321,14 @@
     if (calendarDay?.no_period) {
       noPeriodDate = date;
       shareDate = null;
+      dayOffset = 0;
       period = 'today';
       onOpenDay?.(date);
       return;
     }
     noPeriodDate = null;
     shareDate = date;
+    dayOffset = 0;
     period = 'today';
     onOpenDay?.(date);
   }
@@ -321,6 +349,20 @@
     weekOffset = next;
   }
 
+  /**
+   * Move the day cursor by `delta`. Clamped at 0: the cursor never walks before
+   * the baseline (server today, or a pinned share date) — no past days. The
+   * «Сегодня»/«Завтра» tabs stay meaningful: offset 0 → today, ≥1 → tomorrow.
+   */
+  function shiftDay(delta: number) {
+    const next = dayOffset + delta;
+    if (next < 0) {
+      return;
+    }
+    dayOffset = next;
+    period = next === 0 ? 'today' : 'tomorrow';
+  }
+
   const canGoPrevWeek = $derived(weekOffset > WEEK_OFFSET_MIN);
   const canGoNextWeek = $derived(weekOffset < WEEK_OFFSET_MAX);
 
@@ -331,7 +373,7 @@
     if (!schoolId || !name) {
       return;
     }
-    const date = shareDate ?? (period === 'tomorrow' ? today.tomorrow : today.today) ?? null;
+    const date = dayDate ?? null;
     const url = buildShareUrl(origin, schoolId, selection.kind, name, date);
     const result = await shareSchedule(url, { title: 'Расписание', text: name }, navigatorLike);
     if (result.ok) {
@@ -362,7 +404,7 @@
     school: selection.schoolId ?? '',
     kind: selection.kind,
     name: selection.name ?? '',
-    date: shareDate ?? (period === 'tomorrow' ? today.tomorrow : today.today) ?? null,
+    date: dayDate ?? null,
   });
 
   // W23: the offline/cached indicator. `fromCache` is derived from the SW's
@@ -384,7 +426,7 @@
     }
     pushState = 'busy';
     pushNotice = null;
-    const date = shareDate ?? (period === 'tomorrow' ? today.tomorrow : today.today) ?? null;
+    const date = dayDate ?? null;
     const url = buildShareUrl(origin, schoolId, selection.kind, name, date);
     const result: PushResult = await pushEnable({ schoolId, name, kind: 'class', url });
     if (result.ok) {
@@ -442,7 +484,7 @@
     <PeriodTabs value={period} onChange={handlePeriodChange} />
 
     {#if shareDate}
-      <p class="pinned" role="status">Расписание на {shareDate}</p>
+      <p class="pinned" role="status">Расписание на {dayDate}</p>
     {/if}
 
     {#if !hasEntity}
@@ -459,47 +501,52 @@
       />
     {:else if period === 'week'}
       <!-- The week nav stays mounted while a week loads so the controls remain
-           clickable (W38 fix). -->
-      <div class="week-nav">
-        <button
-          type="button"
-          aria-label="Предыдущая неделя"
-          disabled={!canGoPrevWeek}
-          onclick={() => shiftWeek(-1)}
-        >
-          ‹
-        </button>
-        <span class="week-label" role="status">
-          {weekOffset === 0
-            ? 'Текущая неделя'
-            : weekOffset > 0
-              ? `+${weekOffset} нед.`
-              : `${weekOffset} нед.`}
-        </span>
-        <button
-          type="button"
-          aria-label="Следующая неделя"
-          disabled={!canGoNextWeek}
-          onclick={() => shiftWeek(1)}
-        >
-          ›
-        </button>
+           clickable (W38 fix). Swiping the pane moves the week too. -->
+      <div
+        class="week-pane"
+        use:swipe={{ onLeft: () => shiftWeek(1), onRight: () => shiftWeek(-1) }}
+      >
+        <div class="week-nav">
+          <button
+            type="button"
+            aria-label="Предыдущая неделя"
+            disabled={!canGoPrevWeek}
+            onclick={() => shiftWeek(-1)}
+          >
+            ‹
+          </button>
+          <span class="week-label" role="status">
+            {weekOffset === 0
+              ? 'Текущая неделя'
+              : weekOffset > 0
+                ? `+${weekOffset} нед.`
+                : `${weekOffset} нед.`}
+          </span>
+          <button
+            type="button"
+            aria-label="Следующая неделя"
+            disabled={!canGoNextWeek}
+            onclick={() => shiftWeek(1)}
+          >
+            ›
+          </button>
+        </div>
+        {#if bodyStatus === 'error'}
+          <StateNotice tone="error" title="Ошибка загрузки" detail={bodyError ?? ''} />
+        {:else if bodyStatus === 'loading' || bodyStatus === 'idle'}
+          <p class="loading" role="status">Загрузка…</p>
+        {:else if weekResource.data && weekResource.data.days.length > 0}
+          <WeekView week={weekResource.data} kind={selection.kind} {strikeoutFreeLsn} />
+        {:else}
+          <StateNotice title="Занятий нет" detail="Расписание на неделю пустое." />
+        {/if}
       </div>
+    {:else if period === 'month'}
       {#if bodyStatus === 'error'}
         <StateNotice tone="error" title="Ошибка загрузки" detail={bodyError ?? ''} />
       {:else if bodyStatus === 'loading' || bodyStatus === 'idle'}
-        <p role="status">Загрузка…</p>
-      {:else if weekResource.data && weekResource.data.days.length > 0}
-        <WeekView week={weekResource.data} kind={selection.kind} {strikeoutFreeLsn} />
-      {:else}
-        <StateNotice title="Занятий нет" detail="Расписание на неделю пустое." />
-      {/if}
-    {:else if bodyStatus === 'error'}
-      <StateNotice tone="error" title="Ошибка загрузки" detail={bodyError ?? ''} />
-    {:else if bodyStatus === 'loading' || bodyStatus === 'idle'}
-      <p role="status">Загрузка…</p>
-    {:else if period === 'month'}
-      {#if monthCursor && calendarResource.data}
+        <p class="loading" role="status">Загрузка…</p>
+      {:else if monthCursor && calendarResource.data}
         <CalendarView
           month={calendarResource.data}
           year={monthCursor.year}
@@ -510,8 +557,32 @@
           onNextMonth={() => shiftCalendarMonth(1)}
         />
       {/if}
-    {:else if dayResource.data}
-      <DayView day={dayResource.data} kind={selection.kind} {strikeoutFreeLsn} />
+    {:else}
+      <!-- Day mode: the cursor pane owns swipe (left → next, right → previous)
+           and keeps prev/next controls for pointer/keyboard users. -->
+      <div class="day-pane" use:swipe={{ onLeft: () => shiftDay(1), onRight: () => shiftDay(-1) }}>
+        {#if dayDate}
+          <div class="day-nav">
+            <button
+              type="button"
+              aria-label="Предыдущий день"
+              disabled={!canGoPrevDay}
+              onclick={() => shiftDay(-1)}
+            >
+              ‹
+            </button>
+            <span class="day-label" role="status">{dayHeading(dayDate)}</span>
+            <button type="button" aria-label="Следующий день" onclick={() => shiftDay(1)}>›</button>
+          </div>
+        {/if}
+        {#if bodyStatus === 'error'}
+          <StateNotice tone="error" title="Ошибка загрузки" detail={bodyError ?? ''} />
+        {:else if bodyStatus === 'loading' || bodyStatus === 'idle'}
+          <p class="loading" role="status">Загрузка…</p>
+        {:else if dayResource.data}
+          <DayView day={dayResource.data} kind={selection.kind} {strikeoutFreeLsn} />
+        {/if}
+      </div>
     {/if}
 
     {#if hasEntity}
@@ -549,7 +620,9 @@
 
   h2 {
     font-size: var(--text-2xl);
-    margin: 0 0 var(--space-4);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 var(--space-5);
   }
 
   .pinned {
@@ -558,7 +631,14 @@
     color: var(--color-muted);
   }
 
-  .week-nav {
+  /* Swipe panes: allow vertical page scroll, own the horizontal axis. */
+  .week-pane,
+  .day-pane {
+    touch-action: pan-y;
+  }
+
+  .week-nav,
+  .day-nav {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -566,7 +646,8 @@
     margin-bottom: var(--space-4);
   }
 
-  .week-nav button {
+  .week-nav button,
+  .day-nav button {
     min-height: 44px;
     min-width: 44px;
     padding: var(--space-1) var(--space-3);
@@ -584,22 +665,39 @@
       transform 0.1s;
   }
 
-  .week-nav button:hover:not(:disabled) {
+  .week-nav button:hover:not(:disabled),
+  .day-nav button:hover:not(:disabled) {
     background: var(--color-accent-soft);
     border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
     color: var(--color-accent);
   }
 
-  .week-nav button:active:not(:disabled) {
+  .week-nav button:active:not(:disabled),
+  .day-nav button:active:not(:disabled) {
     transform: scale(0.96);
   }
 
-  .week-nav button:disabled {
+  .week-nav button:disabled,
+  .day-nav button:disabled {
     opacity: 0.4;
     cursor: default;
   }
 
   .week-label {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+
+  .day-label {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--color-text);
+    letter-spacing: -0.011em;
+  }
+
+  .loading {
+    margin: var(--space-4) 0;
+    text-align: center;
     font-size: var(--text-sm);
     color: var(--color-muted);
   }

@@ -22,4 +22,10 @@
   .week {
     display: block;
   }
+
+  /* Thin divider between stacked days; the first day needs no rule. */
+  .week :global(.day + .day) {
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-4);
+  }
 </style>

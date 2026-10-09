@@ -23,6 +23,17 @@ export const RU_MONTHS: readonly string[] = [
   'Декабрь',
 ];
 
+/** Russian weekday names, Monday first (nominative, title case). */
+export const RU_WEEKDAYS: readonly string[] = [
+  'Понедельник',
+  'Вторник',
+  'Среда',
+  'Четверг',
+  'Пятница',
+  'Суббота',
+  'Воскресенье',
+];
+
 /** «Октябрь 2026» for a 1-based month. */
 export function monthLabel(year: number, month: number): string {
   return `${RU_MONTHS[month - 1]} ${year}`;
@@ -46,6 +57,24 @@ export function mondayIndex(year: number, month: number, day: number): number {
   // `getUTCDay()` is Sun=0 … Sat=6; rotate so Monday is 0.
   const jsDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
   return (jsDay + 6) % 7;
+}
+
+/**
+ * Full Russian weekday name for a `DD.MM.YYYY` date, or `''` for invalid input.
+ * Clock-free: derived from the explicit UTC calendar date.
+ */
+export function weekdayLabel(date: string): string {
+  const parsed = parseRuDate(date);
+  if (!parsed) {
+    return '';
+  }
+  return RU_WEEKDAYS[mondayIndex(parsed.year, parsed.month, parsed.day)];
+}
+
+/** «05.10.2026, Понедельник» — the day-view cursor heading. */
+export function dayHeading(date: string): string {
+  const weekday = weekdayLabel(date);
+  return weekday ? `${date}, ${weekday}` : date;
 }
 
 /**

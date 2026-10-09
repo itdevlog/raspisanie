@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import CalendarView from './CalendarView.svelte';
-import { makeCalendar, makeCalendarDay } from '../test-helpers';
+import { fireSwipe, makeCalendar, makeCalendarDay } from '../test-helpers';
 import { formatRuDate } from '../lib/dates';
 
 /** October 2026 with one marked exchange, cancellation and vacation day. */
@@ -70,5 +70,18 @@ describe('CalendarView', () => {
     await fireEvent.click(getByRole('button', { name: 'Следующий месяц' }));
     expect(onPrevMonth).toHaveBeenCalledOnce();
     expect(onNextMonth).toHaveBeenCalledOnce();
+  });
+
+  it('swipes the grid to the next and previous month', () => {
+    const onPrevMonth = vi.fn();
+    const onNextMonth = vi.fn();
+    const { container } = render(CalendarView, { props: props({ onPrevMonth, onNextMonth }) });
+    const grid = container.querySelector('.grid') as HTMLElement;
+
+    fireSwipe(grid, -60);
+    expect(onNextMonth).toHaveBeenCalledOnce();
+
+    fireSwipe(grid, 60);
+    expect(onPrevMonth).toHaveBeenCalledOnce();
   });
 });

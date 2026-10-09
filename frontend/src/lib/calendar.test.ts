@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   calendarDayAriaLabel,
+  dayHeading,
   dayNumber,
   mondayIndex,
   monthGrid,
   monthLabel,
   RU_MONTHS,
+  RU_WEEKDAYS,
   shiftMonth,
+  weekdayLabel,
 } from './calendar';
 import { formatRuDate } from './dates';
 import { makeCalendarDay } from '../test-helpers';
@@ -32,6 +35,16 @@ describe('calendar helpers', () => {
     expect(mondayIndex(2026, 10, 5)).toBe(0);
     expect(mondayIndex(2026, 10, 1)).toBe(3); // Thursday
     expect(mondayIndex(2026, 10, 4)).toBe(6); // Sunday
+  });
+
+  it('labels weekdays and the day-view heading in Russian', () => {
+    expect(RU_WEEKDAYS).toHaveLength(7);
+    expect(weekdayLabel('05.10.2026')).toBe('Понедельник');
+    expect(weekdayLabel('09.10.2026')).toBe('Пятница');
+    expect(dayHeading('05.10.2026')).toBe('05.10.2026, Понедельник');
+    // Invalid input degrades gracefully.
+    expect(weekdayLabel('nope')).toBe('');
+    expect(dayHeading('nope')).toBe('nope');
   });
 
   it('pads the month grid to Monday-first full weeks', () => {

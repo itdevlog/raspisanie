@@ -143,7 +143,9 @@
 
   h2 {
     font-size: var(--text-2xl);
-    margin: 0 0 var(--space-4);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 var(--space-5);
   }
 
   hr {

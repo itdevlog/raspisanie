@@ -6,6 +6,7 @@
   // component renders the inline lesson selector, the date label and the result
   // list, and reports the chosen lesson via `onLessonChange`.
   import { LESSONS_PER_DAY, lessonNumbers } from '../lib/schedule-view';
+  import StateNotice from './StateNotice.svelte';
 
   interface Props {
     /** Date the free-rooms answer is for, as `DD.MM.YYYY` (server today). */
@@ -51,11 +52,15 @@
   </div>
 
   {#if status === 'loading' || status === 'idle'}
-    <p role="status">Загрузка…</p>
+    <p class="loading" role="status">Загрузка…</p>
   {:else if status === 'error'}
-    <p class="error" role="status">{error ?? 'Не удалось загрузить свободные кабинеты'}</p>
+    <StateNotice
+      tone="error"
+      title="Ошибка загрузки"
+      detail={error ?? 'Не удалось загрузить свободные кабинеты'}
+    />
   {:else if rooms.length === 0}
-    <p role="status">Все кабинеты заняты</p>
+    <StateNotice tone="muted" title="Все кабинеты заняты" detail="Свободных кабинетов нет." />
   {:else}
     <ul class="rooms">
       {#each rooms as room (room)}
@@ -68,6 +73,8 @@
 <style>
   h3 {
     font-size: var(--text-lg);
+    font-weight: 600;
+    letter-spacing: -0.011em;
     margin: 0 0 var(--space-2);
   }
 
@@ -101,6 +108,10 @@
 
   .date {
     margin: 0 0 var(--space-1);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-2);
+    font-size: var(--text-sm);
     color: var(--color-muted);
   }
 
@@ -119,12 +130,13 @@
     background: var(--color-surface-2);
   }
 
-  [role='status'] {
+  .loading {
+    margin: var(--space-4) 0;
+    font-size: var(--text-sm);
     color: var(--color-muted);
   }
 
-  .error {
-    color: var(--color-cancel);
-    opacity: 1;
+  [role='status'] {
+    color: var(--color-muted);
   }
 </style>

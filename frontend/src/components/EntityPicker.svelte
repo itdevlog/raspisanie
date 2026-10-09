@@ -80,6 +80,7 @@
     background: transparent;
     color: var(--color-muted);
     cursor: pointer;
+    font-size: var(--text-sm);
     font-weight: 500;
     transition:
       background-color 0.15s,

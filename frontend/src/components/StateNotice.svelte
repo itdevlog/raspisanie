@@ -41,6 +41,7 @@
 
   .error {
     color: var(--color-cancel);
+    border-left: 3px solid var(--color-cancel);
   }
 
   .error strong {

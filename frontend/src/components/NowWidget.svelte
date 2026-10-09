@@ -62,6 +62,8 @@
 
   h3 {
     font-size: var(--text-lg);
+    font-weight: 600;
+    letter-spacing: -0.011em;
     margin: 0 0 var(--space-2);
   }
 

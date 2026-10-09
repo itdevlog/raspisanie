@@ -15,6 +15,7 @@ export * from './offline';
 export * from './telegram';
 export * from './schedule-view';
 export * from './calendar';
+export * from './swipe';
 export * from './async.svelte';
 export * from './stores/persisted';
 export * from './stores/selection.svelte';

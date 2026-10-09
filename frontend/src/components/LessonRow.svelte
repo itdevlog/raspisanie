@@ -99,12 +99,21 @@
 
   .head {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: var(--space-2);
   }
 
   .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    background: var(--color-surface-2);
+    font-size: var(--text-sm);
     font-weight: 700;
+    line-height: 1;
   }
 
   .time {

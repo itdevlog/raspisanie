@@ -6,6 +6,7 @@
   // `rooms` results and the load status. Clicking a result raises `onSelect` so
   // the parent can update the selection store (same navigation as W20).
   import type { ScheduleKind } from '../lib/api/types';
+  import StateNotice from './StateNotice.svelte';
 
   interface Props {
     /** Matching classes (names). Defaults to none (W37 added classes to `/search`). */
@@ -66,11 +67,15 @@
   </label>
 
   {#if status === 'loading'}
-    <p role="status">Поиск…</p>
+    <p class="loading" role="status">Поиск…</p>
   {:else if status === 'error'}
-    <p class="error" role="status">{error ?? 'Не удалось выполнить поиск'}</p>
+    <StateNotice
+      tone="error"
+      title="Ошибка поиска"
+      detail={error ?? 'Не удалось выполнить поиск'}
+    />
   {:else if isEmpty}
-    <p class="empty" role="status">Ничего не найдено</p>
+    <StateNotice tone="muted" title="Ничего не найдено" detail="Попробуйте другой запрос." />
   {:else if status === 'ready' && hasQuery}
     {#if classes.length > 0}
       <div class="group">
@@ -148,7 +153,10 @@
   }
 
   h4 {
-    font-size: var(--text-sm);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     margin: 0 0 var(--space-2);
     color: var(--color-muted);
   }
@@ -186,12 +194,13 @@
     transform: scale(0.98);
   }
 
-  [role='status'] {
+  .loading {
+    margin: var(--space-4) 0;
+    font-size: var(--text-sm);
     color: var(--color-muted);
   }
 
-  .error {
-    color: var(--color-cancel);
-    opacity: 1;
+  [role='status'] {
+    color: var(--color-muted);
   }
 </style>
