@@ -78,18 +78,23 @@
     border-radius: var(--radius-md);
     background: var(--color-surface);
     box-shadow: var(--shadow-sm);
-    margin-bottom: var(--space-2);
+    margin-bottom: var(--space-3);
   }
 
   .lesson.exchange {
-    border-left: 4px solid var(--color-exchange);
-    background: var(--color-exchange-soft);
+    border-left: 3px solid var(--color-exchange);
   }
 
   .lesson.cancelled {
-    border-left: 4px solid var(--color-cancel);
-    background: var(--color-cancel-soft);
-    opacity: 0.85;
+    border-left: 3px solid var(--color-cancel);
+  }
+
+  .lesson.exchange .badge {
+    color: var(--color-exchange);
+  }
+
+  .lesson.cancelled .badge {
+    color: var(--color-cancel);
   }
 
   .head {
@@ -104,13 +109,16 @@
 
   .time {
     font-variant-numeric: tabular-nums;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
   }
 
   .badge {
     margin-left: auto;
     font-size: var(--text-xs);
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
   }
 
   .cancelled .subject {
@@ -118,7 +126,7 @@
   }
 
   .lesson.free {
-    opacity: 0.65;
+    opacity: 0.6;
   }
 
   .lesson.free .subject {
@@ -136,7 +144,7 @@
 
   .items {
     list-style: none;
-    margin: var(--space-1) 0 0;
+    margin: var(--space-2) 0 0;
     padding: 0;
     display: grid;
     gap: var(--space-1);
@@ -146,6 +154,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2);
+    align-items: baseline;
   }
 
   .subject {
@@ -155,7 +164,7 @@
   .meta {
     display: flex;
     gap: var(--space-2);
-    opacity: 0.75;
+    color: var(--color-muted);
     font-size: var(--text-sm);
   }
 </style>

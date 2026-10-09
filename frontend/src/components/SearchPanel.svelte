@@ -121,7 +121,7 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
+    gap: var(--space-2);
     font-size: var(--text-sm);
     color: var(--color-muted);
   }
@@ -144,12 +144,12 @@
   }
 
   .group {
-    margin-top: var(--space-3);
+    margin-top: var(--space-5);
   }
 
   h4 {
     font-size: var(--text-sm);
-    margin: 0 0 var(--space-1);
+    margin: 0 0 var(--space-2);
     color: var(--color-muted);
   }
 
@@ -159,27 +159,31 @@
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-1);
+    gap: var(--space-2);
   }
 
   li button {
-    min-height: 36px;
-    padding: var(--space-1) var(--space-3);
+    min-height: 44px;
+    padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
+    border: 1px solid transparent;
+    background: var(--color-surface-2);
     color: var(--color-text);
     cursor: pointer;
     transition:
       background-color 0.15s,
       border-color 0.15s,
-      color 0.15s;
+      color 0.15s,
+      transform 0.1s;
   }
 
   li button:hover {
     background: var(--color-accent-soft);
-    border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
     color: var(--color-accent);
+  }
+
+  li button:active {
+    transform: scale(0.98);
   }
 
   [role='status'] {

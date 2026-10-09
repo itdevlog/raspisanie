@@ -68,20 +68,20 @@
 <style>
   h3 {
     font-size: var(--text-lg);
-    margin: 0 0 var(--space-1);
+    margin: 0 0 var(--space-2);
   }
 
   .controls {
     display: flex;
     align-items: flex-end;
-    gap: var(--space-3);
-    margin-bottom: var(--space-2);
+    gap: var(--space-4);
+    margin-bottom: var(--space-3);
   }
 
   .field {
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
+    gap: var(--space-2);
     font-size: var(--text-sm);
     color: var(--color-muted);
   }
@@ -106,18 +106,17 @@
 
   .rooms {
     list-style: none;
-    margin: 0;
+    margin: var(--space-3) 0 0;
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-1);
+    gap: var(--space-2);
   }
 
   .rooms li {
-    padding: var(--space-1) var(--space-3);
+    padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
+    background: var(--color-surface-2);
   }
 
   [role='status'] {

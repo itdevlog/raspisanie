@@ -20,6 +20,7 @@
   --color-bg: var(--tg-bg, #f5f6f8);
   --color-surface: #ffffff;
   --color-surface-2: #eef1f5;
+  --color-track: #e9edf2;
   --color-text: var(--tg-text, #16181d);
   --color-muted: var(--tg-hint, #6b7280);
   --color-border: #e2e5ea;
@@ -70,6 +71,7 @@
     --color-bg: var(--tg-bg, #0f1115);
     --color-surface: #1a1d23;
     --color-surface-2: #23272f;
+    --color-track: #15181e;
     --color-text: var(--tg-text, #e8eaed);
     --color-muted: var(--tg-hint, #9aa0a6);
     --color-border: #2f343c;
@@ -95,30 +97,46 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-size: var(--text-base);
-  line-height: 1.45;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 #app {
   width: 100%;
   max-width: 40rem;
-  padding: var(--space-4);
+  padding: var(--space-5) var(--space-4) var(--space-6);
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+  letter-spacing: -0.011em;
+  text-wrap: balance;
 }
 
 h1 {
   font-size: var(--text-2xl);
+  margin: 0 0 var(--space-4);
 }
 
 h2 {
-  font-size: var(--text-xl);
+  font-size: var(--text-2xl);
+  margin: 0 0 var(--space-4);
 }
 
 h3 {
   font-size: var(--text-lg);
 }
 
+h4 {
+  letter-spacing: 0.01em;
+}
+
 a {
   color: var(--color-link);
+  text-underline-offset: 2px;
 }
 
 :focus-visible {
@@ -138,6 +156,19 @@ textarea {
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+  padding: var(--space-4);
+}
+
+/* Calm, airy default for interactive controls; components refine as needed. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

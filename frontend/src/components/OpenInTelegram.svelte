@@ -34,7 +34,7 @@
   .open-telegram {
     display: inline-flex;
     align-items: center;
-    margin-top: var(--space-3);
+    margin-top: var(--space-4);
     margin-left: var(--space-2);
     min-height: 44px;
     padding: var(--space-2) var(--space-4);
@@ -47,11 +47,16 @@
     transition:
       background-color 0.15s,
       border-color 0.15s,
-      color 0.15s;
+      color 0.15s,
+      transform 0.1s;
   }
 
   .open-telegram:hover {
     border-color: var(--color-accent);
     background: var(--color-accent-soft);
+  }
+
+  .open-telegram:active {
+    transform: scale(0.98);
   }
 </style>

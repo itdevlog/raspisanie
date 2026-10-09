@@ -548,12 +548,12 @@
   }
 
   h2 {
-    font-size: var(--text-xl);
-    margin: 0 0 var(--space-3);
+    font-size: var(--text-2xl);
+    margin: 0 0 var(--space-4);
   }
 
   .pinned {
-    margin: 0 0 var(--space-2);
+    margin: 0 0 var(--space-3);
     font-size: var(--text-sm);
     color: var(--color-muted);
   }
@@ -563,11 +563,12 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
-    margin-bottom: var(--space-2);
+    margin-bottom: var(--space-4);
   }
 
   .week-nav button {
-    min-height: 40px;
+    min-height: 44px;
+    min-width: 44px;
     padding: var(--space-1) var(--space-3);
     border-radius: var(--radius-sm);
     border: 1px solid var(--color-border);
@@ -579,13 +580,18 @@
     transition:
       background-color 0.15s,
       border-color 0.15s,
-      color 0.15s;
+      color 0.15s,
+      transform 0.1s;
   }
 
   .week-nav button:hover:not(:disabled) {
     background: var(--color-accent-soft);
     border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
     color: var(--color-accent);
+  }
+
+  .week-nav button:active:not(:disabled) {
+    transform: scale(0.96);
   }
 
   .week-nav button:disabled {
@@ -599,7 +605,7 @@
   }
 
   .share {
-    margin-top: var(--space-3);
+    margin-top: var(--space-4);
     min-height: 44px;
     padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-sm);
@@ -611,21 +617,26 @@
     transition:
       background-color 0.15s,
       border-color 0.15s,
-      color 0.15s;
+      color 0.15s,
+      transform 0.1s;
   }
 
   .share:hover {
     background: color-mix(in srgb, var(--color-accent) 88%, black);
   }
 
+  .share:active {
+    transform: scale(0.98);
+  }
+
   .share-notice {
-    margin: var(--space-1) 0 0;
+    margin: var(--space-2) 0 0;
     font-size: var(--text-sm);
     color: var(--color-muted);
   }
 
   .offline {
-    margin: var(--space-2) 0;
+    margin: var(--space-3) 0;
     padding: var(--space-3) var(--space-4);
     border-radius: var(--radius-md);
     border: 1px solid var(--color-border);
@@ -635,8 +646,8 @@
 
   .offline[data-tone='offline'] {
     color: var(--color-cancel);
-    background: var(--color-cancel-soft);
-    border-color: color-mix(in srgb, var(--color-cancel) 30%, transparent);
+    border-color: color-mix(in srgb, var(--color-cancel) 35%, var(--color-border));
+    border-left: 3px solid var(--color-cancel);
   }
 
   .offline-detail {
@@ -646,7 +657,7 @@
   }
 
   .push {
-    margin-top: var(--space-3);
+    margin-top: var(--space-4);
     margin-left: var(--space-2);
     min-height: 44px;
     padding: var(--space-2) var(--space-4);
@@ -658,11 +669,16 @@
     transition:
       background-color 0.15s,
       border-color 0.15s,
-      color 0.15s;
+      color 0.15s,
+      transform 0.1s;
   }
 
   .push:hover:not(:disabled) {
     border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+  }
+
+  .push:active:not(:disabled) {
+    transform: scale(0.98);
   }
 
   .push:disabled {

@@ -34,19 +34,17 @@
   .periods {
     display: flex;
     gap: var(--space-1);
-    margin-bottom: var(--space-3);
+    margin-bottom: var(--space-4);
     padding: var(--space-1);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: var(--color-track);
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
   }
 
   .periods button {
     flex: 1;
-    min-height: 40px;
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid transparent;
+    min-height: 44px;
+    padding: var(--space-2) var(--space-1);
+    border: none;
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--color-muted);
@@ -54,19 +52,23 @@
     font-weight: 500;
     transition:
       background-color 0.15s,
-      border-color 0.15s,
-      color 0.15s;
+      color 0.15s,
+      box-shadow 0.15s,
+      transform 0.1s;
   }
 
   .periods button:hover:not(.active) {
-    background: var(--color-surface-2);
     color: var(--color-text);
   }
 
+  .periods button:active {
+    transform: scale(0.98);
+  }
+
   .periods button.active {
-    font-weight: 700;
-    background: var(--color-accent-soft);
+    font-weight: 600;
+    background: var(--color-surface);
     color: var(--color-accent);
-    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+    box-shadow: var(--shadow-sm);
   }
 </style>

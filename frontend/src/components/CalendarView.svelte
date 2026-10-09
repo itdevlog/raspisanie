@@ -89,6 +89,11 @@
 <style>
   .calendar {
     text-align: left;
+    padding: var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
   }
 
   .nav {
@@ -96,7 +101,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
-    margin-bottom: var(--space-2);
+    margin-bottom: var(--space-4);
   }
 
   .nav h3 {
@@ -105,25 +110,30 @@
   }
 
   .nav button {
-    min-height: 36px;
+    min-height: 40px;
+    min-width: 40px;
     padding: var(--space-1) var(--space-3);
     border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    color: var(--color-text);
+    border: none;
+    background: var(--color-surface-2);
+    color: var(--color-muted);
     cursor: pointer;
     font-size: var(--text-lg);
     line-height: 1;
     transition:
       background-color 0.15s,
       border-color 0.15s,
-      color 0.15s;
+      color 0.15s,
+      transform 0.1s;
   }
 
   .nav button:hover {
     background: var(--color-accent-soft);
-    border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
     color: var(--color-accent);
+  }
+
+  .nav button:active {
+    transform: scale(0.96);
   }
 
   .weekdays,
@@ -131,6 +141,10 @@
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: var(--space-1);
+  }
+
+  .weekdays {
+    margin-bottom: var(--space-1);
   }
 
   .weekdays span {
@@ -147,32 +161,35 @@
     justify-content: center;
     aspect-ratio: 1;
     padding: var(--space-1);
-    border: 1px solid var(--color-border);
+    border: none;
     border-radius: var(--radius-sm);
-    background: var(--color-surface);
+    background: transparent;
     color: var(--color-text);
     cursor: pointer;
     font-size: var(--text-sm);
     transition:
       background-color 0.15s,
-      border-color 0.15s,
-      color 0.15s;
+      color 0.15s,
+      box-shadow 0.15s,
+      transform 0.1s;
   }
 
   .cell:hover:not(.pad) {
     background: var(--color-accent-soft);
-    border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+  }
+
+  .cell:active:not(.pad) {
+    transform: scale(0.96);
   }
 
   .cell.pad {
-    border-color: transparent;
     background: transparent;
     cursor: default;
   }
 
   .cell.weekend,
   .cell.no-period {
-    opacity: 0.45;
+    opacity: 0.4;
   }
 
   .cell.vacation {
@@ -180,20 +197,23 @@
   }
 
   .cell.exchange {
-    border-color: var(--color-exchange);
+    box-shadow: inset 0 -2px 0 var(--color-exchange);
   }
 
   .cell.cancelled {
-    border-color: var(--color-cancel);
+    box-shadow: inset 0 -2px 0 var(--color-cancel);
   }
 
   .cell.today {
-    outline: 2px solid var(--color-accent);
-    outline-offset: -2px;
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 2px var(--color-accent);
   }
 
   .marker {
     font-size: 10px;
+    font-weight: 700;
     line-height: 1;
   }
 

@@ -20,28 +20,37 @@
 
 <style>
   .notice {
-    margin: var(--space-2) 0;
-    padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-md);
+    margin: var(--space-4) 0;
+    padding: var(--space-5) var(--space-4);
+    border-radius: var(--radius-lg);
     border: 1px solid var(--color-border);
     background: var(--color-surface);
-    box-shadow: var(--shadow-sm);
+    text-align: center;
+    color: var(--color-muted);
+  }
+
+  .notice strong {
+    display: block;
+    color: var(--color-text);
+    font-weight: 600;
   }
 
   .muted {
-    color: var(--color-muted);
     background: var(--color-surface-2);
   }
 
   .error {
     color: var(--color-cancel);
-    background: var(--color-cancel-soft);
-    border-color: color-mix(in srgb, var(--color-cancel) 30%, transparent);
+  }
+
+  .error strong {
+    color: var(--color-cancel);
   }
 
   .detail {
     display: block;
-    margin-top: var(--space-1);
-    opacity: 0.8;
+    margin-top: var(--space-2);
+    font-size: var(--text-sm);
+    opacity: 0.85;
   }
 </style>

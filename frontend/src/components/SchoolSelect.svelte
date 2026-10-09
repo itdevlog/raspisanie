@@ -35,10 +35,10 @@
   .school {
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
+    gap: var(--space-2);
     font-size: var(--text-sm);
     color: var(--color-muted);
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-5);
   }
 
   select {

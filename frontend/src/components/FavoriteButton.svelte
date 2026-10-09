@@ -29,7 +29,7 @@
 
 <style>
   .favorite {
-    margin-top: var(--space-3);
+    margin-top: var(--space-4);
     min-height: 44px;
     padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-sm);
@@ -40,11 +40,16 @@
     transition:
       background-color 0.15s,
       border-color 0.15s,
-      color 0.15s;
+      color 0.15s,
+      transform 0.1s;
   }
 
   .favorite:hover {
     border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+  }
+
+  .favorite:active {
+    transform: scale(0.98);
   }
 
   .favorite.active {

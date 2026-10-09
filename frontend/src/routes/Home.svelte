@@ -218,20 +218,20 @@
   }
 
   h2 {
-    font-size: var(--text-xl);
-    margin: 0 0 var(--space-3);
+    font-size: var(--text-2xl);
+    margin: 0 0 var(--space-4);
   }
 
   h3 {
     font-size: var(--text-lg);
-    margin: var(--space-2) 0 var(--space-1);
+    margin: var(--space-4) 0 var(--space-2);
   }
 
   .school-meta {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-3);
-    margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+    margin: calc(-1 * var(--space-2)) 0 var(--space-4);
     font-size: var(--text-sm);
     color: var(--color-muted);
   }
@@ -241,7 +241,7 @@
   }
 
   button {
-    margin-top: var(--space-3);
+    margin-top: var(--space-4);
     min-height: 44px;
     padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-sm);
@@ -252,11 +252,16 @@
     transition:
       background-color 0.15s,
       border-color 0.15s,
-      color 0.15s;
+      color 0.15s,
+      transform 0.1s;
   }
 
   button:hover {
     border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+  }
+
+  button:active {
+    transform: scale(0.98);
   }
 
   button.primary {
@@ -271,7 +276,7 @@
   }
 
   .free-rooms {
-    margin-bottom: var(--space-3);
+    margin-bottom: var(--space-4);
   }
 
   [role='status'] {

@@ -201,39 +201,41 @@
     display: flex;
     gap: var(--space-1);
     justify-content: center;
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-5);
     padding: var(--space-1);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: var(--color-track);
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
   }
 
   nav button {
     flex: 1;
-    min-height: 40px;
+    min-height: 44px;
     padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-sm);
-    border: 1px solid transparent;
+    border: none;
     background: transparent;
     color: var(--color-muted);
     cursor: pointer;
     font-weight: 500;
     transition:
       background-color 0.15s,
-      border-color 0.15s,
-      color 0.15s;
+      color 0.15s,
+      box-shadow 0.15s,
+      transform 0.1s;
   }
 
   nav button:hover:not(.active) {
-    background: var(--color-surface-2);
     color: var(--color-text);
   }
 
+  nav button:active {
+    transform: scale(0.98);
+  }
+
   nav button.active {
-    font-weight: 700;
-    background: var(--color-accent-soft);
+    font-weight: 600;
+    background: var(--color-surface);
     color: var(--color-accent);
-    border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+    box-shadow: var(--shadow-sm);
   }
 </style>

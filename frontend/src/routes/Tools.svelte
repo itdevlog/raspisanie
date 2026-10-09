@@ -142,12 +142,12 @@
   }
 
   h2 {
-    font-size: var(--text-xl);
-    margin: 0 0 var(--space-3);
+    font-size: var(--text-2xl);
+    margin: 0 0 var(--space-4);
   }
 
   hr {
-    margin: var(--space-4) 0;
+    margin: var(--space-5) 0;
     border: none;
     border-top: 1px solid var(--color-border);
   }

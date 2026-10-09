@@ -57,26 +57,37 @@
 
 <style>
   .now {
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-5);
   }
 
   h3 {
     font-size: var(--text-lg);
-    margin: 0 0 var(--space-1);
+    margin: 0 0 var(--space-2);
   }
 
   .lesson {
-    margin: var(--space-2) 0;
-    padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-md);
+    margin: var(--space-2) 0 var(--space-4);
+    padding: var(--space-5);
+    border-radius: var(--radius-lg);
     border: 1px solid var(--color-border);
     background: var(--color-surface);
     box-shadow: var(--shadow-sm);
   }
 
+  .lesson strong {
+    display: block;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-muted);
+  }
+
   .detail {
     display: block;
-    margin-top: var(--space-1);
+    margin-top: var(--space-2);
+    font-size: var(--text-lg);
+    font-weight: 500;
   }
 
   .hint {

@@ -79,24 +79,24 @@
 
 <style>
   .day {
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-6);
   }
 
   h3 {
     font-size: var(--text-lg);
-    margin: 0 0 var(--space-1);
+    margin: 0 0 var(--space-2);
   }
 
   .period,
   .shift {
-    margin: 0 0 var(--space-1);
+    margin: 0 0 var(--space-2);
     font-size: var(--text-sm);
     color: var(--color-muted);
   }
 
   .lessons {
     list-style: none;
-    margin: 0;
+    margin: var(--space-3) 0 0;
     padding: 0;
   }
 </style>
