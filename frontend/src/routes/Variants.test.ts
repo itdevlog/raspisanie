@@ -83,6 +83,26 @@ describe('Variants comparison screen', () => {
     expect(queryByText('Показан примерный день')).toBeNull();
   });
 
+  it('falls back to the sample when the selected day has no lessons', async () => {
+    const client = makeClient({
+      getDay: vi.fn().mockResolvedValue(makeDay({ lessons: [] })),
+    });
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '6А');
+
+    const { findAllByText, getByText } = render(Variants, {
+      props: { client, selection, today: makeToday() },
+    });
+
+    await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+    expect((await findAllByText('Русский язык')).length).toBeGreaterThan(0);
+    expect(getByText('Показан примерный день')).toBeTruthy();
+    expect(
+      getByText('В расписании на этот день нет уроков — показан пример для сравнения.'),
+    ).toBeTruthy();
+  });
+
   it('falls back to the sample when loading the selected day fails', async () => {
     const client = makeClient({
       getDay: vi.fn().mockRejectedValue(new Error('boom')),

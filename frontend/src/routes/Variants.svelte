@@ -50,10 +50,13 @@
   interface Preview {
     day: DaySchedule;
     sample: boolean;
+    /** True when a real day loaded but had no lessons, so the sample stands in. */
+    emptyReal?: boolean;
   }
 
-  // The day to preview. Falls back to the sample when nothing is selected or the
-  // real load fails, so the comparison always has data to render.
+  // The day to preview. Falls back to the sample when nothing is selected, the
+  // real load fails, or the real day has no lessons (weekend/vacation), so the
+  // comparison always has data to render.
   const previewResource = createAsync<Preview>(async () => {
     const schoolId = selection.schoolId;
     const name = selection.name;
@@ -61,10 +64,16 @@
       return { day: SAMPLE_DAY, sample: true };
     }
     try {
-      return {
-        day: await client.getDay(schoolId, selection.kind, name, today.today || undefined),
-        sample: false,
-      };
+      const realDay = await client.getDay(
+        schoolId,
+        selection.kind,
+        name,
+        today.today || undefined,
+      );
+      if (realDay.lessons.length === 0) {
+        return { day: SAMPLE_DAY, sample: true, emptyReal: true };
+      }
+      return { day: realDay, sample: false };
     } catch {
       return { day: SAMPLE_DAY, sample: true };
     }
@@ -140,7 +149,9 @@
     <StateNotice
       tone="muted"
       title="Показан примерный день"
-      detail="Школа и класс не выбраны — данные для сравнения вымышленные."
+      detail={preview.emptyReal
+        ? 'В расписании на этот день нет уроков — показан пример для сравнения.'
+        : 'Школа и класс не выбраны — данные для сравнения вымышленные.'}
     />
   {/if}
 
