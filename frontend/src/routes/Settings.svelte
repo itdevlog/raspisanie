@@ -67,7 +67,7 @@
     clearCache = defaultClearCache,
   }: Props = $props();
 
-  const SKINS: Skin[] = ['classic', 'minimal', 'dark', 'contrast'];
+  const SKINS: Skin[] = ['classic', 'minimal', 'dark', 'contrast', 'youth'];
   const ACCENTS: Accent[] = ['blue', 'green', 'purple'];
   const FONTS: FontSize[] = ['normal', 'large'];
   const DEFAULT_KINDS: DefaultKind[] = ['class', 'teacher'];

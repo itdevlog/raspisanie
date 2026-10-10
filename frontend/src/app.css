@@ -342,6 +342,138 @@
   --text-2xl: 26px;
 }
 
+/*
+ * Youth («Молодёжный») — an opt-in dark, neon look. A near-black indigo base,
+ * translucent glass panels, a purple→cyan gradient on the header and primary
+ * buttons, oversized soft radii and glow shadows. The gradient is its own
+ * thing: the accent choice still persists, but this skin paints its accent
+ * surfaces itself, so «синий/зелёный/фиолетовый» stay harmless here.
+ */
+:root[data-skin='youth'] {
+  color-scheme: dark;
+
+  --youth-gradient: linear-gradient(135deg, #a855f7, #22d3ee);
+
+  --color-bg: #0b0b12;
+  --color-surface: rgba(255, 255, 255, 0.06);
+  --color-surface-2: rgba(255, 255, 255, 0.1);
+  --color-track: rgba(255, 255, 255, 0.14);
+  --color-text: #f2f2ff;
+  --color-muted: #a0a0c0;
+  --color-border: rgba(255, 255, 255, 0.08);
+
+  --color-accent: #a855f7;
+  --color-accent-contrast: #0b0b12;
+  --color-link: #7dd3fc;
+
+  --color-exchange: #fbbf24;
+  --color-cancel: #fb7185;
+  --color-vacation: #34d399;
+  --color-free: var(--color-muted);
+
+  --lesson-num: #8b8ba7;
+  --lesson-time: #4ade80;
+  --lesson-subject: #7dd3fc;
+  --lesson-teacher: #c4b5fd;
+  --lesson-room: #f8fafc;
+  --lesson-cancel: #fb7185;
+  --lesson-exchange: #fbbf24;
+  --lesson-group: #22d3ee;
+  --lesson-upk: #7dd3fc;
+  --lesson-free-teacher: #fbbf24;
+
+  --cal-cell-border: rgba(255, 255, 255, 0.1);
+  --cal-cell-text: #c9c9e0;
+  --cal-day-bg: rgba(168, 85, 247, 0.22);
+  --cal-changed-bg: rgba(251, 113, 133, 0.2);
+  --cal-method-bg: rgba(251, 191, 36, 0.2);
+  --cal-today-border: #22d3ee;
+  --cal-sat: #34d399;
+  --cal-sun: #fb7185;
+
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --nika-radius: 16px;
+
+  --shadow-sm: 0 8px 30px rgba(168, 85, 247, 0.25);
+  --shadow-md: 0 12px 40px rgba(168, 85, 247, 0.32);
+  --nika-shadow: 0 8px 30px rgba(168, 85, 247, 0.25);
+
+  /* Neon gradient header; dark text reads best across the bright cyan half. */
+  --nika-header-bg: #a855f7;
+  --nika-header-bg-image: var(--youth-gradient);
+  --nika-header-border: transparent;
+  --nika-header-text: #0b0b12;
+  --nika-header-text-shadow: none;
+
+  /* Primary buttons carry the gradient; light buttons become glass pills. */
+  --nika-btn-blue-border: transparent;
+  --nika-btn-blue-bg: #a855f7;
+  --nika-btn-blue-bg-image: var(--youth-gradient);
+  --nika-btn-blue-text: #0b0b12;
+  --nika-btn-blue-text-shadow: none;
+
+  --nika-btn-light-border: rgba(255, 255, 255, 0.28);
+  --nika-btn-light-bg: rgba(255, 255, 255, 0.14);
+  --nika-btn-light-bg-image: none;
+  --nika-btn-light-text: #f2f2ff;
+  --nika-btn-light-text-shadow: none;
+
+  --nika-btn-yellow-border: transparent;
+  --nika-btn-yellow-bg: #fbbf24;
+  --nika-btn-yellow-bg-image: none;
+  --nika-btn-yellow-text: #0b0b12;
+  --nika-btn-yellow-text-shadow: none;
+
+  --nika-pressed-blue-image: linear-gradient(135deg, #22d3ee, #a855f7);
+  --nika-pressed-light-image: none;
+  --nika-pressed-yellow-image: none;
+}
+
+/* Youth: a soft indigo/cyan glow behind the glass panels (fixed to viewport). */
+:root[data-skin='youth'] body {
+  background:
+    radial-gradient(60% 40% at 15% -5%, rgba(168, 85, 247, 0.3), transparent 60%),
+    radial-gradient(50% 35% at 100% 0%, rgba(34, 211, 238, 0.2), transparent 55%), #0b0b12;
+  background-attachment: fixed;
+}
+
+/* Youth: heavier display headings. */
+:root[data-skin='youth'] h1,
+:root[data-skin='youth'] h2,
+:root[data-skin='youth'] h3 {
+  font-weight: 800;
+}
+
+/* The gear sits on the bright gradient: a dark glass pill keeps it readable. */
+:root[data-skin='youth'] .app-header .nika-btn-light {
+  background: rgba(11, 11, 18, 0.4);
+  border-color: rgba(11, 11, 18, 0.3);
+  color: #f2f2ff;
+}
+
+/*
+ * Youth: small emoji accents, CSS-only (::before) so the DOM text, roles and
+ * accessible names the tests assert stay exactly as before. The `.section-btn`
+ * buttons carry a stable `data-section` hook (class/teacher/site).
+ */
+:root[data-skin='youth'] .section-btn[data-section='class']::before {
+  content: '🎓';
+}
+
+:root[data-skin='youth'] .section-btn[data-section='teacher']::before {
+  content: '👩‍🏫';
+}
+
+:root[data-skin='youth'] .section-btn[data-section='site']::before {
+  content: '🌐';
+}
+
+:root[data-skin='youth'] .day > h3::before {
+  content: '📅 ';
+}
+
 /* Skins that suppress gradients keep the accent button flat too. */
 :root[data-skin='minimal'][data-accent],
 :root[data-skin='contrast'][data-accent] {

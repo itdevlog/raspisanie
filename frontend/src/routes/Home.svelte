@@ -174,6 +174,7 @@
         <button
           type="button"
           class="section-btn nika-btn nika-btn-blue"
+          data-section="class"
           onclick={() => onOpenList?.('class')}
         >
           Классы
@@ -181,12 +182,17 @@
         <button
           type="button"
           class="section-btn nika-btn nika-btn-blue"
+          data-section="teacher"
           onclick={() => onOpenList?.('teacher')}
         >
           Учителя
         </button>
         {#if showHomepageLink}
-          <a class="section-btn nika-btn nika-btn-yellow" href={selectedSchool?.homepage_url ?? ''}>
+          <a
+            class="section-btn nika-btn nika-btn-yellow"
+            data-section="site"
+            href={selectedSchool?.homepage_url ?? ''}
+          >
             Школьный сайт
           </a>
         {/if}

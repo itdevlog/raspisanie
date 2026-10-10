@@ -14,7 +14,7 @@ import { readJson, removeKey, type StorageLike, writeJson } from './persisted';
 const SETTINGS_KEY = 'settings';
 
 /** Visual skin presets. `classic` reproduces the original Nikasoft look. */
-export type Skin = 'classic' | 'minimal' | 'dark' | 'contrast';
+export type Skin = 'classic' | 'minimal' | 'dark' | 'contrast' | 'youth';
 /** Accent colour choice; mapped to the semantic accent tokens in `app.css`. */
 export type Accent = 'blue' | 'green' | 'purple';
 /** Base font-size choice. */
@@ -44,6 +44,7 @@ export const SKIN_LABELS: Record<Skin, string> = {
   minimal: 'Минимализм',
   dark: 'Тёмная',
   contrast: 'Контрастная',
+  youth: 'Молодёжный',
 };
 
 export const ACCENT_LABELS: Record<Accent, string> = {
@@ -72,7 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showLessonTime: true,
 };
 
-const SKINS: readonly Skin[] = ['classic', 'minimal', 'dark', 'contrast'];
+const SKINS: readonly Skin[] = ['classic', 'minimal', 'dark', 'contrast', 'youth'];
 const ACCENTS: readonly Accent[] = ['blue', 'green', 'purple'];
 const FONT_SIZES: readonly FontSize[] = ['normal', 'large'];
 const DEFAULT_KINDS: readonly DefaultKind[] = ['class', 'teacher'];

@@ -69,6 +69,24 @@ describe('settings store', () => {
     expect(reloaded.skin).toBe('contrast');
   });
 
+  it('round-trips the «Молодёжный» (youth) skin through storage and apply()', () => {
+    const storage = memoryStorage();
+    const store = createSettingsStore(storage);
+    store.setSkin('youth');
+
+    expect(store.skin).toBe('youth');
+    expect(JSON.parse(storage.getItem('raspisanie:settings') as string)).toMatchObject({
+      skin: 'youth',
+    });
+
+    const reloaded = createSettingsStore(storage);
+    expect(reloaded.skin).toBe('youth');
+
+    const target: ThemeAttributeTarget = { setAttribute: vi.fn() };
+    reloaded.apply(target);
+    expect(target.setAttribute).toHaveBeenCalledWith('data-skin', 'youth');
+  });
+
   it('sanitizes corrupt / hand-edited values back to safe defaults', () => {
     const storage = memoryStorage({
       'raspisanie:settings': JSON.stringify({

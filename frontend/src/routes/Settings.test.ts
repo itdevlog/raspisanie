@@ -17,6 +17,7 @@ describe('Settings screen', () => {
     expect(getByRole('radio', { name: 'Минимализм' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Тёмная' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Контрастная' })).toBeTruthy();
+    expect(getByRole('radio', { name: 'Молодёжный' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Синий' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Зелёный' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Фиолетовый' })).toBeTruthy();
@@ -33,6 +34,18 @@ describe('Settings screen', () => {
     expect(settings.skin).toBe('dark');
     await waitFor(() =>
       expect(document.documentElement.getAttribute('data-skin')).toBe('dark'),
+    );
+  });
+
+  it('persists the «Молодёжный» skin and applies it to <html>', async () => {
+    const settings = makeSettings();
+    const { getByRole } = render(Settings, { props: { settings } });
+
+    await fireEvent.click(getByRole('radio', { name: 'Молодёжный' }));
+
+    expect(settings.skin).toBe('youth');
+    await waitFor(() =>
+      expect(document.documentElement.getAttribute('data-skin')).toBe('youth'),
     );
   });
 
