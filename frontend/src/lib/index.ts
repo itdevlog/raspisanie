@@ -14,6 +14,7 @@ export * from './sw-register';
 export * from './offline';
 export * from './telegram';
 export * from './schedule-view';
+export * from './sample-day';
 export * from './calendar';
 export * from './swipe';
 export * from './async.svelte';

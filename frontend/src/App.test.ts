@@ -78,6 +78,31 @@ describe('App shell', () => {
     await waitFor(() => expect(client.getTeachers).toHaveBeenCalledWith('gym1'));
   });
 
+  it('opens the schedule variants comparison from settings', async () => {
+    const fake = makeFakeEnv('/settings');
+    const router = createRouteStore(fake.env);
+
+    const { getByRole, findByText } = render(App, {
+      props: { client: makeClient(), selection: makeSelection(), today: makeToday(), router },
+    });
+
+    await fireEvent.click(getByRole('button', { name: 'Показать варианты расписания' }));
+
+    expect(await findByText('1. Компактный (текущий)')).toBeTruthy();
+    expect(fake.location.pathname).toBe('/variants');
+  });
+
+  it('opens the /variants deep link directly', async () => {
+    const fake = makeFakeEnv('/variants');
+    const router = createRouteStore(fake.env);
+
+    const { findByText } = render(App, {
+      props: { client: makeClient(), selection: makeSelection(), today: makeToday(), router },
+    });
+
+    expect(await findByText('Варианты расписания')).toBeTruthy();
+  });
+
   it('opens a list deep link for the linked kind', async () => {
     const fake = makeFakeEnv('/list/teacher');
     const router = createRouteStore(fake.env);

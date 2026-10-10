@@ -36,6 +36,8 @@
     selection?: SelectionStore;
     /** Return to the landing screen. */
     onBack?: () => void;
+    /** Open the read-only schedule layout comparison (`/variants`). */
+    onOpenVariants?: () => void;
     /**
      * School `STRIKEOUT_FREE_LSN` value, used as the strike-through checkbox's
      * state while the user has no explicit override (`null`).
@@ -58,6 +60,7 @@
     settings = defaultSettings,
     selection = defaultSelection,
     onBack,
+    onOpenVariants,
     schoolStrikeoutFreeLsn = true,
     origin = typeof window === 'undefined' ? '' : window.location.origin,
     pushEnable = enablePush,
@@ -303,6 +306,9 @@
       </button>
       <button type="button" class="clear-cache nika-btn nika-btn-light" onclick={handleClearCache}>
         Очистить кэш расписания
+      </button>
+      <button type="button" class="variants nika-btn nika-btn-light" onclick={() => onOpenVariants?.()}>
+        Показать варианты расписания
       </button>
     </div>
     {#if resetNotice}

@@ -182,6 +182,8 @@ describe('route parsing (unknown / absent → Home)', () => {
   it('recognizes the settings and per-kind list views', () => {
     expect(parsePath('/settings')).toEqual({ view: 'settings' });
     expect(parsePath('/settings/')).toEqual({ view: 'settings' });
+    expect(parsePath('/variants')).toEqual({ view: 'variants' });
+    expect(parsePath('/variants/')).toEqual({ view: 'variants' });
     expect(parsePath('/list/class')).toEqual({ view: 'list', kind: 'class' });
     expect(parsePath('/list/teacher')).toEqual({ view: 'list', kind: 'teacher' });
     expect(parsePath('/list/room')).toEqual({ view: 'list', kind: 'room' });
@@ -249,6 +251,7 @@ describe('buildViewPath / buildSharePath', () => {
     expect(buildViewPath({ view: 'home' })).toBe('/');
     expect(buildViewPath({ view: 'tools' })).toBe('/tools');
     expect(buildViewPath({ view: 'settings' })).toBe('/settings');
+    expect(buildViewPath({ view: 'variants' })).toBe('/variants');
     expect(buildViewPath({ view: 'list', kind: 'class' })).toBe('/list/class');
     expect(buildViewPath({ view: 'list', kind: 'teacher' })).toBe('/list/teacher');
     expect(buildViewPath({ view: 'list', kind: 'room' })).toBe('/list/room');
@@ -267,6 +270,7 @@ describe('buildViewPath / buildSharePath', () => {
       expect(parsePath(buildViewPath({ view: 'list', kind }))).toEqual({ view: 'list', kind });
     }
     expect(parsePath(buildViewPath({ view: 'settings' }))).toEqual({ view: 'settings' });
+    expect(parsePath(buildViewPath({ view: 'variants' }))).toEqual({ view: 'variants' });
   });
 
   it('omits the date when none is pinned', () => {

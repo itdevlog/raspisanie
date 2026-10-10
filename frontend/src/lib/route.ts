@@ -19,7 +19,7 @@ import { parseRuDate } from './dates';
 import type { ScheduleKind } from './api/types';
 
 /** The in-app screens. */
-export type View = 'home' | 'schedule' | 'tools' | 'list' | 'settings';
+export type View = 'home' | 'schedule' | 'tools' | 'list' | 'settings' | 'variants';
 
 /**
  * Parsed route. `schedule` carries the selection encoded in a share link (and
@@ -31,6 +31,7 @@ export type Route =
   | { view: 'home' }
   | { view: 'tools' }
   | { view: 'settings' }
+  | { view: 'variants' }
   | { view: 'list'; kind: ScheduleKind }
   | {
       view: 'schedule';
@@ -58,7 +59,14 @@ export const BARE_SCHEDULE_ROUTE: Route = {
 const SCHEDULE_PREFIX = '/s/';
 
 /** All view values as a runtime list for validation. */
-export const VIEWS: readonly View[] = ['home', 'schedule', 'tools', 'list', 'settings'] as const;
+export const VIEWS: readonly View[] = [
+  'home',
+  'schedule',
+  'tools',
+  'list',
+  'settings',
+  'variants',
+] as const;
 
 /** True for the valid view names. */
 export function isView(value: string): value is View {
@@ -112,6 +120,9 @@ export function parsePath(pathname: string, search = ''): Route {
     }
     if (segment === 'settings') {
       return { view: 'settings' };
+    }
+    if (segment === 'variants') {
+      return { view: 'variants' };
     }
     if (segment === 'schedule') {
       return { ...BARE_SCHEDULE_ROUTE };
@@ -222,6 +233,9 @@ export function buildViewPath(route: Route): string {
   }
   if (route.view === 'settings') {
     return '/settings';
+  }
+  if (route.view === 'variants') {
+    return '/variants';
   }
   if (route.view === 'list') {
     return `/list/${route.kind}`;

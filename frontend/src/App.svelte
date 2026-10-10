@@ -16,6 +16,7 @@
   import Schedule from './routes/Schedule.svelte';
   import Tools from './routes/Tools.svelte';
   import Settings from './routes/Settings.svelte';
+  import Variants from './routes/Variants.svelte';
   import {
     api as defaultApi,
     route as defaultRoute,
@@ -256,7 +257,10 @@
       {selection}
       schoolStrikeoutFreeLsn={schoolStrikeoutFreeLsn}
       onBack={goHome}
+      onOpenVariants={() => router.goTo('variants')}
     />
+  {:else if view === 'variants'}
+    <Variants {client} {selection} {today} onBack={goHome} />
   {:else if view === 'tools'}
     <Tools {client} {selection} {today} onBack={backToList} />
   {:else if showSchedule}

@@ -156,6 +156,16 @@ describe('Settings screen', () => {
     expect(getByText('Уведомления недоступны')).toBeTruthy();
   });
 
+  it('opens the schedule variants comparison from the «Прочее» section', async () => {
+    const onOpenVariants = vi.fn();
+    const { getByRole } = render(Settings, {
+      props: { settings: makeSettings(), onOpenVariants },
+    });
+
+    await fireEvent.click(getByRole('button', { name: 'Показать варианты расписания' }));
+    expect(onOpenVariants).toHaveBeenCalled();
+  });
+
   it('resets settings and clears the schedule cache', async () => {
     const settings = makeSettings();
     settings.setSkin('dark');
