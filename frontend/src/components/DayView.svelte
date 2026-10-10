@@ -22,8 +22,10 @@
      * (default `true` when absent). Forwarded to every {@link LessonRow}.
      */
     strikeoutFreeLsn?: boolean;
+    /** Show lesson numbers/times (user setting; forwarded to every row). */
+    showLessonTime?: boolean;
   }
-  let { day, kind, strikeoutFreeLsn = true }: Props = $props();
+  let { day, kind, strikeoutFreeLsn = true, showLessonTime = true }: Props = $props();
 
   // W41 fix: when `STRIKEOUT_FREE_LSN` is off the site hides free/cancelled
   // rows. Filter them out first so notices and the empty state reflect what is
@@ -68,6 +70,7 @@
         <LessonRow
           {lesson}
           {strikeoutFreeLsn}
+          showTime={showLessonTime}
           showRoom={kind !== 'room'}
           showTeacher={kind !== 'teacher'}
           showClass={kind !== 'class'}

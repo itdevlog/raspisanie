@@ -179,6 +179,18 @@ describe('route parsing (unknown / absent → Home)', () => {
     expect(parsePath('/nope')).toEqual(HOME_ROUTE);
   });
 
+  it('recognizes the settings and per-kind list views', () => {
+    expect(parsePath('/settings')).toEqual({ view: 'settings' });
+    expect(parsePath('/settings/')).toEqual({ view: 'settings' });
+    expect(parsePath('/list/class')).toEqual({ view: 'list', kind: 'class' });
+    expect(parsePath('/list/teacher')).toEqual({ view: 'list', kind: 'teacher' });
+    expect(parsePath('/list/room')).toEqual({ view: 'list', kind: 'room' });
+    // A missing/invalid kind is not a list.
+    expect(parsePath('/list')).toEqual(HOME_ROUTE);
+    expect(parsePath('/list/magic')).toEqual(HOME_ROUTE);
+    expect(parsePath('/list/class/extra')).toEqual(HOME_ROUTE);
+  });
+
   it('validates kinds', () => {
     expect(isScheduleKind('class')).toBe(true);
     expect(isScheduleKind('teacher')).toBe(true);
@@ -236,6 +248,10 @@ describe('buildViewPath / buildSharePath', () => {
   it('builds in-app paths for each view', () => {
     expect(buildViewPath({ view: 'home' })).toBe('/');
     expect(buildViewPath({ view: 'tools' })).toBe('/tools');
+    expect(buildViewPath({ view: 'settings' })).toBe('/settings');
+    expect(buildViewPath({ view: 'list', kind: 'class' })).toBe('/list/class');
+    expect(buildViewPath({ view: 'list', kind: 'teacher' })).toBe('/list/teacher');
+    expect(buildViewPath({ view: 'list', kind: 'room' })).toBe('/list/room');
     const schedule: Route = {
       view: 'schedule',
       school: 'gym1',
@@ -244,6 +260,13 @@ describe('buildViewPath / buildSharePath', () => {
       date: '07.09.2026',
     };
     expect(buildViewPath(schedule)).toBe('/s/gym1/class/5%D0%90?date=07.09.2026');
+  });
+
+  it('round-trips list and settings paths through parsePath', () => {
+    for (const kind of ['class', 'teacher', 'room'] as const) {
+      expect(parsePath(buildViewPath({ view: 'list', kind }))).toEqual({ view: 'list', kind });
+    }
+    expect(parsePath(buildViewPath({ view: 'settings' }))).toEqual({ view: 'settings' });
   });
 
   it('omits the date when none is pinned', () => {

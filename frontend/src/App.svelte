@@ -3,28 +3,30 @@
   // scheme (`/s/{school}/{kind}/{name}?date=…`), so a deep link opens the right
   // screen and back/forward work.
   //
-  // Navigation model: the entity KIND is the top-level navigation — a global
-  // tab bar («Классы» / «Учителя» / «Кабинеты») under the blue header, like the
-  // original site's separate «школьники» / «учителя» sections. Switching a kind
-  // selects it and returns to the LIST view; the chosen name lives in the list,
-  // not in a picker on the schedule screen.
+  // Navigation model: the LANDING (`/`, the original Nikasoft home) offers the
+  // school picker, favorites and large section buttons. Choosing a section opens
+  // the per-kind LIST (`/list/{kind}`); tapping a name opens its SCHEDULE
+  // (`/s/...`). A gear in the header opens SETTINGS (`/settings`). The kind tab
+  // bar lives on the list screen (compact switcher).
   //
   // A `router` prop is injectable so tests can drive navigation with a fake
   // browser env; production uses the default `route` store.
   import Home from './routes/Home.svelte';
+  import List from './routes/List.svelte';
   import Schedule from './routes/Schedule.svelte';
   import Tools from './routes/Tools.svelte';
+  import Settings from './routes/Settings.svelte';
   import {
     api as defaultApi,
     route as defaultRoute,
     selection as defaultSelection,
     serverToday as defaultToday,
     favorites as defaultFavorites,
+    settings as defaultSettings,
     createAsync,
     telegramEnv,
     initTelegramWebApp,
     initTelegramBackButton,
-    KIND_PLURAL_LABELS,
     type SchoolsResponse,
     type TelegramEnv,
     type RouteStore,
@@ -32,6 +34,7 @@
     type ScheduleApiClient,
     type ScheduleKind,
     type SelectionStore,
+    type SettingsStore,
     type TodayStore,
   } from './lib';
 
@@ -40,6 +43,7 @@
     selection?: SelectionStore;
     today?: TodayStore;
     favorites?: FavoritesStore;
+    settings?: SettingsStore;
     router?: RouteStore;
     /** Injectable Telegram WebApp env (tests); defaults to the real `window.Telegram`. */
     telegram?: TelegramEnv;
@@ -51,13 +55,11 @@
     selection = defaultSelection,
     today = defaultToday,
     favorites = defaultFavorites,
+    settings = defaultSettings,
     router = defaultRoute,
     telegram = typeof window === 'undefined' ? { webApp: undefined } : telegramEnv(),
     themeTarget = typeof document === 'undefined' ? undefined : document.documentElement,
   }: Props = $props();
-
-  /** The three entity kinds, in the order shown in the global tab bar. */
-  const KINDS: ScheduleKind[] = ['class', 'teacher', 'room'];
 
   // Parse the initial location and subscribe to popstate (back/forward).
   $effect(() => {
@@ -65,10 +67,14 @@
     return unsubscribe;
   });
 
-  // W41 fix: the shell owns the school feature flags. Fetch `/api/schools`
-  // once and thread `STRIKEOUT_FREE_LSN` (default true) down to the schedule
-  // screens so the flag actually reaches the UI.
-  const schoolsResource = createAsync<SchoolsResponse>(async () => client.getSchools());
+  // The shell owns the school feature flags. Fetch `/api/schools` once and
+  // thread `STRIKEOUT_FREE_LSN` (default true) down to the schedule screens so
+  // the flag actually reaches the UI; also adopt the server's today here.
+  const schoolsResource = createAsync<SchoolsResponse>(async () => {
+    const response = await client.getSchools();
+    today.adopt(response.today);
+    return response;
+  });
 
   $effect(() => {
     void schoolsResource.load();
@@ -77,7 +83,28 @@
   const selectedSchool = $derived(
     schoolsResource.data?.schools.find((school) => school.id === selection.schoolId) ?? null,
   );
-  const strikeoutFreeLsn = $derived(selectedSchool?.features?.strikeout_free_lsn ?? true);
+  const schoolStrikeoutFreeLsn = $derived(selectedSchool?.features?.strikeout_free_lsn ?? true);
+  // A `null` user override follows the school feature flag; an explicit
+  // true/false wins (the user's strike-through preference).
+  const strikeoutFreeLsn = $derived(settings.strikeoutFreeLsn ?? schoolStrikeoutFreeLsn);
+
+  // Mirror the chosen skin/accent/font onto `<html>` at start and on change.
+  $effect(() => {
+    settings.apply();
+  });
+
+  // "Default section on open": adopt the configured kind once, when no entity
+  // is selected yet.
+  let adoptedDefault = false;
+  $effect(() => {
+    const preferred = settings.defaultKind;
+    if (!adoptedDefault && selection.name === null) {
+      adoptedDefault = true;
+      if (selection.kind !== preferred) {
+        selection.selectKind(preferred);
+      }
+    }
+  });
 
   // W24: inside Telegram only — expand/ready + adopt the SDK theme. A regular
   // browser (no SDK) hits the no-op branch and is completely unaffected.
@@ -104,6 +131,14 @@
       if (selection.kind !== current.kind || selection.name !== current.name) {
         selection.selectEntity(current.kind, current.name);
       }
+    }
+  });
+
+  // A list deep link carries the active kind: keep the selection in sync.
+  $effect(() => {
+    const current = router.route;
+    if (current.view === 'list' && selection.kind !== current.kind) {
+      selection.selectKind(current.kind);
     }
   });
 
@@ -142,15 +177,27 @@
     openSchedule();
   }
 
+  /** Open the per-kind list screen for `kind`. */
+  function openList(kind: ScheduleKind): void {
+    selection.selectKind(kind);
+    router.navigate({ view: 'list', kind });
+  }
+
   /**
-   * Global kind switch: make `kind` active and, from any non-list screen, return
-   * to the list so the user can pick a name for the new kind.
+   * List-screen kind switch: make `kind` active and keep the URL in sync.
+   * Selecting the already-active kind is a no-op.
    */
   function handleKindChange(kind: ScheduleKind): void {
-    selection.selectKind(kind);
-    if (router.route.view !== 'home') {
-      router.goTo('home');
+    if (selection.kind === kind && router.route.view === 'list') {
+      return;
     }
+    selection.selectKind(kind);
+    router.navigate({ view: 'list', kind });
+  }
+
+  /** The schedule/tools back button returns to the list for the current kind. */
+  function backToList(): void {
+    router.navigate({ view: 'list', kind: selection.kind });
   }
 
   /**
@@ -170,7 +217,7 @@
   const view = $derived(currentRoute.view);
   const pinnedDate = $derived(currentRoute.view === 'schedule' ? currentRoute.date : null);
   // A schedule view is only meaningful when the URL actually carries an entity.
-  // A bare `/schedule` (no entity) falls back to the list instead of a broken
+  // A bare `/schedule` (no entity) falls back to the landing instead of a broken
   // screen.
   const showSchedule = $derived(
     currentRoute.view === 'schedule' &&
@@ -185,33 +232,33 @@
 
 <main>
   <!-- Persistent blue header bar, mirroring the original site: the selected
-       school name plus the «Обновлено» timestamp. -->
+       school name plus the «Обновлено» timestamp, and the settings gear. -->
   <header class="app-header">
-    <h1 class="app-header-title">{selectedSchool?.name ?? 'Расписание'}</h1>
+    <div class="header-row">
+      <h1 class="app-header-title">{selectedSchool?.name ?? 'Расписание'}</h1>
+      <button
+        type="button"
+        class="gear nika-btn nika-btn-light"
+        aria-label="Настройки"
+        onclick={() => router.goTo('settings')}
+      >
+        <span aria-hidden="true">⚙</span>
+      </button>
+    </div>
     {#if selectedSchool?.updated}
       <p class="app-header-subtitle">Обновлено {selectedSchool.updated}</p>
     {/if}
   </header>
 
-  <!-- Global kind tab bar: the top-level navigation, mirroring the original
-       site's separate «школьники» / «учителя» sections. -->
-  <div class="kind-tabs" role="tablist" aria-label="Разделы">
-    {#each KINDS as kind (kind)}
-      <button
-        type="button"
-        role="tab"
-        aria-selected={selection.kind === kind}
-        class="tab nika-btn nika-btn-blue"
-        class:is-active={selection.kind === kind}
-        onclick={() => handleKindChange(kind)}
-      >
-        {KIND_PLURAL_LABELS[kind]}
-      </button>
-    {/each}
-  </div>
-
-  {#if view === 'tools'}
-    <Tools {client} {selection} {today} onBack={goHome} />
+  {#if view === 'settings'}
+    <Settings
+      {settings}
+      {selection}
+      schoolStrikeoutFreeLsn={schoolStrikeoutFreeLsn}
+      onBack={goHome}
+    />
+  {:else if view === 'tools'}
+    <Tools {client} {selection} {today} onBack={backToList} />
   {:else if showSchedule}
     <Schedule
       {client}
@@ -220,7 +267,18 @@
       {favorites}
       {pinnedDate}
       {strikeoutFreeLsn}
+      showLessonTime={settings.showLessonTime}
       onOpenDay={openDay}
+      onBack={backToList}
+    />
+  {:else if view === 'list'}
+    <List
+      {client}
+      {selection}
+      {favorites}
+      onKindChange={handleKindChange}
+      onOpenEntity={openEntity}
+      onOpenFreeRooms={() => router.goTo('tools')}
       onBack={goHome}
     />
   {:else}
@@ -229,8 +287,8 @@
       {selection}
       {today}
       {favorites}
+      onOpenList={openList}
       onOpenEntity={openEntity}
-      onOpenFreeRooms={() => router.goTo('tools')}
     />
   {/if}
 </main>
@@ -251,11 +309,26 @@
     text-shadow: var(--nika-header-text-shadow);
   }
 
+  .header-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
   .app-header-title {
+    flex: 1;
     margin: 0;
     font-size: var(--text-xl);
     font-weight: bold;
     line-height: 1.2;
+  }
+
+  .gear {
+    flex: none;
+    min-width: 44px;
+    padding: 0;
+    font-size: var(--text-lg);
+    line-height: 1;
   }
 
   .app-header-subtitle {
@@ -264,19 +337,5 @@
     font-style: italic;
     font-weight: normal;
     opacity: 0.95;
-  }
-
-  /* Kind tab bar: the original navbar — blue tabs, active = pressed/highlight. */
-  .kind-tabs {
-    display: flex;
-    gap: var(--space-1);
-    margin: 0 calc(-1 * var(--space-4)) var(--space-5);
-    padding: var(--space-1) var(--space-4);
-    background: var(--color-track);
-  }
-
-  .tab {
-    flex: 1;
-    font-size: var(--text-sm);
   }
 </style>

@@ -83,6 +83,8 @@
      * shell (`/api/schools`). Default `true` keeps the strike-through behavior.
      */
     strikeoutFreeLsn?: boolean;
+    /** Show lesson numbers/times (user setting; forwarded to the day/week views). */
+    showLessonTime?: boolean;
   }
   let {
     client = defaultApi,
@@ -100,6 +102,7 @@
     pushInitiallyOn = false,
     pushSupported = undefined,
     strikeoutFreeLsn = true,
+    showLessonTime = true,
   }: Props = $props();
 
   let period = $state<Period>('today');
@@ -492,7 +495,7 @@
         {:else if bodyStatus === 'loading' || bodyStatus === 'idle'}
           <p class="loading" role="status">Загрузка…</p>
         {:else if weekResource.data && weekResource.data.days.length > 0}
-          <WeekView week={weekResource.data} kind={selection.kind} {strikeoutFreeLsn} />
+          <WeekView week={weekResource.data} kind={selection.kind} {strikeoutFreeLsn} {showLessonTime} />
         {:else}
           <StateNotice title="Занятий нет" detail="Расписание на неделю пустое." />
         {/if}
@@ -544,7 +547,7 @@
         {:else if bodyStatus === 'loading' || bodyStatus === 'idle'}
           <p class="loading" role="status">Загрузка…</p>
         {:else if dayResource.data}
-          <DayView day={dayResource.data} kind={selection.kind} {strikeoutFreeLsn} />
+          <DayView day={dayResource.data} kind={selection.kind} {strikeoutFreeLsn} {showLessonTime} />
         {/if}
       </div>
     {/if}

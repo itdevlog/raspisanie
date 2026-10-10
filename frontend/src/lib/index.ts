@@ -21,4 +21,5 @@ export * from './stores/persisted';
 export * from './stores/selection.svelte';
 export * from './stores/favorites.svelte';
 export * from './stores/today.svelte';
+export * from './stores/settings.svelte';
 export * from './stores/route.svelte';

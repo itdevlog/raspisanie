@@ -18,17 +18,20 @@
 import { parseRuDate } from './dates';
 import type { ScheduleKind } from './api/types';
 
-/** The three in-app screens. */
-export type View = 'home' | 'schedule' | 'tools';
+/** The in-app screens. */
+export type View = 'home' | 'schedule' | 'tools' | 'list' | 'settings';
 
 /**
  * Parsed route. `schedule` carries the selection encoded in a share link (and
  * the optional pinned date); a bare `schedule` (school/name null) is the nav-tab
- * view with no entity chosen yet. The other views carry only their `view`.
+ * view with no entity chosen yet. `list` is the per-kind name list, `settings`
+ * the preferences screen. The other views carry only their `view`.
  */
 export type Route =
   | { view: 'home' }
   | { view: 'tools' }
+  | { view: 'settings' }
+  | { view: 'list'; kind: ScheduleKind }
   | {
       view: 'schedule';
       /** Linked school id, or null for the bare nav-tab view. */
@@ -55,9 +58,9 @@ export const BARE_SCHEDULE_ROUTE: Route = {
 const SCHEDULE_PREFIX = '/s/';
 
 /** All view values as a runtime list for validation. */
-export const VIEWS: readonly View[] = ['home', 'schedule', 'tools'] as const;
+export const VIEWS: readonly View[] = ['home', 'schedule', 'tools', 'list', 'settings'] as const;
 
-/** True for the three valid view names. */
+/** True for the valid view names. */
 export function isView(value: string): value is View {
   return (VIEWS as readonly string[]).includes(value);
 }
@@ -107,8 +110,17 @@ export function parsePath(pathname: string, search = ''): Route {
     if (segment === 'tools') {
       return { view: 'tools' };
     }
+    if (segment === 'settings') {
+      return { view: 'settings' };
+    }
     if (segment === 'schedule') {
       return { ...BARE_SCHEDULE_ROUTE };
+    }
+    if (segment.startsWith('list/')) {
+      const kind = segment.slice('list/'.length);
+      if (isScheduleKind(kind)) {
+        return { view: 'list', kind };
+      }
     }
     return HOME_ROUTE;
   }
@@ -192,7 +204,8 @@ export function buildSharePath(
 }
 
 /**
- * Build the in-app path for a view: `/` for home, `/tools` for tools, `/schedule`
+ * Build the in-app path for a view: `/` for home, `/tools` for tools,
+ * `/settings` for settings, `/list/{kind}` for a per-kind list, `/schedule`
  * for the bare schedule view, and a share path for a scheduled entity.
  *
  * This keeps the address bar in sync with `pushState` navigation.
@@ -204,5 +217,14 @@ export function buildViewPath(route: Route): string {
     }
     return '/schedule';
   }
-  return route.view === 'tools' ? '/tools' : '/';
+  if (route.view === 'tools') {
+    return '/tools';
+  }
+  if (route.view === 'settings') {
+    return '/settings';
+  }
+  if (route.view === 'list') {
+    return `/list/${route.kind}`;
+  }
+  return '/';
 }

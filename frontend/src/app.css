@@ -127,9 +127,13 @@
 /*
  * Dark theme: a derivation of the original palette. The header/button
  * gradients stay as-is (they read well on dark), only surfaces/text invert.
+ *
+ * Scoped to the `classic` skin so an explicit skin choice (e.g. `minimal`)
+ * always wins over the OS preference. Before `apply()` sets the attribute the
+ * base `:root` palette applies; the attribute is set at app start.
  */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root[data-skin='classic'] {
     --color-bg: var(--tg-bg, #17191c);
     --color-surface: #24272b;
     --color-surface-2: #2e3237;
@@ -150,6 +154,208 @@
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
   }
+}
+
+/*
+ * ---- Accent colours --------------------------------------------------------
+ *
+ * `data-accent` tints the semantic accent/link tokens and the «blue» button.
+ * Declared BEFORE the skins so a skin can override any button token it wants
+ * (e.g. contrast keeps its own high-contrast colours); the accent still drives
+ * links/focus/accent elements everywhere.
+ */
+:root[data-accent='blue'] {
+  --color-accent: #1e8bdc;
+  --color-link: #1e8bdc;
+  --nika-btn-blue-bg: #1e8bdc;
+  --nika-btn-blue-border: #044062;
+  --nika-btn-blue-bg-image: linear-gradient(#25adff, #1668a5);
+}
+
+:root[data-accent='green'] {
+  --color-accent: #1f9d55;
+  --color-link: #1f9d55;
+  --nika-btn-blue-bg: #1f9d55;
+  --nika-btn-blue-border: #0f6b39;
+  --nika-btn-blue-bg-image: linear-gradient(
+    color-mix(in srgb, #1f9d55 80%, #ffffff),
+    color-mix(in srgb, #1f9d55 80%, #000000)
+  );
+}
+
+:root[data-accent='purple'] {
+  --color-accent: #7c3aed;
+  --color-link: #7c3aed;
+  --nika-btn-blue-bg: #7c3aed;
+  --nika-btn-blue-border: #4c1d95;
+  --nika-btn-blue-bg-image: linear-gradient(
+    color-mix(in srgb, #7c3aed 80%, #ffffff),
+    color-mix(in srgb, #7c3aed 80%, #000000)
+  );
+}
+
+/*
+ * ---- Skins -----------------------------------------------------------------
+ *
+ * `data-skin` selects a token set. `classic` (the default) is the base `:root`
+ * palette above; the others override surfaces/radii/shadows/typography here.
+ * Skin blocks come after accent (so they win button tokens) and before font.
+ */
+
+/* Minimalism — the earlier calm, airy look: soft greys, generous radii, no
+   gradients, a system font stack. */
+:root[data-skin='minimal'] {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+
+  --color-bg: var(--tg-bg, #f5f6f8);
+  --color-surface: #ffffff;
+  --color-surface-2: #eef1f5;
+  --color-track: #e9edf2;
+  --color-text: var(--tg-text, #16181d);
+  --color-muted: var(--tg-hint, #6b7280);
+  --color-border: #e2e5ea;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(15, 17, 21, 0.06), 0 1px 3px rgba(15, 17, 21, 0.08);
+  --shadow-md: 0 4px 10px rgba(15, 17, 21, 0.1), 0 2px 4px rgba(15, 17, 21, 0.06);
+
+  /* Flat, quiet buttons: drop the jQM gradients and glossy shadows. */
+  --nika-radius: 10px;
+  --nika-shadow: 0 1px 2px rgba(15, 17, 21, 0.08);
+  --nika-header-bg: #ffffff;
+  --nika-header-bg-image: none;
+  --nika-header-border: #e2e5ea;
+  --nika-header-text: #16181d;
+  --nika-header-text-shadow: none;
+  --nika-btn-blue-border: transparent;
+  --nika-btn-blue-bg-image: none;
+  --nika-btn-light-border: #e2e5ea;
+  --nika-btn-light-bg: #ffffff;
+  --nika-btn-light-bg-image: none;
+  --nika-btn-light-text: #16181d;
+  --nika-btn-light-text-shadow: none;
+  --nika-btn-yellow-border: transparent;
+  --nika-btn-yellow-bg: #fde68a;
+  --nika-btn-yellow-bg-image: none;
+  --nika-pressed-blue-image: none;
+  --nika-pressed-light-image: none;
+  --nika-pressed-yellow-image: none;
+}
+
+/* Dark — inverted surfaces over the original accents. */
+:root[data-skin='dark'] {
+  color-scheme: dark;
+
+  --color-bg: var(--tg-bg, #17191c);
+  --color-surface: #24272b;
+  --color-surface-2: #2e3237;
+  --color-track: #1d2023;
+  --color-text: var(--tg-text, #e8eaed);
+  --color-muted: var(--tg-hint, #a0a4a8);
+  --color-border: #3a3f44;
+
+  --color-exchange: #f59e0b;
+  --color-cancel: #f87171;
+  --color-vacation: #4ade80;
+
+  --cal-cell-text: #c9ccd0;
+  --cal-day-bg: #23303c;
+  --cal-changed-bg: #3a2628;
+  --cal-method-bg: #3a2f22;
+
+  --lesson-num: #8b9096;
+  --lesson-time: #4ade80;
+  --lesson-subject: #cfe3ff;
+  --lesson-teacher: #a9c7cc;
+  --lesson-room: #f1f3f5;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+
+  --nika-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --nika-btn-light-bg: #2e3237;
+  --nika-btn-light-bg-image: none;
+  --nika-btn-light-border: #3a3f44;
+  --nika-btn-light-text: #e8eaed;
+  --nika-btn-light-text-shadow: none;
+}
+
+/* Contrast — high contrast and a larger base type scale. */
+:root[data-skin='contrast'] {
+  color-scheme: light;
+
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #f2f2f2;
+  --color-track: #000000;
+  --color-text: #000000;
+  --color-muted: #1a1a1a;
+  --color-border: #000000;
+
+  --color-exchange: #b00000;
+  --color-cancel: #b00000;
+  --color-vacation: #005c00;
+
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --nika-radius: 4px;
+
+  --shadow-sm: none;
+  --shadow-md: none;
+  --nika-shadow: none;
+
+  --nika-header-bg: #000000;
+  --nika-header-bg-image: none;
+  --nika-header-border: #000000;
+  --nika-header-text: #ffffff;
+  --nika-header-text-shadow: none;
+
+  --nika-btn-blue-border: #000000;
+  --nika-btn-blue-bg: #0033cc;
+  --nika-btn-blue-bg-image: none;
+  --nika-btn-light-border: #000000;
+  --nika-btn-light-bg: #ffffff;
+  --nika-btn-light-bg-image: none;
+  --nika-btn-light-text: #000000;
+  --nika-btn-light-text-shadow: none;
+  --nika-btn-yellow-border: #000000;
+  --nika-btn-yellow-bg: #ffd400;
+  --nika-btn-yellow-bg-image: none;
+  --nika-btn-yellow-text: #000000;
+  --nika-pressed-blue-image: none;
+  --nika-pressed-light-image: none;
+  --nika-pressed-yellow-image: none;
+
+  --text-base: 17px;
+  --text-sm: 15px;
+  --text-lg: 19px;
+  --text-xl: 22px;
+  --text-2xl: 26px;
+}
+
+/* Skins that suppress gradients keep the accent button flat too. */
+:root[data-skin='minimal'][data-accent],
+:root[data-skin='contrast'][data-accent] {
+  --nika-btn-blue-bg-image: none;
+}
+
+/* ---- Font size ------------------------------------------------------------- */
+:root[data-font='large'] {
+  --text-xs: 13px;
+  --text-sm: 15px;
+  --text-base: 17px;
+  --text-lg: 19px;
+  --text-xl: 22px;
+  --text-2xl: 26px;
 }
 
 * {

@@ -234,4 +234,14 @@ describe('DayView', () => {
     });
     expect(container.querySelector('.lesson.free')).toBeTruthy();
   });
+
+  it('hides the lesson number and time when showLessonTime is false', () => {
+    const { getByText, queryByText } = render(DayView, {
+      props: { day: makeDay({ lessons: [makeLesson()] }), kind: 'class', showLessonTime: false },
+    });
+    // The subject stays; the number/time do not.
+    expect(getByText('Математика')).toBeTruthy();
+    expect(queryByText('08:00–08:45')).toBeNull();
+    expect(queryByText('1')).toBeNull();
+  });
 });

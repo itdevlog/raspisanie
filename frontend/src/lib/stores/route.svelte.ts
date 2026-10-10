@@ -73,6 +73,12 @@ export function createRouteStore(envOverride?: BrowserEnv): RouteStore {
       navigate({ ...BARE_SCHEDULE_ROUTE });
       return;
     }
+    if (view === 'list') {
+      // A bare `goTo('list')` has no kind; the shell prefers `navigate` with an
+      // explicit kind so the active section is preserved.
+      navigate({ view: 'list', kind: 'class' });
+      return;
+    }
     navigate({ view });
   }
 

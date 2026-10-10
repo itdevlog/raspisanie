@@ -26,6 +26,8 @@
      * Defaults to `true` (server/flag default) when absent.
      */
     strikeoutFreeLsn?: boolean;
+    /** Show the lesson number and time (user setting; default `true`). */
+    showTime?: boolean;
   }
   let {
     lesson,
@@ -33,6 +35,7 @@
     showTeacher = true,
     showClass = false,
     strikeoutFreeLsn = true,
+    showTime = true,
   }: Props = $props();
 
   const status = $derived(lessonStatusLabel(lesson));
@@ -51,8 +54,8 @@
     aria-label={status ? 'Урок {lesson.num}: {status}' : undefined}
   >
     <div class="head">
-      <span class="num">{lesson.num}</span>
-      {#if time}<span class="time">{time}</span>{/if}
+      {#if showTime}<span class="num">{lesson.num}</span>{/if}
+      {#if showTime && time}<span class="time">{time}</span>{/if}
       {#if status}<span class="badge">{status}</span>{/if}
     </div>
     <ul class="items">

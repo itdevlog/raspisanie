@@ -8,13 +8,15 @@
     kind: ScheduleKind;
     /** W41 fix: school `STRIKEOUT_FREE_LSN` flag forwarded to every day. */
     strikeoutFreeLsn?: boolean;
+    /** Show lesson numbers/times (user setting; forwarded to every day). */
+    showLessonTime?: boolean;
   }
-  let { week, kind, strikeoutFreeLsn = true }: Props = $props();
+  let { week, kind, strikeoutFreeLsn = true, showLessonTime = true }: Props = $props();
 </script>
 
 <div class="week">
   {#each week.days as day (day.date)}
-    <DayView {day} {kind} {strikeoutFreeLsn} />
+    <DayView {day} {kind} {strikeoutFreeLsn} {showLessonTime} />
   {/each}
 </div>
 

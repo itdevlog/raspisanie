@@ -12,6 +12,7 @@ import type { CalendarDay, CalendarResponse, DaySchedule, School } from './lib/a
 import { createSelectionStore } from './lib/stores/selection.svelte';
 import { createFavoritesStore } from './lib/stores/favorites.svelte';
 import { createTodayStore } from './lib/stores/today.svelte';
+import { createSettingsStore } from './lib/stores/settings.svelte';
 import { createRouteStore, type RouteStore } from './lib/stores/route.svelte';
 import type { BrowserEnv } from './lib/platform';
 
@@ -95,6 +96,11 @@ export function makeFavorites() {
 export function makeToday(today = '05.10.2026') {
   const client = makeClient({ getSchools: vi.fn().mockResolvedValue({ today, schools: [] }) });
   return createTodayStore(client, null);
+}
+
+/** A settings store backed by an isolated in-memory storage. */
+export function makeSettings() {
+  return createSettingsStore(null);
 }
 
 /**

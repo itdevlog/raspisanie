@@ -121,6 +121,20 @@ describe('route store', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it('goTo() reaches the settings and list views', () => {
+    const fake = makeFakeEnv('/');
+    const store = createRouteStore(fake.env);
+    store.start();
+
+    store.goTo('settings');
+    expect(store.route).toEqual({ view: 'settings' });
+    expect(fake.location.pathname).toBe('/settings');
+
+    store.goTo('list');
+    expect(store.route).toEqual({ view: 'list', kind: 'class' });
+    expect(fake.location.pathname).toBe('/list/class');
+  });
+
   it('start() returns an unsubscribe that detaches popstate', () => {
     const fake = makeFakeEnv('/');
     const store = createRouteStore(fake.env);

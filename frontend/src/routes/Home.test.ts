@@ -29,7 +29,7 @@ function schoolWithMeta(overrides: Partial<School> = {}): School {
   };
 }
 
-describe('Home screen (list view)', () => {
+describe('Home screen (landing)', () => {
   beforeEach(() => {
     localStorage.clear();
   });
@@ -87,6 +87,19 @@ describe('Home screen (list view)', () => {
     expect(await findByText('Сеть недоступна')).toBeTruthy();
   });
 
+  it('does not fetch a per-kind list on the landing', async () => {
+    const client = makeClient();
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+
+    const { findByRole } = render(Home, {
+      props: { client, selection, today: makeToday() },
+    });
+
+    expect(await findByRole('heading', { name: 'Гимназия №1' })).toBeTruthy();
+    expect(client.getClasses).not.toHaveBeenCalled();
+  });
+
   describe('school metadata', () => {
     function metaClient(school: School) {
       return makeClient({
@@ -94,7 +107,7 @@ describe('Home screen (list view)', () => {
       });
     }
 
-    it('shows the city and the yellow school-site button', async () => {
+    it('shows the school name, city, «Обновлено» and the yellow school-site button', async () => {
       const selection = makeSelection();
       selection.selectSchool('gym1');
 
@@ -102,8 +115,9 @@ describe('Home screen (list view)', () => {
         props: { client: metaClient(schoolWithMeta()), selection, today: makeToday() },
       });
 
+      expect(await findByRole('heading', { name: 'Гимназия №1' })).toBeTruthy();
       expect(await findByText('Москва')).toBeTruthy();
-      // «Обновлено» now lives in the App header, not on Home.
+      expect(await findByText('Обновлено 01.09.2026 10:00')).toBeTruthy();
       const link = await findByRole('link', { name: 'Школьный сайт' });
       expect(link.getAttribute('href')).toBe('https://gym1.example.ru');
     });
@@ -141,117 +155,26 @@ describe('Home screen (list view)', () => {
     });
   });
 
-  describe('per-kind list', () => {
-    it('shows the active class list and opens a class schedule', async () => {
+  describe('section buttons', () => {
+    it('opens the class and teacher lists', async () => {
       const selection = makeSelection();
       selection.selectSchool('gym1');
-      const onOpenEntity = vi.fn();
-      const client = makeClient({
-        getClasses: vi.fn().mockResolvedValue({ classes: ['5А', '6Б'] }),
+      const onOpenList = vi.fn();
+
+      const { findByRole } = render(Home, {
+        props: { client: makeClient(), selection, today: makeToday(), onOpenList },
       });
 
-      const { findByRole, findByText } = render(Home, {
-        props: { client, selection, today: makeToday(), onOpenEntity },
-      });
+      await fireEvent.click(await findByRole('button', { name: 'Классы' }));
+      expect(onOpenList).toHaveBeenCalledWith('class');
 
-      expect(await findByText('Классы')).toBeTruthy();
-      await fireEvent.click(await findByRole('button', { name: '6Б' }));
-      expect(onOpenEntity).toHaveBeenCalledWith('class', '6Б');
-    });
-
-    it('filters the teacher list case-insensitively and opens a teacher schedule', async () => {
-      const selection = makeSelection();
-      selection.selectSchool('gym1');
-      selection.selectKind('teacher');
-      const onOpenEntity = vi.fn();
-      const client = makeClient({
-        getTeachers: vi.fn().mockResolvedValue({ teachers: ['Иванов И.И.', 'Петров П.П.'] }),
-      });
-
-      const { findByRole, queryByRole } = render(Home, {
-        props: { client, selection, today: makeToday(), onOpenEntity },
-      });
-
-      await waitFor(() => expect(client.getTeachers).toHaveBeenCalledWith('gym1'));
-      const input = await findByRole('searchbox', { name: 'Поиск' });
-      expect(await findByRole('button', { name: 'Петров П.П.' })).toBeTruthy();
-
-      await fireEvent.input(input, { target: { value: 'петров' } });
-      await waitFor(() => expect(queryByRole('button', { name: 'Иванов И.И.' })).toBeNull());
-
-      await fireEvent.click(await findByRole('button', { name: 'Петров П.П.' }));
-      expect(onOpenEntity).toHaveBeenCalledWith('teacher', 'Петров П.П.');
-    });
-
-    it('shows the room list and a free-rooms shortcut only for the rooms kind', async () => {
-      const selection = makeSelection();
-      selection.selectSchool('gym1');
-      const client = makeClient({
-        getRooms: vi.fn().mockResolvedValue({ rooms: ['101', '202'] }),
-      });
-
-      const { findByRole, queryByRole } = render(Home, {
-        props: { client, selection, today: makeToday() },
-      });
-
-      // Default «Классы» kind: no free-rooms shortcut.
-      expect(await findByRole('button', { name: '5А' })).toBeTruthy();
-      expect(queryByRole('button', { name: 'Свободные кабинеты' })).toBeNull();
-
-      selection.selectKind('room');
-      await waitFor(() => expect(client.getRooms).toHaveBeenCalledWith('gym1'));
-      expect(await findByRole('button', { name: '101' })).toBeTruthy();
-      expect(await findByRole('button', { name: 'Свободные кабинеты' })).toBeTruthy();
-    });
-
-    it('shows deliberate error and empty states for the active kind', async () => {
-      const selection = makeSelection();
-      selection.selectSchool('gym1');
-      const client = makeClient({
-        getClasses: vi.fn().mockRejectedValue(new Error('нет классов')),
-      });
-
-      const { findByText } = render(Home, {
-        props: { client, selection, today: makeToday() },
-      });
-
-      expect(await findByText('Ошибка загрузки классов')).toBeTruthy();
-      expect(await findByText('нет классов')).toBeTruthy();
-    });
-
-    it('shows an empty state when the active kind has no names', async () => {
-      const selection = makeSelection();
-      selection.selectSchool('gym1');
-      selection.selectKind('teacher');
-      const client = makeClient({
-        getTeachers: vi.fn().mockResolvedValue({ teachers: [] }),
-      });
-
-      const { findByText } = render(Home, {
-        props: { client, selection, today: makeToday() },
-      });
-
-      expect(await findByText('Учителя не найдены')).toBeTruthy();
-    });
-
-    it('does not fetch the full day schedule on the list (that lives on Schedule)', async () => {
-      const client = makeClient();
-      const selection = makeSelection();
-      selection.selectSchool('gym1');
-      selection.selectEntity('class', '5А');
-
-      const { findByText } = render(Home, {
-        props: { client, selection, today: makeToday('05.10.2026') },
-      });
-
-      expect(await findByText('Классы')).toBeTruthy();
-      await waitFor(() => expect(client.getClasses).toHaveBeenCalledWith('gym1'));
-      expect(client.getDay).not.toHaveBeenCalled();
+      await fireEvent.click(await findByRole('button', { name: 'Учителя' }));
+      expect(onOpenList).toHaveBeenCalledWith('teacher');
     });
   });
 
-  describe('favorites-first', () => {
-    it('shows only the active kind favorites and opens/removes them', async () => {
+  describe('favorites-first (all kinds)', () => {
+    it('shows favorites of every kind and opens/removes them', async () => {
       const selection = makeSelection();
       selection.selectSchool('gym1');
       const favorites = makeFavorites();
@@ -260,37 +183,20 @@ describe('Home screen (list view)', () => {
       favorites.add('gym1', 'room', '303');
       const onOpenEntity = vi.fn();
 
-      const { findByRole, findByText, queryByText } = render(Home, {
+      const { findByRole, findByText } = render(Home, {
         props: { client: makeClient(), selection, today: makeToday(), favorites, onOpenEntity },
       });
 
       expect(await findByText('Избранное')).toBeTruthy();
       expect(await findByText('7В')).toBeTruthy();
-      // Other kinds' favorites are not shown in the «Классы» list.
-      expect(queryByText('Сидоров С.С.')).toBeNull();
-      expect(queryByText('303')).toBeNull();
+      expect(await findByText('Сидоров С.С.')).toBeTruthy();
+      expect(await findByText('303')).toBeTruthy();
 
-      await fireEvent.click(await findByRole('button', { name: '7В' }));
+      await fireEvent.click(await findByRole('button', { name: 'Открыть расписание: 7В' }));
       expect(onOpenEntity).toHaveBeenCalledWith('class', '7В');
 
       await fireEvent.click(await findByRole('button', { name: 'Удалить из избранного: 7В' }));
       expect(favorites.has('gym1', 'class', '7В')).toBe(false);
-    });
-
-    it('switches the favorites section with the active kind', async () => {
-      const selection = makeSelection();
-      selection.selectSchool('gym1');
-      selection.selectKind('teacher');
-      const favorites = makeFavorites();
-      favorites.add('gym1', 'class', '7В');
-      favorites.add('gym1', 'teacher', 'Сидоров С.С.');
-
-      const { findByText, queryByText } = render(Home, {
-        props: { client: makeClient(), selection, today: makeToday(), favorites },
-      });
-
-      expect(await findByText('Сидоров С.С.')).toBeTruthy();
-      expect(queryByText('7В')).toBeNull();
     });
 
     it('hides the Избранное section when there are no favorites', async () => {
@@ -324,26 +230,6 @@ describe('Home screen (list view)', () => {
       );
     });
 
-    it('renders the next lesson when none is running', async () => {
-      const client = makeClient({
-        getNow: vi.fn().mockResolvedValue({
-          server_time: '2026-10-05T08:00:00+03:00',
-          current: null,
-          next: { num: 1, time: '08:00-08:45', subject: 'Химия', room: '303', in_minutes: 5 },
-        } satisfies NowResponse),
-      });
-      const selection = makeSelection();
-      selection.selectSchool('gym1');
-      selection.selectEntity('class', '5А');
-
-      const { findByText } = render(Home, {
-        props: { client, selection, today: makeToday('05.10.2026') },
-      });
-
-      expect(await findByText('До начала')).toBeTruthy();
-      expect(await findByText(/Химия/)).toBeTruthy();
-    });
-
     it('handles a day with no lessons left', async () => {
       const client = makeClient({
         getNow: vi.fn().mockResolvedValue({
@@ -362,36 +248,5 @@ describe('Home screen (list view)', () => {
 
       expect(await findByText('Уроков нет')).toBeTruthy();
     });
-  });
-
-  it('navigates to the free-rooms screen for the rooms kind', async () => {
-    const selection = makeSelection();
-    selection.selectSchool('gym1');
-    selection.selectKind('room');
-    const onOpenFreeRooms = vi.fn();
-
-    const { findByRole } = render(Home, {
-      props: { client: makeClient(), selection, today: makeToday(), onOpenFreeRooms },
-    });
-
-    await fireEvent.click(await findByRole('button', { name: 'Свободные кабинеты' }));
-    expect(onOpenFreeRooms).toHaveBeenCalledTimes(1);
-  });
-
-  it('toggles the saved class as a favorite', async () => {
-    const selection = makeSelection();
-    selection.selectSchool('gym1');
-    selection.selectEntity('class', '5А');
-    const favorites = makeFavorites();
-
-    const { findByRole } = render(Home, {
-      props: { client: makeClient(), selection, today: makeToday(), favorites },
-    });
-
-    await fireEvent.click(await findByRole('button', { name: 'В избранное: 5А' }));
-    expect(favorites.has('gym1', 'class', '5А')).toBe(true);
-
-    await fireEvent.click(await findByRole('button', { name: 'Убрать из избранного: 5А' }));
-    expect(favorites.has('gym1', 'class', '5А')).toBe(false);
   });
 });

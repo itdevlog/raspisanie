@@ -1,12 +1,15 @@
 import { mount } from 'svelte';
 import './app.css';
 import App from './App.svelte';
-import { registerServiceWorker } from './lib';
+import { registerServiceWorker, settings } from './lib';
 
 const target = document.getElementById('app');
 if (!target) {
   throw new Error('Не найден контейнер приложения #app');
 }
+
+// Apply the persisted skin/accent/font before the first paint.
+settings.apply();
 
 const app = mount(App, { target });
 
