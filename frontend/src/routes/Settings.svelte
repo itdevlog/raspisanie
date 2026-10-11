@@ -19,11 +19,13 @@
     ACCENT_LABELS,
     DEFAULT_KIND_LABELS,
     FONT_LABELS,
+    SCHEDULE_VIEW_LABELS,
     SKIN_LABELS,
     type Accent,
     type DefaultKind,
     type FontSize,
     type PushResult,
+    type ScheduleView,
     type SelectionStore,
     type SettingsStore,
     type Skin,
@@ -74,6 +76,7 @@
   const ACCENTS: Accent[] = ['blue', 'green', 'purple'];
   const FONTS: FontSize[] = ['normal', 'large'];
   const DEFAULT_KINDS: DefaultKind[] = ['class', 'teacher'];
+  const SCHEDULE_VIEWS: ScheduleView[] = ['compact', 'cards', 'table', 'timeline', 'nownext'];
 
   let pushState = $state<'idle' | 'busy' | 'on'>(untrack(() => pushInitiallyOn) ? 'on' : 'idle');
   let pushNotice = $state<string | null>(null);
@@ -124,6 +127,9 @@
   }
   function handleShowLessonTimeChange(event: Event) {
     settings.setShowLessonTime((event.currentTarget as HTMLInputElement).checked);
+  }
+  function handleScheduleViewChange(event: Event) {
+    settings.setScheduleView((event.currentTarget as HTMLInputElement).value as ScheduleView);
   }
 
   function handleReset() {
@@ -239,6 +245,31 @@
   </fieldset>
 
   <fieldset>
+    <legend>Вид расписания</legend>
+
+    <div class="group" role="radiogroup" aria-label="Вид расписания">
+      <span class="group-label">Оформление дня</span>
+      {#each SCHEDULE_VIEWS as view (view)}
+        <label class="choice">
+          <input
+            type="radio"
+            name="schedule-view"
+            value={view}
+            checked={settings.scheduleView === view}
+            onchange={handleScheduleViewChange}
+          />
+          <span>{SCHEDULE_VIEW_LABELS[view]}</span>
+        </label>
+      {/each}
+    </div>
+
+    <p class="hint" role="note">
+      Так выглядит расписание дня. «Компактный» — привычный вид, остальные — из сравнения вариантов
+      ниже.
+    </p>
+  </fieldset>
+
+  <fieldset>
     <legend>Поведение</legend>
 
     <div class="group" role="radiogroup" aria-label="Раздел по умолчанию">
@@ -258,11 +289,7 @@
     </div>
 
     <label class="toggle">
-      <input
-        type="checkbox"
-        checked={strikeoutChecked}
-        onchange={handleStrikeoutChange}
-      />
+      <input type="checkbox" checked={strikeoutChecked} onchange={handleStrikeoutChange} />
       <span>Зачёркивать свободные уроки</span>
     </label>
 
@@ -294,7 +321,11 @@
         <p class="hint" role="status">{pushNotice}</p>
       {/if}
     {:else}
-      <StateNotice tone="muted" title="Уведомления недоступны" detail="Браузер не поддерживает Web Push." />
+      <StateNotice
+        tone="muted"
+        title="Уведомления недоступны"
+        detail="Браузер не поддерживает Web Push."
+      />
     {/if}
   </fieldset>
 
@@ -307,7 +338,11 @@
       <button type="button" class="clear-cache nika-btn nika-btn-light" onclick={handleClearCache}>
         Очистить кэш расписания
       </button>
-      <button type="button" class="variants nika-btn nika-btn-light" onclick={() => onOpenVariants?.()}>
+      <button
+        type="button"
+        class="variants nika-btn nika-btn-light"
+        onclick={() => onOpenVariants?.()}
+      >
         Показать варианты расписания
       </button>
     </div>

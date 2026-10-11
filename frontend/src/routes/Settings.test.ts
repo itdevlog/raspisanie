@@ -32,9 +32,7 @@ describe('Settings screen', () => {
     await fireEvent.click(getByRole('radio', { name: 'Тёмная' }));
 
     expect(settings.skin).toBe('dark');
-    await waitFor(() =>
-      expect(document.documentElement.getAttribute('data-skin')).toBe('dark'),
-    );
+    await waitFor(() => expect(document.documentElement.getAttribute('data-skin')).toBe('dark'));
   });
 
   it('persists the «Молодёжный» skin and applies it to <html>', async () => {
@@ -44,9 +42,7 @@ describe('Settings screen', () => {
     await fireEvent.click(getByRole('radio', { name: 'Молодёжный' }));
 
     expect(settings.skin).toBe('youth');
-    await waitFor(() =>
-      expect(document.documentElement.getAttribute('data-skin')).toBe('youth'),
-    );
+    await waitFor(() => expect(document.documentElement.getAttribute('data-skin')).toBe('youth'));
   });
 
   it('persists accent and font choices', async () => {
@@ -76,7 +72,9 @@ describe('Settings screen', () => {
       props: { settings, schoolStrikeoutFreeLsn: false },
     });
 
-    const toggle = getByRole('checkbox', { name: 'Зачёркивать свободные уроки' }) as HTMLInputElement;
+    const toggle = getByRole('checkbox', {
+      name: 'Зачёркивать свободные уроки',
+    }) as HTMLInputElement;
     // No user override yet: the checkbox mirrors the school flag.
     expect(toggle.checked).toBe(false);
     expect(settings.strikeoutFreeLsn).toBeNull();
@@ -96,6 +94,21 @@ describe('Settings screen', () => {
 
     await fireEvent.click(toggle);
     expect(settings.showLessonTime).toBe(false);
+  });
+
+  it('offers the five schedule views and persists the choice', async () => {
+    const settings = makeSettings();
+    const { getByRole } = render(Settings, { props: { settings } });
+
+    expect(getByRole('radio', { name: 'Компактный' })).toBeTruthy();
+    expect(getByRole('radio', { name: 'Карточки' })).toBeTruthy();
+    expect(getByRole('radio', { name: 'Таблица' })).toBeTruthy();
+    expect(getByRole('radio', { name: 'Таймлайн' })).toBeTruthy();
+    expect(getByRole('radio', { name: 'Сейчас и далее' })).toBeTruthy();
+    expect(settings.scheduleView).toBe('compact');
+
+    await fireEvent.click(getByRole('radio', { name: 'Таймлайн' }));
+    expect(settings.scheduleView).toBe('timeline');
   });
 
   it('enables push for the saved class with the share URL', async () => {

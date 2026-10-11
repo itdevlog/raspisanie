@@ -30,6 +30,7 @@ describe('settings store', () => {
     expect(store.defaultKind).toBe('class');
     expect(store.strikeoutFreeLsn).toBeNull();
     expect(store.showLessonTime).toBe(true);
+    expect(store.scheduleView).toBe('compact');
   });
 
   it('persists each change under the namespaced key', () => {
@@ -42,6 +43,7 @@ describe('settings store', () => {
     store.setDefaultKind('teacher');
     store.setStrikeoutFreeLsn(false);
     store.setShowLessonTime(false);
+    store.setScheduleView('timeline');
 
     expect(store.skin).toBe('dark');
     expect(store.accent).toBe('purple');
@@ -49,6 +51,7 @@ describe('settings store', () => {
     expect(store.defaultKind).toBe('teacher');
     expect(store.strikeoutFreeLsn).toBe(false);
     expect(store.showLessonTime).toBe(false);
+    expect(store.scheduleView).toBe('timeline');
 
     const raw = storage.getItem('raspisanie:settings');
     expect(raw).not.toBeNull();
@@ -59,7 +62,15 @@ describe('settings store', () => {
       defaultKind: 'teacher',
       strikeoutFreeLsn: false,
       showLessonTime: false,
+      scheduleView: 'timeline',
     });
+  });
+
+  it('persists the schedule view across a new store', () => {
+    const storage = memoryStorage();
+    createSettingsStore(storage).setScheduleView('cards');
+    const reloaded = createSettingsStore(storage);
+    expect(reloaded.scheduleView).toBe('cards');
   });
 
   it('re-reads persisted values on a new store', () => {
@@ -96,10 +107,12 @@ describe('settings store', () => {
         defaultKind: 'room',
         strikeoutFreeLsn: 'yes',
         showLessonTime: 'no',
+        scheduleView: 'kanban',
       }),
     });
     const store = createSettingsStore(storage);
     expect(store.current).toEqual(DEFAULT_SETTINGS);
+    expect(store.scheduleView).toBe('compact');
   });
 
   it('applies skin/accent/font as data attributes on the target', () => {

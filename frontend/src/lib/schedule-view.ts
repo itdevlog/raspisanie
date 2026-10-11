@@ -188,3 +188,61 @@ export function lessonStatusLabel(lesson: Lesson): string {
 export function dayTitle(day: DaySchedule): string {
   return day.day_name ? `${day.day_name}, ${day.date}` : day.date;
 }
+
+/**
+ * A current-time hint for the «Сейчас / далее» layout: the lesson numbers the
+ * server reports as running (`current`) and upcoming (`next`). Both may be
+ * `null` when no server clock is available — the layout then degrades to
+ * showing the first lesson as the hero.
+ */
+export interface NowHint {
+  current: number | null;
+  next: number | null;
+}
+
+/** Result of {@link pickNowNext}: the hero lesson plus the remaining list. */
+export interface NowNextPick<T> {
+  /** The lesson to feature (current, else next, else the first), or `null`. */
+  hero: T | null;
+  /** The other lessons, in their original order. */
+  rest: T[];
+  /** True when {@link hero} is the running lesson (eyebrow «Сейчас»). */
+  heroIsCurrent: boolean;
+}
+
+/**
+ * Split a day's lessons for the «Сейчас / далее» layout. Uses the server's
+ * `current`/`next` hint when it matches a lesson number; otherwise falls back
+ * to the first lesson. Never throws — an empty day yields `hero: null`.
+ */
+export function pickNowNext<T extends { num: number }>(
+  lessons: readonly T[],
+  now?: NowHint | null,
+): NowNextPick<T> {
+  if (lessons.length === 0) {
+    return { hero: null, rest: [], heroIsCurrent: false };
+  }
+  const current = now?.current ?? null;
+  const next = now?.next ?? null;
+  let index = 0;
+  let heroIsCurrent = false;
+  if (current !== null) {
+    const found = lessons.findIndex((lesson) => lesson.num === current);
+    if (found >= 0) {
+      index = found;
+      heroIsCurrent = true;
+    }
+  }
+  if (!heroIsCurrent && next !== null) {
+    const found = lessons.findIndex((lesson) => lesson.num === next);
+    if (found >= 0) {
+      index = found;
+    }
+  }
+  const hero = lessons[index];
+  return {
+    hero,
+    rest: lessons.filter((_, i) => i !== index),
+    heroIsCurrent,
+  };
+}

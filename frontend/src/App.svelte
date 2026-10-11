@@ -272,6 +272,7 @@
       {pinnedDate}
       {strikeoutFreeLsn}
       showLessonTime={settings.showLessonTime}
+      scheduleView={settings.scheduleView}
       onOpenDay={openDay}
       onBack={backToList}
     />

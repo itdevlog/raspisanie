@@ -17,6 +17,7 @@ import {
   lessonStatusLabel,
   lessonTime,
   periodLabel,
+  pickNowNext,
   shiftLabel,
 } from './schedule-view';
 import { makeDay } from '../test-helpers';
@@ -184,10 +185,47 @@ describe('schedule-view helpers', () => {
   it('hides free and cancelled lessons when strikeout_free_lsn is false (W41 fix)', () => {
     // Subject-less (degenerate "free") row.
     expect(isHiddenFreeLesson(makeLesson({ items: [] }), false)).toBe(true);
-    expect(isHiddenFreeLesson(makeLesson({ items: [makeItem({ subject: null })] }), false)).toBe(true);
+    expect(isHiddenFreeLesson(makeLesson({ items: [makeItem({ subject: null })] }), false)).toBe(
+      true,
+    );
     // The real "free" lesson in this codebase: `s:'F'` -> is_cancelled.
     expect(isHiddenFreeLesson(makeLesson({ is_cancelled: true }), false)).toBe(true);
     // A normal lesson is never hidden.
     expect(isHiddenFreeLesson(makeLesson(), false)).toBe(false);
+  });
+
+  describe('pickNowNext', () => {
+    const lessons = [makeLesson({ num: 1 }), makeLesson({ num: 2 }), makeLesson({ num: 3 })];
+
+    it('features the current lesson when the server hint matches', () => {
+      const pick = pickNowNext(lessons, { current: 2, next: 3 });
+      expect(pick.hero?.num).toBe(2);
+      expect(pick.heroIsCurrent).toBe(true);
+      expect(pick.rest.map((lesson) => lesson.num)).toEqual([1, 3]);
+    });
+
+    it('features the next lesson when nothing is running', () => {
+      const pick = pickNowNext(lessons, { current: null, next: 3 });
+      expect(pick.hero?.num).toBe(3);
+      expect(pick.heroIsCurrent).toBe(false);
+      expect(pick.rest.map((lesson) => lesson.num)).toEqual([1, 2]);
+    });
+
+    it('degrades to the first lesson without a hint', () => {
+      expect(pickNowNext(lessons, null).hero?.num).toBe(1);
+      expect(pickNowNext(lessons, undefined).hero?.num).toBe(1);
+    });
+
+    it('ignores a hint whose lesson number is not in the day', () => {
+      const pick = pickNowNext(lessons, { current: 9, next: 8 });
+      expect(pick.hero?.num).toBe(1);
+      expect(pick.heroIsCurrent).toBe(false);
+    });
+
+    it('returns an empty hero for an empty day', () => {
+      const pick = pickNowNext([], { current: 1, next: 2 });
+      expect(pick.hero).toBeNull();
+      expect(pick.rest).toEqual([]);
+    });
   });
 });

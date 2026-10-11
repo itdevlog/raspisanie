@@ -445,9 +445,7 @@ describe('Schedule screen', () => {
   describe('week navigation (W38 fix)', () => {
     it('moves the week offset with prev/next and disables at bounds', async () => {
       const client = makeClient({
-        getWeek: vi
-          .fn()
-          .mockResolvedValue({ days: [dayFor('05.10.2026')], weekday_num: 5 }),
+        getWeek: vi.fn().mockResolvedValue({ days: [dayFor('05.10.2026')], weekday_num: 5 }),
       });
       const selection = makeSelection();
       selection.selectSchool('gym1');
@@ -726,6 +724,129 @@ describe('Schedule screen', () => {
       );
       // The pinned notice follows the cursor.
       expect(await findByText('Расписание на 08.09.2026')).toBeTruthy();
+    });
+  });
+
+  // «Вид расписания» setting: the day screen renders through ScheduleBody.
+  describe('schedule view setting', () => {
+    function lesson(num: number, subject: string) {
+      return {
+        num,
+        start: '08:00',
+        end: '08:45',
+        items: [
+          {
+            subject,
+            teacher: 'Иванов',
+            room: '101',
+            class_name: '5А',
+            groups: null,
+            is_method_hour: false,
+          },
+        ],
+        has_exchange: false,
+        is_cancelled: false,
+      };
+    }
+
+    function setup(lessons = [lesson(1, 'Математика')]) {
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('class', '5А');
+      return { selection, day: dayFor('05.10.2026', { lessons }) };
+    }
+
+    it('renders the selected «Таблица» view instead of the compact list', async () => {
+      const { selection, day } = setup();
+      const client = makeClient({ getDay: vi.fn().mockResolvedValue(day) });
+
+      const { container } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), scheduleView: 'table' },
+      });
+
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+      await waitFor(() => expect(container.querySelector('table.grid')).toBeTruthy());
+      expect(container.querySelector('.cards')).toBeNull();
+      // Table view does not request the /now hint.
+      expect(client.getNow).not.toHaveBeenCalled();
+    });
+
+    it('renders the «Карточки» view', async () => {
+      const { selection, day } = setup();
+      const client = makeClient({ getDay: vi.fn().mockResolvedValue(day) });
+
+      const { container } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), scheduleView: 'cards' },
+      });
+
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+      await waitFor(() => expect(container.querySelector('.cards')).toBeTruthy());
+    });
+
+    it('uses /now to feature the current lesson in «Сейчас / далее»', async () => {
+      const { selection, day } = setup([
+        lesson(1, 'Русский'),
+        lesson(2, 'Физика'),
+        lesson(3, 'Химия'),
+      ]);
+      const client = makeClient({
+        getDay: vi.fn().mockResolvedValue(day),
+        getNow: vi.fn().mockResolvedValue({
+          server_time: '2026-10-05T10:00:00+03:00',
+          current: { num: 2, time: '09:00-09:45', subject: 'Физика', room: '202', in_minutes: 20 },
+          next: { num: 3, time: '09:55-10:40', subject: 'Химия', room: '303', in_minutes: 55 },
+        }),
+      });
+
+      const { findByText, getByText, container } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), scheduleView: 'nownext' },
+      });
+
+      await waitFor(() =>
+        expect(client.getNow).toHaveBeenCalledWith('gym1', 'class', '5А', '05.10.2026'),
+      );
+      // Lesson 2 is the hero, labelled as the running lesson.
+      expect(await findByText('Сейчас')).toBeTruthy();
+      expect(container.querySelector('.hero')).toBeTruthy();
+      expect(getByText('Физика')).toBeTruthy();
+      expect(getByText('Русский')).toBeTruthy();
+    });
+
+    it('degrades to the first lesson when the /now hint is unavailable', async () => {
+      const { selection, day } = setup([lesson(1, 'Русский'), lesson(2, 'Физика')]);
+      const client = makeClient({
+        getDay: vi.fn().mockResolvedValue(day),
+        getNow: vi.fn().mockRejectedValue(new Error('boom')),
+      });
+
+      const { findByText, getByText } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), scheduleView: 'nownext' },
+      });
+
+      expect(await findByText('Далее')).toBeTruthy();
+      expect(getByText('Русский')).toBeTruthy();
+    });
+
+    it('falls back to the compact list for «Сейчас / далее» in the week view', async () => {
+      const { selection, day } = setup();
+      const client = makeClient({
+        getWeek: vi.fn().mockResolvedValue({ days: [day], weekday_num: 5 }),
+      });
+
+      const { getByRole, container, findByText } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), scheduleView: 'nownext' },
+      });
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+      // Day mode does request /now; ignore that call and assert the week does not.
+      (client.getNow as ReturnType<typeof vi.fn>).mockClear();
+
+      await fireEvent.click(getByRole('tab', { name: 'Неделя' }));
+      await waitFor(() => expect(client.getWeek).toHaveBeenCalled());
+
+      expect(await findByText('Математика')).toBeTruthy();
+      // No per-day hero card, and no /now request in week mode.
+      expect(container.querySelector('.hero')).toBeNull();
+      expect(client.getNow).not.toHaveBeenCalled();
     });
   });
 });

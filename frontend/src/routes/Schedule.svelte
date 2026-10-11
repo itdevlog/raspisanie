@@ -38,8 +38,11 @@
     type ConnectivityEnv,
     type DaySchedule,
     type FavoritesStore,
+    type NowHint,
+    type NowResponse,
     type PushResult,
     type ScheduleApiClient,
+    type ScheduleView,
     type SelectionStore,
     type TodayStore,
     type WeekScheduleResponse,
@@ -85,6 +88,8 @@
     strikeoutFreeLsn?: boolean;
     /** Show lesson numbers/times (user setting; forwarded to the day/week views). */
     showLessonTime?: boolean;
+    /** Day layout chosen in Settings; defaults to the original «Компактный». */
+    scheduleView?: ScheduleView;
   }
   let {
     client = defaultApi,
@@ -103,6 +108,7 @@
     pushSupported = undefined,
     strikeoutFreeLsn = true,
     showLessonTime = true,
+    scheduleView = 'compact',
   }: Props = $props();
 
   let period = $state<Period>('today');
@@ -162,8 +168,7 @@
 
   // Track the SW's "served from TTL cache" signal (offline/stale schedule).
   $effect(() => {
-    const container =
-      typeof navigator === 'undefined' ? undefined : navigator.serviceWorker;
+    const container = typeof navigator === 'undefined' ? undefined : navigator.serviceWorker;
     return watchServiceWorkerCache(container, (value) => {
       fromCache = value;
     });
@@ -183,6 +188,19 @@
       throw new Error('Не удалось определить дату');
     }
     return client.getDay(schoolId, selection.kind, name, date);
+  });
+
+  // Server current/next hint for the «Сейчас / далее» layout. Loaded only when
+  // that layout is active in day mode; a failure is non-fatal — the layout then
+  // degrades to featuring the first lesson.
+  const nowResource = createAsync<NowResponse>(async () => {
+    const schoolId = selection.schoolId;
+    const name = selection.name;
+    const date = dayDate;
+    if (!schoolId || !name || !date) {
+      throw new Error('Нет данных для текущего урока');
+    }
+    return client.getNow(schoolId, selection.kind, name, date);
   });
 
   // Week payload (Mon–Fri).
@@ -248,6 +266,29 @@
       void dayResource.load();
     }
   });
+
+  // «Сейчас / далее» needs the server's current/next lesson; fetch it only for
+  // that layout in day mode (today/tomorrow). A failed load leaves `nowHint`
+  // null and the layout falls back to the first lesson.
+  const nowKey = $derived(
+    `${selection.schoolId ?? ''}|${selection.kind}|${selection.name ?? ''}|${dayDate ?? ''}|${scheduleView}`,
+  );
+  $effect(() => {
+    void nowKey;
+    const dayMode = period !== 'week' && period !== 'month';
+    if (scheduleView === 'nownext' && dayMode && !noPeriodDate && dayDate) {
+      void nowResource.load();
+    }
+  });
+
+  const nowHint = $derived<NowHint | null>(
+    nowResource.data
+      ? {
+          current: nowResource.data.current?.num ?? null,
+          next: nowResource.data.next?.num ?? null,
+        }
+      : null,
+  );
 
   // W39: favorite toggle for the shown class/teacher/room.
   const isFavorite = $derived(
@@ -422,7 +463,12 @@
 </script>
 
 <section class="schedule">
-  <button type="button" class="back nika-btn nika-btn-light" aria-label="К списку" onclick={() => onBack?.()}>
+  <button
+    type="button"
+    class="back nika-btn nika-btn-light"
+    aria-label="К списку"
+    onclick={() => onBack?.()}
+  >
     ← к списку
   </button>
 
@@ -495,7 +541,13 @@
         {:else if bodyStatus === 'loading' || bodyStatus === 'idle'}
           <p class="loading" role="status">Загрузка…</p>
         {:else if weekResource.data && weekResource.data.days.length > 0}
-          <WeekView week={weekResource.data} kind={selection.kind} {strikeoutFreeLsn} {showLessonTime} />
+          <WeekView
+            week={weekResource.data}
+            kind={selection.kind}
+            {strikeoutFreeLsn}
+            {showLessonTime}
+            view={scheduleView}
+          />
         {:else}
           <StateNotice title="Занятий нет" detail="Расписание на неделю пустое." />
         {/if}
@@ -547,7 +599,14 @@
         {:else if bodyStatus === 'loading' || bodyStatus === 'idle'}
           <p class="loading" role="status">Загрузка…</p>
         {:else if dayResource.data}
-          <DayView day={dayResource.data} kind={selection.kind} {strikeoutFreeLsn} {showLessonTime} />
+          <DayView
+            day={dayResource.data}
+            kind={selection.kind}
+            {strikeoutFreeLsn}
+            {showLessonTime}
+            view={scheduleView}
+            now={nowHint}
+          />
         {/if}
       </div>
     {/if}
