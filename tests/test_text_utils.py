@@ -2,7 +2,18 @@ from services.text_utils import escape_markdown
 
 
 def test_escapes_legacy_markdown_chars():
-    assert escape_markdown('a_b*c[d]e(f)`g`') == r'a\_b\*c\[d\]e\(f\)\`g\`'
+    # `(` и `)` — не спецсимволы legacy Markdown и намеренно не экранируются.
+    assert escape_markdown('a_b*c[d]e(f)`g`') == r'a\_b\*c\[d\]e(f)\`g\`'
+
+
+def test_parentheses_not_escaped():
+    # Раньше скобки экранировались → бот печатал `Труд \(технология\)`.
+    assert escape_markdown('Труд (технология)') == 'Труд (технология)'
+
+
+def test_still_escapes_remaining_special_chars():
+    for ch in ('_', '*', '`', '[', ']'):
+        assert escape_markdown(ch) == '\\' + ch
 
 
 def test_empty_string():
