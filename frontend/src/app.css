@@ -354,13 +354,13 @@
 
   --youth-gradient: linear-gradient(135deg, #a855f7, #22d3ee);
 
-  --color-bg: #0b0b12;
-  --color-surface: rgba(255, 255, 255, 0.06);
-  --color-surface-2: rgba(255, 255, 255, 0.1);
-  --color-track: rgba(255, 255, 255, 0.14);
-  --color-text: #f2f2ff;
-  --color-muted: #a0a0c0;
-  --color-border: rgba(255, 255, 255, 0.08);
+  --color-bg: #171528;
+  --color-surface: #221f36;
+  --color-surface-2: #2c2846;
+  --color-track: #2c2846;
+  --color-text: #f4f4fb;
+  --color-muted: #bcb8d6;
+  --color-border: rgba(255, 255, 255, 0.2);
 
   --color-accent: #a855f7;
   --color-accent-contrast: #0b0b12;
@@ -382,7 +382,7 @@
   --lesson-upk: #7dd3fc;
   --lesson-free-teacher: #fbbf24;
 
-  --cal-cell-border: rgba(255, 255, 255, 0.1);
+  --cal-cell-border: rgba(255, 255, 255, 0.22);
   --cal-cell-text: #c9c9e0;
   --cal-day-bg: rgba(168, 85, 247, 0.22);
   --cal-changed-bg: rgba(251, 113, 133, 0.2);
@@ -414,8 +414,8 @@
   --nika-btn-blue-text: #0b0b12;
   --nika-btn-blue-text-shadow: none;
 
-  --nika-btn-light-border: rgba(255, 255, 255, 0.28);
-  --nika-btn-light-bg: rgba(255, 255, 255, 0.14);
+  --nika-btn-light-border: rgba(255, 255, 255, 0.4);
+  --nika-btn-light-bg: rgba(255, 255, 255, 0.18);
   --nika-btn-light-bg-image: none;
   --nika-btn-light-text: #f2f2ff;
   --nika-btn-light-text-shadow: none;
@@ -435,7 +435,7 @@
 :root[data-skin='youth'] body {
   background:
     radial-gradient(60% 40% at 15% -5%, rgba(168, 85, 247, 0.3), transparent 60%),
-    radial-gradient(50% 35% at 100% 0%, rgba(34, 211, 238, 0.2), transparent 55%), #0b0b12;
+    radial-gradient(50% 35% at 100% 0%, rgba(34, 211, 238, 0.2), transparent 55%), #171528;
   background-attachment: fixed;
 }
 
