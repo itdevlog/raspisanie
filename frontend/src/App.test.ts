@@ -20,11 +20,37 @@ describe('App shell', () => {
 
   it('renders the landing by default', async () => {
     const { router } = makeRouter();
-    const { findByRole, findByText } = render(App, {
+    const { findByRole } = render(App, {
       props: { client: makeClient(), selection: makeSelection(), today: makeToday(), router },
     });
-    expect(await findByRole('combobox', { name: /Школа/ })).toBeTruthy();
-    expect(await findByText('Гимназия №1')).toBeTruthy();
+    // School-number quick buttons are the switcher on the landing.
+    expect(await findByRole('button', { name: '1' })).toBeTruthy();
+  });
+
+  it('shows the selected school name and «Обновлено» in the header', async () => {
+    const { router } = makeRouter();
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    const client = makeClient({
+      getSchools: vi.fn().mockResolvedValue({
+        today: '05.10.2026',
+        schools: [
+          {
+            id: 'gym1',
+            name: 'Гимназия №1',
+            loaded: true,
+            updated: '01.09.2026 10:00',
+          },
+        ],
+      }),
+    });
+
+    const { findByRole, findByText } = render(App, {
+      props: { client, selection, today: makeToday(), router },
+    });
+
+    expect(await findByRole('heading', { name: 'Гимназия №1' })).toBeTruthy();
+    expect(await findByText('Обновлено 01.09.2026 10:00')).toBeTruthy();
   });
 
   it('opens the settings screen from the header gear', async () => {
@@ -346,12 +372,13 @@ describe('App shell', () => {
     expect(queryByText('08:00–08:45')).toBeNull();
   });
 
-  it('falls back to the landing for an unknown deep link', async () => {    const fake = makeFakeEnv('/s/gym1/magic/5%D0%90');
+  it('falls back to the landing for an unknown deep link', async () => {
+    const fake = makeFakeEnv('/s/gym1/magic/5%D0%90');
     const router = createRouteStore(fake.env);
     const { findByRole } = render(App, {
       props: { client: makeClient(), selection: makeSelection(), today: makeToday(), router },
     });
-    expect(await findByRole('combobox', { name: /Школа/ })).toBeTruthy();
+    expect(await findByRole('button', { name: '1' })).toBeTruthy();
   });
 
   it('renders the landing (not a broken schedule) for a bare /schedule URL', async () => {
@@ -365,7 +392,7 @@ describe('App shell', () => {
       props: { client, selection, today: makeToday(), router },
     });
 
-    expect(await findByRole('combobox', { name: /Школа/ })).toBeTruthy();
+    expect(await findByRole('button', { name: '1' })).toBeTruthy();
     expect(client.getDay).not.toHaveBeenCalled();
   });
 

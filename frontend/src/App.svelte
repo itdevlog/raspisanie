@@ -304,15 +304,19 @@
     text-align: left;
   }
 
-  /* Full-bleed header bar in the original jQuery Mobile bar-a style. */
+  /* Rounded card header: an inset panel with the original bar palette so it
+     reads as a polished card instead of a hard-edged full-bleed bar. Radius,
+     shadow and text-shadow all come from tokens, so every skin adapts. */
   .app-header {
-    margin: 0 calc(-1 * var(--space-4)) var(--space-4);
+    margin: 0 0 var(--space-4);
     padding: var(--space-3) var(--space-4);
     border: 1px solid var(--nika-header-border);
+    border-radius: var(--radius-lg);
     background: var(--nika-header-bg);
     background-image: var(--nika-header-bg-image);
     color: var(--nika-header-text);
     text-shadow: var(--nika-header-text-shadow);
+    box-shadow: var(--shadow-sm);
   }
 
   .header-row {

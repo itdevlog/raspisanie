@@ -1,8 +1,9 @@
 <script lang="ts">
   // Landing screen (initial view) — the original Nikasoft home.
   //
-  //   * the school picker and the selected school's name;
-  //   * «Обновлено <дата> <время>» from `/api/schools`;
+  //   * quick school-number buttons (the school switcher — the selected
+  //     school's name and «Обновлено» live in the app header);
+  //   * the selected school's city, when known;
   //   * large section buttons «Классы» / «Учителя» (→ per-kind list) and
   //     «Школьный сайт» (yellow, only when `features.homepage`);
   //   * favorites of ALL kinds as tappable rows (tap opens the schedule,
@@ -25,7 +26,6 @@
     type SelectionStore,
     type TodayStore,
   } from '../lib';
-  import SchoolSelect from '../components/SchoolSelect.svelte';
   import NowWidget from '../components/NowWidget.svelte';
   import StateNotice from '../components/StateNotice.svelte';
 
@@ -143,12 +143,6 @@
   {:else if schoolsResource.status === 'loading' || schoolsResource.status === 'idle'}
     <p role="status">Загрузка…</p>
   {:else if schoolsResource.data}
-    <SchoolSelect
-      schools={schoolsResource.data.schools}
-      selectedId={selection.schoolId}
-      onChange={handleSchoolChange}
-    />
-
     {#if schoolChoices.length > 0}
       <nav class="school-quick" aria-label="Быстрый выбор школы">
         {#each schoolChoices as choice (choice.id)}
@@ -166,16 +160,8 @@
       </nav>
     {/if}
 
-    {#if selectedSchool}
-      <div class="school-card">
-        <h2 class="school-name">{selectedSchool.name}</h2>
-        {#if selectedSchool.city}
-          <p class="school-city">{selectedSchool.city}</p>
-        {/if}
-        {#if selectedSchool.updated}
-          <p class="school-updated">Обновлено {selectedSchool.updated}</p>
-        {/if}
-      </div>
+    {#if selectedSchool?.city}
+      <p class="school-city">{selectedSchool.city}</p>
     {/if}
 
     {#if !selection.schoolId}
@@ -265,25 +251,19 @@
     font-size: var(--text-base);
   }
 
-  .school-card {
-    margin: 0 0 var(--space-5);
-  }
-
-  .school-name {
-    font-size: var(--text-xl);
-    margin: 0;
+  /* The active school is a single solid accent fill (no gradient/gloss), so it
+     reads the same across every skin. Inactive buttons stay light. */
+  .school-number.is-active {
+    background: var(--color-accent);
+    background-image: none;
+    border-color: var(--color-accent);
+    color: var(--color-accent-contrast);
+    text-shadow: none;
   }
 
   .school-city {
-    margin: var(--space-1) 0 0;
+    margin: 0 0 var(--space-5);
     font-size: var(--text-sm);
-    color: var(--color-muted);
-  }
-
-  .school-updated {
-    margin: var(--space-1) 0 0;
-    font-size: var(--text-sm);
-    font-style: italic;
     color: var(--color-muted);
   }
 

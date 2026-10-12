@@ -40,10 +40,10 @@ describe('Home screen (landing)', () => {
 
   it('lists schools from /api/schools', async () => {
     const client = makeClient();
-    const { findByText } = render(Home, {
+    const { findByTitle } = render(Home, {
       props: { client, selection: makeSelection(), today: makeToday() },
     });
-    expect(await findByText('Гимназия №1')).toBeTruthy();
+    expect(await findByTitle('Гимназия №1')).toBeTruthy();
     expect(client.getSchools).toHaveBeenCalledTimes(1);
   });
 
@@ -67,10 +67,8 @@ describe('Home screen (landing)', () => {
       props: { client, selection, today: makeToday() },
     });
 
-    const select = (await waitFor(() =>
-      getByRole('combobox', { name: /Школа/ }),
-    )) as HTMLSelectElement;
-    await fireEvent.change(select, { target: { value: 'school2' } });
+    // «Школа №2» → the quick button labelled `2`.
+    await fireEvent.click(await waitFor(() => getByRole('button', { name: '2' })));
 
     expect(selection.schoolId).toBe('school2');
     expect(selection.name).toBeNull();
@@ -96,7 +94,8 @@ describe('Home screen (landing)', () => {
       props: { client, selection, today: makeToday() },
     });
 
-    expect(await findByRole('heading', { name: 'Гимназия №1' })).toBeTruthy();
+    // The landing offers the section buttons (and never fetches a list itself).
+    expect(await findByRole('button', { name: 'Классы' })).toBeTruthy();
     expect(client.getClasses).not.toHaveBeenCalled();
   });
 
@@ -107,17 +106,17 @@ describe('Home screen (landing)', () => {
       });
     }
 
-    it('shows the school name, city, «Обновлено» and the yellow school-site button', async () => {
+    it('shows the school city and the yellow school-site button', async () => {
       const selection = makeSelection();
       selection.selectSchool('gym1');
 
-      const { findByText, findByRole } = render(Home, {
+      const { findByText, findByRole, queryByText } = render(Home, {
         props: { client: metaClient(schoolWithMeta()), selection, today: makeToday() },
       });
 
-      expect(await findByRole('heading', { name: 'Гимназия №1' })).toBeTruthy();
+      // The school name and «Обновлено» live in the app header, not here.
       expect(await findByText('Москва')).toBeTruthy();
-      expect(await findByText('Обновлено 01.09.2026 10:00')).toBeTruthy();
+      expect(queryByText('Обновлено 01.09.2026 10:00')).toBeNull();
       const link = await findByRole('link', { name: 'Школьный сайт' });
       expect(link.getAttribute('href')).toBe('https://gym1.example.ru');
     });
@@ -188,14 +187,14 @@ describe('Home screen (landing)', () => {
       ]);
       const selection = makeSelection();
 
-      const { findAllByRole, getByRole } = render(Home, {
+      const { findAllByRole, getByRole, queryByRole } = render(Home, {
         props: { client, selection, today: makeToday() },
       });
 
       const buttons = await findAllByRole('button', { name: /^\d+$/ });
       expect(buttons.map((button) => button.textContent?.trim())).toEqual(['16', '19', '181']);
-      // The dropdown stays available alongside the quick buttons.
-      expect(getByRole('combobox', { name: /Школа/ })).toBeTruthy();
+      // The quick buttons are the only school switcher now (no dropdown).
+      expect(queryByRole('combobox')).toBeNull();
 
       await fireEvent.click(getByRole('button', { name: '19' }));
 
