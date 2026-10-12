@@ -98,11 +98,46 @@ def test_schools_metadata_present_when_loaded():
     # city из SCHOOLS_CONFIG имеет приоритет над CITY_NAME.
     assert entry['city'] == 'Москва'
     assert entry['updated'] == '04.10.2026 20:45:13'
+    # Нет homepage в конфиге — откат к HOMEPAGE_URL выгрузки.
     assert entry['homepage_url'] == 'https://school.example/'
     assert entry['features'] == {
         'teachers': True, 'classrooms': True, 'rooms': True, 'homepage': True,
         'strikeout_free_lsn': True,
     }
+
+
+def test_schools_homepage_from_config_wins_over_export():
+    """Настроенный homepage школы имеет приоритет над HOMEPAGE_URL выгрузки."""
+    entry = _entry_for(
+        _school_with_metadata(),
+        schools_config={
+            'school_133': {
+                'name': 'Школа', 'active': True,
+                'homepage': 'https://real-school.example/',
+            },
+        },
+    )
+    assert entry['homepage_url'] == 'https://real-school.example/'
+
+
+def test_schools_homepage_from_config_when_not_loaded():
+    """homepage из конфига отдаётся даже без данных школы (fix school_19)."""
+    bot_data = {'schools_data': {}, 'user_service': _FakeUserService()}
+    services = {
+        'bot_data': bot_data,
+        'schools_config': {
+            'school_19': {
+                'name': 'Школа', 'active': True,
+                'homepage': 'https://school19.example/',
+            },
+        },
+    }
+    r = TestClient(create_app(services)).get('/api/schools')
+    assert r.status_code == 200
+    entry = r.json()['schools'][0]
+    assert entry['loaded'] is False
+    assert entry['homepage_url'] == 'https://school19.example/'
+    assert entry['features']['homepage'] is True
 
 
 def test_schools_city_falls_back_to_city_name():

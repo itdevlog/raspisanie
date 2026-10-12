@@ -15,6 +15,7 @@ _BUILTIN_SCHOOLS_CONFIG: dict[str, dict] = {
         "city": "Екатеринбург",
         "check_url": "https://raspisanie.nikasoft.ru/check/55812556.html",
         "base_url": "https://raspisanie.nikasoft.ru/static/public/",
+        "homepage": "https://xn--133-5cd3cgu2f.xn--80acgfbsl1azdqr.xn--p1ai/",
         "active": True
     },
     "school_181": {
@@ -23,6 +24,7 @@ _BUILTIN_SCHOOLS_CONFIG: dict[str, dict] = {
         "city": "Екатеринбург",
         "check_url": "https://raspisanie.nikasoft.ru/check/32911315.html",
         "base_url": "https://raspisanie.nikasoft.ru/static/public/",
+        "homepage": "https://xn--181-5cd3cgu2f.xn--80acgfbsl1azdqr.xn--p1ai/",
         "active": True
     },
     "school_16": {
@@ -31,6 +33,7 @@ _BUILTIN_SCHOOLS_CONFIG: dict[str, dict] = {
         "city": "Екатеринбург",
         "check_url": "https://raspisanie.nikasoft.ru/check/63506790.html",
         "base_url": "https://raspisanie.nikasoft.ru/static/public/",
+        "homepage": "https://xn--16-6kc3bfr2e.xn--80acgfbsl1azdqr.xn--p1ai/",
         "active": True
     },
     "school_19": {
@@ -39,6 +42,7 @@ _BUILTIN_SCHOOLS_CONFIG: dict[str, dict] = {
         "city": "Екатеринбург",
         "check_url": "https://raspisanie.nikasoft.ru/check/69409577.html",
         "base_url": "https://raspisanie.nikasoft.ru/static/public/",
+        "homepage": "https://xn--19-6kc3bfr2e.xn--80acgfbsl1azdqr.xn--p1ai/",
         "active": True
     },
     "school_123": {
@@ -47,6 +51,7 @@ _BUILTIN_SCHOOLS_CONFIG: dict[str, dict] = {
         "city": "Екатеринбург",
         "check_url": "https://raspisanie.nikasoft.ru/check/12210248.html",
         "base_url": "https://raspisanie.nikasoft.ru/static/public/",
+        "homepage": "https://xn--123-5cd3cgu2f.xn--80acgfbsl1azdqr.xn--p1ai/",
         "active": True
     }
 }

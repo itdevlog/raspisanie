@@ -42,6 +42,19 @@ def test_added_schools_present_and_active():
         )
 
 
+def test_builtin_schools_have_real_homepage():
+    """Реальные сайты школ прописаны в homepage встроенного конфига."""
+    expected = {
+        "school_133": "https://xn--133-5cd3cgu2f.xn--80acgfbsl1azdqr.xn--p1ai/",
+        "school_181": "https://xn--181-5cd3cgu2f.xn--80acgfbsl1azdqr.xn--p1ai/",
+        "school_16": "https://xn--16-6kc3bfr2e.xn--80acgfbsl1azdqr.xn--p1ai/",
+        "school_19": "https://xn--19-6kc3bfr2e.xn--80acgfbsl1azdqr.xn--p1ai/",
+        "school_123": "https://xn--123-5cd3cgu2f.xn--80acgfbsl1azdqr.xn--p1ai/",
+    }
+    for sid, homepage in expected.items():
+        assert SCHOOLS_CONFIG[sid]["homepage"] == homepage
+
+
 def test_external_json_adds_and_overrides_schools(tmp_path):
     path = tmp_path / 'schools.json'
     path.write_text(json.dumps({

@@ -175,7 +175,9 @@ def create_app(services: dict, rate_limit: int = 100, widget_rate_limit: int = 3
                 # city: конфиг школы имеет приоритет, иначе — CITY_NAME выгрузки.
                 'city': cfg.get('city') or school_data.get('CITY_NAME'),
                 'updated': _updated_at(school_data),
-                'homepage_url': school_data.get('HOMEPAGE_URL'),
+                # homepage: конфиг школы имеет приоритет (реальные сайты школ),
+                # иначе — HOMEPAGE_URL выгрузки Nikasoft.
+                'homepage_url': cfg.get('homepage') or school_data.get('HOMEPAGE_URL'),
                 'features': _school_features(school_data),
             })
         return {
