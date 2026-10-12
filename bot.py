@@ -391,18 +391,14 @@ class ScheduleBot:
         except Exception as e:
             self.logger.error(f"Ошибка отправки уведомления о запуске: {e}")
 
-        webapp_url = self.config.WEBAPP_URL
-        if webapp_url:
-            try:
-                from telegram import MenuButtonWebApp, WebAppInfo
-                await application.bot.set_chat_menu_button(
-                    menu_button=MenuButtonWebApp(
-                        text="🌐 Веб-расписание",
-                        web_app=WebAppInfo(url=webapp_url),
-                    )
-                )
-            except Exception as e:
-                self.logger.error(f"Ошибка установки MenuButtonWebApp: {e}")
+        # Кнопка меню в чате — стандартный список команд (/start).
+        # Явно ставим команды, чтобы сбросить ранее установленную кнопку
+        # «🌐 Веб-расписание» (MenuButtonWebApp), если она осталась в Telegram.
+        try:
+            from telegram import MenuButtonCommands
+            await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+        except Exception as e:
+            self.logger.error(f"Ошибка установки кнопки меню: {e}")
 
         # Публикуем стартовый снапшот на edge после первичной загрузки
         # schools_data (она синхронна и уже прошла до event loop). Синхронный
