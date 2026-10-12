@@ -591,20 +591,9 @@ class BackgroundUpdater:
                         updated_schools.append(school_name)
 
                 if updated_schools:
+                    # Статусы обновления смотрим в /admin; отдельное сообщение
+                    # администраторам не шлём, чтобы не спамить.
                     self.logger.info(f"✅ Фоновое обновление завершено. Обновлено школ: {len(updated_schools)}")
-
-                    # Проверяем настройки уведомлений администратора перед отправкой
-                    notification_settings = self._get_admin_notification_settings()
-                    if notification_settings.get('update_notifications', False):
-                        # Уведомляем админов об успешном обновлении
-                        message = "✅ *Автоматическое обновление*\n\nОбновлены школы:\n"
-                        for school in updated_schools:
-                            message += f"• {school}\n"
-
-                        context = self._make_context()
-                        notification_service = self._notification_service()
-                        if notification_service:
-                            await notification_service.notify_admins(context, message)
                 else:
                     self.logger.info("✅ Фоновое обновление завершено. Изменений нет")
 
