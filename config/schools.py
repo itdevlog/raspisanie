@@ -24,6 +24,30 @@ _BUILTIN_SCHOOLS_CONFIG: dict[str, dict] = {
         "check_url": "https://raspisanie.nikasoft.ru/check/32911315.html",
         "base_url": "https://raspisanie.nikasoft.ru/static/public/",
         "active": True
+    },
+    "school_16": {
+        "id": "school_16",
+        "name": "МАОУ СОШ №16",
+        "city": "Екатеринбург",
+        "check_url": "https://raspisanie.nikasoft.ru/check/63506790.html",
+        "base_url": "https://raspisanie.nikasoft.ru/static/public/",
+        "active": True
+    },
+    "school_19": {
+        "id": "school_19",
+        "name": "МАОУ СОШ №19",
+        "city": "Екатеринбург",
+        "check_url": "https://raspisanie.nikasoft.ru/check/69409577.html",
+        "base_url": "https://raspisanie.nikasoft.ru/static/public/",
+        "active": True
+    },
+    "school_123": {
+        "id": "school_123",
+        "name": "МАОУ СОШ №123",
+        "city": "Екатеринбург",
+        "check_url": "https://raspisanie.nikasoft.ru/check/12210248.html",
+        "base_url": "https://raspisanie.nikasoft.ru/static/public/",
+        "active": True
     }
 }
 

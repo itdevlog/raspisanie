@@ -25,6 +25,23 @@ def test_unknown_school_id():
     assert get_display_name("school_999", {"SCHOOL_NAME": ""}) == "school_999"
 
 
+def test_added_schools_present_and_active():
+    expected = {
+        "school_16": ("МАОУ СОШ №16", "63506790"),
+        "school_19": ("МАОУ СОШ №19", "69409577"),
+        "school_123": ("МАОУ СОШ №123", "12210248"),
+    }
+    for sid, (name, nikasoft_id) in expected.items():
+        cfg = SCHOOLS_CONFIG[sid]
+        assert cfg["name"] == name
+        assert cfg["city"] == "Екатеринбург"
+        assert cfg["active"] is True
+        assert cfg["base_url"] == "https://raspisanie.nikasoft.ru/static/public/"
+        assert cfg["check_url"] == (
+            f"https://raspisanie.nikasoft.ru/check/{nikasoft_id}.html"
+        )
+
+
 def test_external_json_adds_and_overrides_schools(tmp_path):
     path = tmp_path / 'schools.json'
     path.write_text(json.dumps({
