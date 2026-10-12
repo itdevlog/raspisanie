@@ -40,13 +40,12 @@ Docs are in Russian (see [docs/](docs/README.md)).
 
 ## 📸 Скриншоты
 
-> _Плейсхолдеры — замените на реальные PNG в [`docs/assets/screenshots/`](docs/assets/screenshots/)._
-
-| Бот | Публичный сайт |
-|-----|----------------|
+| Telegram-бот | Публичный сайт |
+|--------------|----------------|
 | ![Меню бота](docs/assets/screenshots/bot-menu.png) | ![Главная сайта](docs/assets/screenshots/site-home.png) |
 | ![Расписание в боте](docs/assets/screenshots/bot-schedule.png) | ![Расписание на сайте](docs/assets/screenshots/site-schedule.png) |
 | ![Замены](docs/assets/screenshots/bot-exchanges.png) | ![Календарь](docs/assets/screenshots/site-calendar.png) |
+| ![Mini App](docs/assets/screenshots/miniapp.png) | ![Настройки и скины](docs/assets/screenshots/site-settings.png) |
 
 ---
 
