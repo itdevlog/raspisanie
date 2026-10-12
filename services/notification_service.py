@@ -597,7 +597,7 @@ class NotificationService:
         message = (
             f"🤖 *Бот запущен*\n\n"
             f"✅ *Школы:* {loaded_schools}/{total_schools} загружены\n"
-            f"🕒 *Время:* {datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
+            f"🕒 *Время:* {datetime.now(get_timezone()).strftime('%d.%m.%Y %H:%M')}\n"
         )
 
         # Добавляем статус каждой школы
