@@ -173,6 +173,50 @@ describe('Home screen (landing)', () => {
     });
   });
 
+  describe('school-number quick buttons', () => {
+    function numberedClient(schools: School[]) {
+      return makeClient({
+        getSchools: vi.fn().mockResolvedValue({ today: '05.10.2026', schools }),
+      });
+    }
+
+    it('renders one numbered button per school and selects the tapped one', async () => {
+      const client = numberedClient([
+        { id: 'school_16', name: 'МАОУ СОШ №16', loaded: true },
+        { id: 'school_19', name: 'МАОУ СОШ №19', loaded: true },
+        { id: 'school_181', name: 'МАОУ СОШ №181', loaded: true },
+      ]);
+      const selection = makeSelection();
+
+      const { findAllByRole, getByRole } = render(Home, {
+        props: { client, selection, today: makeToday() },
+      });
+
+      const buttons = await findAllByRole('button', { name: /^\d+$/ });
+      expect(buttons.map((button) => button.textContent?.trim())).toEqual(['16', '19', '181']);
+      // The dropdown stays available alongside the quick buttons.
+      expect(getByRole('combobox', { name: /Школа/ })).toBeTruthy();
+
+      await fireEvent.click(getByRole('button', { name: '19' }));
+
+      expect(selection.schoolId).toBe('school_19');
+      const active = getByRole('button', { name: '19' });
+      expect(active.getAttribute('aria-pressed')).toBe('true');
+      expect(active.classList.contains('is-active')).toBe(true);
+      expect(getByRole('button', { name: '16' }).getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('falls back to the id suffix when the name has no number', async () => {
+      const client = numberedClient([{ id: 'school_42', name: 'Лицей', loaded: true }]);
+
+      const { findByRole } = render(Home, {
+        props: { client, selection: makeSelection(), today: makeToday() },
+      });
+
+      expect(await findByRole('button', { name: '42' })).toBeTruthy();
+    });
+  });
+
   describe('favorites-first (all kinds)', () => {
     it('shows favorites of every kind and opens/removes them', async () => {
       const selection = makeSelection();

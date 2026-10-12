@@ -20,6 +20,7 @@
     type NowResponse,
     type ScheduleApiClient,
     type ScheduleKind,
+    type School,
     type SchoolsResponse,
     type SelectionStore,
     type TodayStore,
@@ -92,6 +93,29 @@
     selection.selectSchool(schoolId);
   }
 
+  /**
+   * Short label for a school's quick-select button: the first run of digits in
+   * the name («МАОУ СОШ №16» → `16`), falling back to the id suffix
+   * (`school_16` → `16`) when the name carries no number.
+   */
+  function schoolNumber(school: School): string {
+    const fromName = school.name.match(/\d+/);
+    if (fromName) {
+      return fromName[0];
+    }
+    const fromId = school.id.match(/(\d+)$/);
+    return fromId ? fromId[1] : school.id;
+  }
+
+  /** One quick-select button per school, in the order the API returns them. */
+  const schoolChoices = $derived(
+    (schoolsResource.data?.schools ?? []).map((school) => ({
+      id: school.id,
+      name: school.name,
+      label: schoolNumber(school),
+    })),
+  );
+
   const selectedSchool = $derived(
     schoolsResource.data?.schools.find((school) => school.id === selection.schoolId) ?? null,
   );
@@ -124,6 +148,23 @@
       selectedId={selection.schoolId}
       onChange={handleSchoolChange}
     />
+
+    {#if schoolChoices.length > 0}
+      <nav class="school-quick" aria-label="Быстрый выбор школы">
+        {#each schoolChoices as choice (choice.id)}
+          <button
+            type="button"
+            class="school-number nika-btn nika-btn-light"
+            class:is-active={choice.id === selection.schoolId}
+            aria-pressed={choice.id === selection.schoolId}
+            title={choice.name}
+            onclick={() => handleSchoolChange(choice.id)}
+          >
+            {choice.label}
+          </button>
+        {/each}
+      </nav>
+    {/if}
 
     {#if selectedSchool}
       <div class="school-card">
@@ -208,6 +249,20 @@
 <style>
   .home {
     text-align: left;
+  }
+
+  /* Quick school-number buttons: compact pills that wrap on narrow screens. */
+  .school-quick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-5);
+  }
+
+  .school-number {
+    min-width: 44px;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-base);
   }
 
   .school-card {
