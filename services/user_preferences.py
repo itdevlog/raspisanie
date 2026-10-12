@@ -27,7 +27,7 @@ class UserPreferencesService:
             'update_notifications': False,
             'lesson_reminders': False,
             'daily_digest': False,
-            'quiet_hours': {'enabled': False, 'start': 22, 'end': 7},
+            'quiet_hours': {'enabled': True, 'start': 22, 'end': 7},
         }
 
     def get_notification_settings(self, user_id: int) -> dict:

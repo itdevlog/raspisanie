@@ -90,6 +90,8 @@
     showLessonTime?: boolean;
     /** Day layout chosen in Settings; defaults to the original «Компактный». */
     scheduleView?: ScheduleView;
+    /** «Не беспокоить ночью» (Web Push) — carried into the initial subscribe. */
+    pushQuietHours?: boolean;
   }
   let {
     client = defaultApi,
@@ -109,6 +111,7 @@
     strikeoutFreeLsn = true,
     showLessonTime = true,
     scheduleView = 'compact',
+    pushQuietHours = true,
   }: Props = $props();
 
   let period = $state<Period>('today');
@@ -439,7 +442,13 @@
     pushNotice = null;
     const date = dayDate ?? null;
     const url = buildShareUrl(origin, schoolId, selection.kind, name, date);
-    const result: PushResult = await pushEnable({ schoolId, name, kind: 'class', url });
+    const result: PushResult = await pushEnable({
+      schoolId,
+      name,
+      kind: 'class',
+      url,
+      quiet: pushQuietHours,
+    });
     if (result.ok) {
       pushState = 'on';
     } else {

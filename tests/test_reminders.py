@@ -433,7 +433,7 @@ def test_get_settings_map_merges_defaults_and_skips_missing(make_db):
     assert settings_map[1]['lesson_reminders'] is True
     # недостающие ключи дополнены дефолтами
     assert settings_map[1]['daily_digest'] is False
-    assert settings_map[1]['quiet_hours'] == {'enabled': False, 'start': 22, 'end': 7}
+    assert settings_map[1]['quiet_hours'] == {'enabled': True, 'start': 22, 'end': 7}
     # пользователя без записи в карте нет
     assert 2 not in settings_map
 

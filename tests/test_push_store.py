@@ -181,3 +181,21 @@ def test_upsert_rejects_bad_kind(store, kind):
 @pytest.mark.parametrize('kind', ['class', 'teacher', 'room'])
 def test_upsert_accepts_all_valid_kinds(store, kind):
     assert store.upsert(**_sub(endpoint=_ENDPOINT + kind, kind=kind)) is True
+
+
+def test_upsert_defaults_quiet_true(store):
+    assert store.upsert(**_sub()) is True
+    assert store.collection.find_one({'endpoint': _ENDPOINT})['quiet'] is True
+
+
+def test_upsert_stores_quiet_false(store):
+    assert store.upsert(**_sub(quiet=False)) is True
+    assert store.collection.find_one({'endpoint': _ENDPOINT})['quiet'] is False
+
+
+def test_upsert_updates_quiet_for_same_endpoint(store):
+    store.upsert(**_sub(quiet=True))
+    store.upsert(**_sub(quiet=False))
+    docs = store.collection.find()
+    assert len(docs) == 1
+    assert docs[0]['quiet'] is False

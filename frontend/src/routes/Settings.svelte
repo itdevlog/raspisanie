@@ -157,12 +157,41 @@
     pushState = 'busy';
     pushNotice = null;
     const url = buildShareUrl(origin, schoolId, 'class', name, null);
-    const result: PushResult = await pushEnable({ schoolId, name, kind: 'class', url });
+    const result: PushResult = await pushEnable({
+      schoolId,
+      name,
+      kind: 'class',
+      url,
+      quiet: settings.pushQuietHours,
+    });
     if (result.ok) {
       pushState = 'on';
     } else {
       pushState = 'idle';
       pushNotice = result.error ?? 'Не удалось включить уведомления';
+    }
+  }
+
+  /**
+   * «Не беспокоить ночью». Persist the preference; if push is already on,
+   * re-upsert the existing browser subscription with the new `quiet` value.
+   */
+  async function handlePushQuietChange(event: Event) {
+    const quiet = (event.currentTarget as HTMLInputElement).checked;
+    settings.setPushQuietHours(quiet);
+    if (!isPushOn) {
+      return;
+    }
+    const schoolId = selection.schoolId;
+    const name = selection.name;
+    if (!schoolId || !name) {
+      return;
+    }
+    pushNotice = null;
+    const url = buildShareUrl(origin, schoolId, 'class', name, null);
+    const result: PushResult = await pushEnable({ schoolId, name, kind: 'class', url, quiet });
+    if (!result.ok) {
+      pushNotice = result.error ?? 'Не удалось сохранить настройку';
     }
   }
 
@@ -317,6 +346,14 @@
       {#if !isPushOn && !savedClass}
         <p class="hint" role="status">Выберите класс, чтобы включить уведомления.</p>
       {/if}
+      <label class="toggle">
+        <input
+          type="checkbox"
+          checked={settings.pushQuietHours}
+          onchange={handlePushQuietChange}
+        />
+        <span>🌙 Не беспокоить ночью (22:00–07:00)</span>
+      </label>
       {#if pushNotice}
         <p class="hint" role="status">{pushNotice}</p>
       {/if}

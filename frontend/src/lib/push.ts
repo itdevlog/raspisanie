@@ -28,6 +28,8 @@ export interface SubscribeBody {
   school_id: string;
   kind: ScheduleKind;
   name: string;
+  /** «Не беспокоить ночью» (22:00–07:00); defaults to `true` on the origin. */
+  quiet?: boolean;
 }
 
 /** Body sent to `/api/push/unsubscribe`; only `endpoint` is required. */
@@ -109,6 +111,11 @@ export interface EnablePushOptions {
   name: string;
   kind?: ScheduleKind;
   /**
+   * «Не беспокоить ночью» (22:00–07:00). Sent with subscribe; re-subscribing
+   * sends the current value. Defaults to `true`.
+   */
+  quiet?: boolean;
+  /**
    * Optional W16 share URL for the class. Not sent with subscribe today (the
    * origin derives the click target when a replacement is detected); accepted so
    * callers can keep the UI's share link and opt-in in one place.
@@ -169,14 +176,16 @@ export function urlBase64ToUint8Array(base64: string): Uint8Array {
  * Build the `/api/push/subscribe` body from a `PushSubscription`.
  *
  * Field names are exactly what `web/push_api.py` reads: `endpoint`, `keys`
- * (`p256dh`/`auth`), `school_id`, `kind`, `name`. Throws when the browser omits
- * the encryption keys (an unusable subscription must not be sent upstream).
+ * (`p256dh`/`auth`), `school_id`, `kind`, `name`, `quiet`. Throws when the
+ * browser omits the encryption keys (an unusable subscription must not be sent
+ * upstream).
  */
 export function buildSubscribeBody(
   subscription: PushSubscriptionLike,
   schoolId: string,
   name: string,
   kind: ScheduleKind = 'class',
+  quiet = true,
 ): SubscribeBody {
   const json = subscription.toJSON();
   const p256dh = json.keys?.p256dh;
@@ -190,6 +199,7 @@ export function buildSubscribeBody(
     school_id: schoolId,
     kind,
     name,
+    quiet,
   };
 }
 
@@ -254,7 +264,7 @@ export async function enablePush(
   options: EnablePushOptions,
   deps: PushDeps = defaultPushDeps(),
 ): Promise<PushResult> {
-  const { schoolId, name, kind = 'class' } = options;
+  const { schoolId, name, kind = 'class', quiet = true } = options;
   if (!isPushSupported(deps)) {
     return { ok: false, state: 'unsupported', error: 'Web Push недоступен в этом браузере' };
   }
@@ -277,7 +287,7 @@ export async function enablePush(
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       }));
-    await postSubscribe(buildSubscribeBody(subscription, schoolId, name, kind), deps);
+    await postSubscribe(buildSubscribeBody(subscription, schoolId, name, kind, quiet), deps);
     return { ok: true, state: 'subscribed', subscription };
   } catch (err) {
     return { ok: false, state: 'error', error: errorMessage(err) };

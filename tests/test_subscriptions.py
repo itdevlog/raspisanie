@@ -191,6 +191,10 @@ async def test_notify_subscribers_skips_quiet_hours(monkeypatch):
     UserPreferencesService(db).set_notification_settings(7, {
         'quiet_hours': {'enabled': True, 'start': 22, 'end': 7},
     })
+    # Новый дефолт — тихие часы включены; пользователь 8 явно без них.
+    UserPreferencesService(db).set_notification_settings(8, {
+        'quiet_hours': {'enabled': False, 'start': 22, 'end': 7},
+    })
     s = SubscriptionService(db)
     s.subscribe(7, 'school_133', 'teacher', 'Иванов')
     s.subscribe(8, 'school_133', 'teacher', 'Иванов')

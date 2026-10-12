@@ -40,6 +40,8 @@ export interface Settings {
   showLessonTime: boolean;
   /** Day layout used by the Schedule screen (`compact` reproduces the original). */
   scheduleView: ScheduleView;
+  /** «Не беспокоить ночью» (Web Push, 22:00–07:00); default on. */
+  pushQuietHours: boolean;
 }
 
 /** Human-readable labels, shared by the Settings screen and its tests. */
@@ -84,6 +86,7 @@ export const DEFAULT_SETTINGS: Settings = {
   strikeoutFreeLsn: null,
   showLessonTime: true,
   scheduleView: 'compact',
+  pushQuietHours: true,
 };
 
 const SKINS: readonly Skin[] = ['classic', 'minimal', 'dark', 'contrast', 'youth'];
@@ -133,6 +136,10 @@ function sanitizeSettings(raw: unknown): Settings {
         ? obj.showLessonTime
         : DEFAULT_SETTINGS.showLessonTime,
     scheduleView: pick(obj.scheduleView, SCHEDULE_VIEWS, DEFAULT_SETTINGS.scheduleView),
+    pushQuietHours:
+      typeof obj.pushQuietHours === 'boolean'
+        ? obj.pushQuietHours
+        : DEFAULT_SETTINGS.pushQuietHours,
   };
 }
 
@@ -178,6 +185,9 @@ export function createSettingsStore(storage?: StorageLike | null) {
     get scheduleView(): ScheduleView {
       return state.scheduleView;
     },
+    get pushQuietHours(): boolean {
+      return state.pushQuietHours;
+    },
     setSkin(skin: Skin): void {
       persist({ ...state, skin });
     },
@@ -199,6 +209,9 @@ export function createSettingsStore(storage?: StorageLike | null) {
     },
     setScheduleView(scheduleView: ScheduleView): void {
       persist({ ...state, scheduleView });
+    },
+    setPushQuietHours(pushQuietHours: boolean): void {
+      persist({ ...state, pushQuietHours });
     },
     /**
      * Mirror the current settings onto the theme target (defaults to `<html>`)

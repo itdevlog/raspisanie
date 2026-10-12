@@ -31,6 +31,7 @@ describe('settings store', () => {
     expect(store.strikeoutFreeLsn).toBeNull();
     expect(store.showLessonTime).toBe(true);
     expect(store.scheduleView).toBe('compact');
+    expect(store.pushQuietHours).toBe(true);
   });
 
   it('persists each change under the namespaced key', () => {
@@ -44,6 +45,7 @@ describe('settings store', () => {
     store.setStrikeoutFreeLsn(false);
     store.setShowLessonTime(false);
     store.setScheduleView('timeline');
+    store.setPushQuietHours(false);
 
     expect(store.skin).toBe('dark');
     expect(store.accent).toBe('purple');
@@ -52,6 +54,7 @@ describe('settings store', () => {
     expect(store.strikeoutFreeLsn).toBe(false);
     expect(store.showLessonTime).toBe(false);
     expect(store.scheduleView).toBe('timeline');
+    expect(store.pushQuietHours).toBe(false);
 
     const raw = storage.getItem('raspisanie:settings');
     expect(raw).not.toBeNull();
@@ -63,7 +66,17 @@ describe('settings store', () => {
       strikeoutFreeLsn: false,
       showLessonTime: false,
       scheduleView: 'timeline',
+      pushQuietHours: false,
     });
+  });
+
+  it('persists pushQuietHours across a new store and defaults it on', () => {
+    const storage = memoryStorage();
+    const store = createSettingsStore(storage);
+    expect(store.pushQuietHours).toBe(true);
+
+    store.setPushQuietHours(false);
+    expect(createSettingsStore(storage).pushQuietHours).toBe(false);
   });
 
   it('persists the schedule view across a new store', () => {

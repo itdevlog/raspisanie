@@ -11,6 +11,7 @@ edge (`/api/` middleware, W8/W17), потому что origin вызываетс
 Маршруты регистрируются, только если заданы VAPID-ключи И `EDGE_AUTH_SECRET`;
 иначе их в приложении нет вовсе.
 """
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -85,6 +86,37 @@ def test_subscribe_upserts_subscription(tmp_path):
     assert docs[0]['school_id'] == 'school_133'
     assert docs[0]['kind'] == 'class'
     assert docs[0]['name'] == '5А'
+
+
+def test_subscribe_defaults_quiet_true(tmp_path):
+    store = _store(tmp_path)
+    r = TestClient(_app(store)).post(
+        '/api/push/subscribe', json=_sub(), headers=_auth()
+    )
+
+    assert r.status_code == 200
+    assert store.collection.find_one({'endpoint': _ENDPOINT})['quiet'] is True
+
+
+def test_subscribe_stores_quiet_false(tmp_path):
+    store = _store(tmp_path)
+    r = TestClient(_app(store)).post(
+        '/api/push/subscribe', json=_sub(quiet=False), headers=_auth()
+    )
+
+    assert r.status_code == 200
+    assert store.collection.find_one({'endpoint': _ENDPOINT})['quiet'] is False
+
+
+@pytest.mark.parametrize('quiet', ['no', 0, 1, None, [], {}])
+def test_subscribe_non_bool_quiet_defaults_true(tmp_path, quiet):
+    store = _store(tmp_path)
+    r = TestClient(_app(store)).post(
+        '/api/push/subscribe', json=_sub(quiet=quiet), headers=_auth()
+    )
+
+    assert r.status_code == 200
+    assert store.collection.find_one({'endpoint': _ENDPOINT})['quiet'] is True
 
 
 def test_subscribe_same_endpoint_updates_without_duplicate(tmp_path):

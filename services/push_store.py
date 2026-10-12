@@ -5,11 +5,16 @@
 `endpoint`:
 
     {'endpoint': str, 'keys': {'p256dh': str, 'auth': str},
-     'school_id': str, 'kind': str, 'name': str, 'created_at': iso8601}
+     'school_id': str, 'kind': str, 'name': str, 'quiet': bool,
+     'created_at': iso8601}
 
 `endpoint` — ключ уникальности: `upsert` пишет через
 `update_one({'endpoint': ...}, ..., upsert=True)`, поэтому повторный вызов для
 того же endpoint обновляет существующий документ, а не добавляет дубль.
+
+`quiet` — флаг «не беспокоить ночью» (тихие часы 22:00–07:00, по умолчанию
+`True`). Читатели обязаны трактовать отсутствие поля в старых записях как
+`True` (`subscription.get('quiet', True)`); здесь только хранение.
 
 MVP создаёт только `kind='class'` (фронтенд предлагает opt-in класса);
 `kind`/`name` оставлены под будущие entity-подписки (`teacher`/`room`).
@@ -56,8 +61,12 @@ class PushSubscriptionStore:
         )
 
     def upsert(self, endpoint: str, keys: dict, school_id: str,
-               kind: str, name: str) -> bool:
-        """Создаёт или обновляет подписку по `endpoint`. False — при невалидных данных."""
+               kind: str, name: str, quiet: bool = True) -> bool:
+        """Создаёт или обновляет подписку по `endpoint`. False — при невалидных данных.
+
+        `quiet` — «не беспокоить ночью» (по умолчанию `True`); приводится к
+        `bool` и хранится как `'quiet'`.
+        """
         if not self._valid_endpoint(endpoint):
             return False
         if not self._valid_keys(keys):
@@ -73,6 +82,7 @@ class PushSubscriptionStore:
                 'school_id': school_id,
                 'kind': kind,
                 'name': name,
+                'quiet': bool(quiet),
                 'created_at': now,
             },
             upsert=True,

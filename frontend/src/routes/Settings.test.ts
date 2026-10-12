@@ -136,9 +136,108 @@ describe('Settings screen', () => {
         name: '5А',
         kind: 'class',
         url: 'https://rasp.example.ru/s/gym1/class/5%D0%90',
+        quiet: true,
       }),
     );
     expect(await findByText('Выключить уведомления')).toBeTruthy();
+  });
+
+  it('shows «не беспокоить ночью» on by default and persists the toggle', async () => {
+    const settings = makeSettings();
+    const { getByRole } = render(Settings, {
+      props: { settings, pushSupported: true },
+    });
+
+    const toggle = getByRole('checkbox', {
+      name: /Не беспокоить ночью/,
+    }) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+
+    await fireEvent.click(toggle);
+    expect(settings.pushQuietHours).toBe(false);
+  });
+
+  it('re-upserts the subscription with the new quiet value when push is on', async () => {
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '5А');
+    const pushEnable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+
+    const { getByRole } = render(Settings, {
+      props: {
+        settings: makeSettings(),
+        selection,
+        origin: 'https://rasp.example.ru',
+        pushEnable,
+        pushDisable: vi.fn(),
+        pushSupported: true,
+        pushInitiallyOn: true,
+      },
+    });
+
+    const toggle = getByRole('checkbox', {
+      name: /Не беспокоить ночью/,
+    }) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+
+    await fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(pushEnable).toHaveBeenCalledWith({
+        schoolId: 'gym1',
+        name: '5А',
+        kind: 'class',
+        url: 'https://rasp.example.ru/s/gym1/class/5%D0%90',
+        quiet: false,
+      }),
+    );
+  });
+
+  it('only persists «не беспокоить ночью» when push is off', async () => {
+    const settings = makeSettings();
+    const pushEnable = vi.fn();
+    const { getByRole } = render(Settings, {
+      props: { settings, pushEnable, pushSupported: true },
+    });
+
+    const toggle = getByRole('checkbox', {
+      name: /Не беспокоить ночью/,
+    }) as HTMLInputElement;
+    await fireEvent.click(toggle);
+
+    expect(settings.pushQuietHours).toBe(false);
+    expect(pushEnable).not.toHaveBeenCalled();
+  });
+
+  it('passes the current quiet value when enabling push', async () => {
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '5А');
+    const settings = makeSettings();
+    settings.setPushQuietHours(false);
+    const pushEnable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+
+    const { getByRole } = render(Settings, {
+      props: {
+        settings,
+        selection,
+        origin: 'https://rasp.example.ru',
+        pushEnable,
+        pushDisable: vi.fn(),
+        pushSupported: true,
+      },
+    });
+
+    await fireEvent.click(getByRole('button', { name: 'Включить уведомления' }));
+
+    await waitFor(() =>
+      expect(pushEnable).toHaveBeenCalledWith({
+        schoolId: 'gym1',
+        name: '5А',
+        kind: 'class',
+        url: 'https://rasp.example.ru/s/gym1/class/5%D0%90',
+        quiet: false,
+      }),
+    );
   });
 
   it('disables push through the injected handler', async () => {

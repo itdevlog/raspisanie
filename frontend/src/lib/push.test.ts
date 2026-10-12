@@ -159,11 +159,17 @@ describe('buildSubscribeBody', () => {
       school_id: 'school_133',
       kind: 'class',
       name: '5А',
+      quiet: true,
     });
   });
 
   it('defaults kind to class', () => {
     expect(buildSubscribeBody(makeSubscription(), 's', 'n').kind).toBe('class');
+  });
+
+  it('defaults quiet to true and carries an explicit false', () => {
+    expect(buildSubscribeBody(makeSubscription(), 's', 'n').quiet).toBe(true);
+    expect(buildSubscribeBody(makeSubscription(), 's', 'n', 'class', false).quiet).toBe(false);
   });
 
   it('throws when the encryption keys are missing', () => {
@@ -232,8 +238,20 @@ describe('enablePush', () => {
       school_id: 'gym1',
       kind: 'class',
       name: '5А',
+      quiet: true,
     });
     expect(JSON.stringify((init as RequestInit).headers)).not.toContain('Edge-Auth');
+  });
+
+  it('carries an explicit quiet=false into the subscribe body', async () => {
+    const deps = makeDeps();
+
+    const result = await enablePush({ schoolId: 'gym1', name: '5А', quiet: false }, deps);
+
+    expect(result.ok).toBe(true);
+    expect(JSON.parse((deps.fetchMock.mock.calls[1][1] as RequestInit).body as string)).toMatchObject(
+      { quiet: false },
+    );
   });
 
   it('reuses an existing subscription (idempotent) but still re-POSTs the class', async () => {

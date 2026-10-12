@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 import threading
+from datetime import datetime
 
 from services.push_service import PushService
 
@@ -268,3 +269,85 @@ async def test_to_thread_is_used_not_direct_call(monkeypatch):
         [_sub('https://fcm.googleapis.com/fcm/send/a')], 't', 'b', '/x')
 
     assert len(seen) == 1
+
+
+# --- «не беспокоить ночью» (quiet hours) ------------------------------------
+
+def test_in_quiet_window_boundaries():
+    assert PushService._in_quiet_window(datetime(2026, 9, 11, 22, 0)) is True
+    assert PushService._in_quiet_window(datetime(2026, 9, 11, 23, 59)) is True
+    assert PushService._in_quiet_window(datetime(2026, 9, 12, 0, 0)) is True
+    assert PushService._in_quiet_window(datetime(2026, 9, 12, 6, 59)) is True
+    assert PushService._in_quiet_window(datetime(2026, 9, 12, 7, 0)) is False
+    assert PushService._in_quiet_window(datetime(2026, 9, 11, 12, 0)) is False
+
+
+async def test_skips_quiet_subscriptions_inside_window(monkeypatch, caplog):
+    calls: list[dict] = []
+    _patch_webpush(monkeypatch, lambda **kwargs: calls.append(kwargs))
+    service = _service(store=_FakeStore())
+
+    with caplog.at_level(logging.INFO, logger='services.push_service'):
+        sent = await service.send_exchange_notifications(
+            [_sub('https://fcm.googleapis.com/fcm/send/a', quiet=True)],
+            't', 'b', '/x', now=datetime(2026, 9, 11, 23, 0))
+
+    assert sent == 0
+    assert calls == []
+    assert 'Пропущено 1 push' in caplog.text
+
+
+async def test_sends_quiet_subscription_outside_window(monkeypatch):
+    calls: list[dict] = []
+    _patch_webpush(monkeypatch, lambda **kwargs: calls.append(kwargs))
+    service = _service(store=_FakeStore())
+
+    sent = await service.send_exchange_notifications(
+        [_sub('https://fcm.googleapis.com/fcm/send/a', quiet=True)],
+        't', 'b', '/x', now=datetime(2026, 9, 11, 12, 0))
+
+    assert sent == 1
+    assert len(calls) == 1
+
+
+async def test_quiet_false_sends_inside_window(monkeypatch):
+    calls: list[dict] = []
+    _patch_webpush(monkeypatch, lambda **kwargs: calls.append(kwargs))
+    service = _service(store=_FakeStore())
+
+    sent = await service.send_exchange_notifications(
+        [_sub('https://fcm.googleapis.com/fcm/send/a', quiet=False)],
+        't', 'b', '/x', now=datetime(2026, 9, 11, 23, 0))
+
+    assert sent == 1
+    assert len(calls) == 1
+
+
+async def test_missing_quiet_treated_as_quiet_inside_window(monkeypatch):
+    calls: list[dict] = []
+    _patch_webpush(monkeypatch, lambda **kwargs: calls.append(kwargs))
+    service = _service(store=_FakeStore())
+
+    # Старая запись без поля `quiet` — считаем «не беспокоить».
+    sent = await service.send_exchange_notifications(
+        [_sub('https://fcm.googleapis.com/fcm/send/old')],
+        't', 'b', '/x', now=datetime(2026, 9, 11, 23, 0))
+
+    assert sent == 0
+    assert calls == []
+
+
+async def test_mixed_quiet_and_explicit_send_inside_window(monkeypatch):
+    calls: list[dict] = []
+    _patch_webpush(monkeypatch, lambda **kwargs: calls.append(kwargs))
+    service = _service(store=_FakeStore())
+    subs = [
+        _sub('https://fcm.googleapis.com/fcm/send/quiet', quiet=True),
+        _sub('https://fcm.googleapis.com/fcm/send/loud', quiet=False),
+    ]
+
+    sent = await service.send_exchange_notifications(
+        subs, 't', 'b', '/x', now=datetime(2026, 9, 11, 23, 0))
+
+    assert sent == 1
+    assert calls[0]['subscription_info']['endpoint'].endswith('/loud')

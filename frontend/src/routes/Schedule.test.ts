@@ -236,9 +236,36 @@ describe('Schedule screen', () => {
         name: '5А',
         kind: 'class',
         url: 'https://rasp.example.ru/s/gym1/class/5%D0%90?date=05.10.2026',
+        quiet: true,
       }),
     );
     expect(await findByText('Выключить уведомления')).toBeTruthy();
+  });
+
+  it('carries the «не беспокоить ночью» setting into the initial subscribe', async () => {
+    const client = makeClient();
+    const selection = makeSelection();
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '5А');
+    const pushEnable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+
+    const { getByRole } = render(Schedule, {
+      props: {
+        client,
+        selection,
+        today: makeToday('05.10.2026'),
+        origin: 'https://rasp.example.ru',
+        pushEnable,
+        pushDisable: vi.fn(),
+        pushSupported: true,
+        pushQuietHours: false,
+      },
+    });
+
+    await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+    await fireEvent.click(getByRole('button', { name: 'Включить уведомления' }));
+
+    await waitFor(() => expect(pushEnable).toHaveBeenCalledWith(expect.objectContaining({ quiet: false })));
   });
 
   it('disables push through the injected handler', async () => {

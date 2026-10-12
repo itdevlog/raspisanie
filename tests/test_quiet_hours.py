@@ -51,7 +51,8 @@ def test_default_settings_gain_quiet_hours(make_db):
     db = make_db()
     prefs = UserPreferencesService(db)
     settings = prefs.get_notification_settings(999)
-    assert settings['quiet_hours'] == {'enabled': False, 'start': 22, 'end': 7}
+    # Тихие часы включены по умолчанию (22–7).
+    assert settings['quiet_hours'] == {'enabled': True, 'start': 22, 'end': 7}
     # существующие ключи на месте — обратная совместимость
     assert settings['update_notifications'] is False
     assert settings['lesson_reminders'] is False
@@ -153,6 +154,8 @@ async def test_toggle_on_preserves_custom_boundaries(make_db):
     db = make_db()
     us = UserService(db)
     prefs = UserPreferencesService(db)
+    # Явно выключаем (иначе новый дефолт — включено), затем правим границы.
+    prefs.disable_quiet_hours(1)
     prefs.set_quiet_hours(1, start=21, end=6, start_minute=30, end_minute=15)
     assert prefs.get_notification_settings(1)['quiet_hours']['enabled'] is False
 
@@ -185,6 +188,8 @@ def test_toggle_quiet_hours_service_preserves_boundaries(make_db):
     """`UserPreferencesService.toggle_quiet_hours` сохраняет минуты при включении."""
     db = make_db()
     prefs = UserPreferencesService(db)
+    # Новый дефолт — включено, поэтому сначала явно выключаем.
+    prefs.disable_quiet_hours(1)
     prefs.set_quiet_hours(1, start=21, end=6, start_minute=30, end_minute=15)
 
     prefs.toggle_quiet_hours(1)

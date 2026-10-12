@@ -100,7 +100,10 @@ def create_push_router(
         if (endpoint is None or school_id is None or name is None
                 or kind is None or not isinstance(keys, dict)):
             return JSONResponse(status_code=422, content={'detail': 'Invalid subscription'})
-        if not store.upsert(endpoint, keys, school_id, kind, name):
+        # «Не беспокоить ночью»: принимаем только bool; отсутствие/не-bool → True.
+        quiet_raw = body.get('quiet', True)
+        quiet = quiet_raw if isinstance(quiet_raw, bool) else True
+        if not store.upsert(endpoint, keys, school_id, kind, name, quiet):
             return JSONResponse(status_code=422, content={'detail': 'Invalid subscription'})
         return {'ok': True}
 

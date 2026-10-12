@@ -273,6 +273,7 @@
       {strikeoutFreeLsn}
       showLessonTime={settings.showLessonTime}
       scheduleView={settings.scheduleView}
+      pushQuietHours={settings.pushQuietHours}
       onOpenDay={openDay}
       onBack={backToList}
     />
