@@ -6,6 +6,7 @@
   // null (day over, weekend, no lessons) a muted notice is shown.
   import type { AsyncStatus } from '../lib/async.svelte';
   import type { LessonSummary, NowResponse } from '../lib/api/types';
+  import { formatDuration } from '../lib/format';
   import StateNotice from './StateNotice.svelte';
 
   interface Props {
@@ -42,13 +43,13 @@
     <p class="lesson" role="status">
       <strong>Идёт урок</strong>
       <span class="detail">{summaryLine(current)}</span>
-      <span class="hint">осталось {current.in_minutes} мин</span>
+      <span class="hint">осталось {formatDuration(current.in_minutes)}</span>
     </p>
   {:else if next}
     <p class="lesson" role="status">
       <strong>До начала</strong>
       <span class="detail">{summaryLine(next)}</span>
-      <span class="hint">через {next.in_minutes} мин</span>
+      <span class="hint">через {formatDuration(next.in_minutes)}</span>
     </p>
   {:else}
     <StateNotice tone="muted" title="Уроков нет" detail="На сегодня уроков больше нет." />

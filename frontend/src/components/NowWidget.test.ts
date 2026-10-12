@@ -43,6 +43,17 @@ describe('NowWidget', () => {
     expect(getByText(/через 15 мин/)).toBeTruthy();
   });
 
+  it('formats a long wait as hours and minutes', () => {
+    const { getByText } = render(NowWidget, {
+      props: {
+        data: nowWith({ next: { ...nextLesson, in_minutes: 123 } }),
+        status: 'ready',
+        error: null,
+      },
+    });
+    expect(getByText(/через 2 ч 3 мин/)).toBeTruthy();
+  });
+
   it('handles both-null gracefully', () => {
     const { getByText } = render(NowWidget, {
       props: { data: nowWith(), status: 'ready', error: null },

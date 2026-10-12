@@ -9,6 +9,7 @@
     lessonStatusLabel,
     lessonTime,
   } from '../../lib/schedule-view';
+  import { formatDuration } from '../../lib/format';
 
   interface Props {
     lessons: Lesson[];
@@ -60,7 +61,7 @@
       {#if gap > 0}
         <li class="tl-gap" aria-hidden="true">
           <span class="tl-gap-line"></span>
-          <span class="tl-gap-label">{gap} мин перерыв</span>
+          <span class="tl-gap-label">{formatDuration(gap)} перерыв</span>
         </li>
       {/if}
     {/if}

@@ -19,7 +19,7 @@ def _parse_timezone(name: str = 'TIMEZONE', default: str = 'Asia/Yekaterinburg')
     except (ZoneInfoNotFoundError, ValueError):
         raise ValueError(
             f"Переменная {name!r} = {raw!r} — неизвестный часовой пояс. "
-            f"Пример: {name}=Europe/Moscow. Проверьте .env (см. .env.example)."
+            f"Пример: {name}=Asia/Yekaterinburg. Проверьте .env (см. .env.example)."
         )
     return value
 
