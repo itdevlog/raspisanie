@@ -1,345 +1,133 @@
-# 🏫 Telegram-бот школьного расписания (с авто-уведомлениями о заменах)
+# 🏫 Школьное расписание
+
+**Telegram-бот + публичный сайт расписания с уведомлениями о заменах.**
 
 [![CI](https://github.com/itdevlog/raspisanie/actions/workflows/ci.yml/badge.svg)](https://github.com/itdevlog/raspisanie/actions/workflows/ci.yml)
-![coverage](https://img.shields.io/badge/coverage-61%25-yellowgreen)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![Tests](https://img.shields.io/badge/tests-868%20pytest%20%2B%20403%20vitest-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-Современный асинхронный Telegram-бот для просмотра расписания и автоматических уведомлений о заменах. Работает на **python-telegram-bot v22.8**, тянет данные из системы **Nikasoft (Ника-Люкс)**, отслеживает изменения в реальном времени и присылает push-уведомления подписанным пользователям. Дополнительно поднимает **Mini App** — веб-версию расписания (FastAPI + Telegram WebApp) и **публичный сайт расписания** (Svelte PWA на отдельном `.ru`-домене, гео-разделение origin→edge, Web Push).
+Асинхронный Telegram-бот для просмотра расписания и **автоматических уведомлений о заменах**.
+Тянет данные из системы **Nikasoft (Ника-Люкс)**, следит за изменениями в реальном времени и
+присылает уведомления подписчикам. Дополнительно поднимает **Mini App** (веб-расписание
+внутри Telegram) и **публичный сайт** — мобильное PWA без входа, на отдельном `.ru`-домене,
+с Web Push и офлайн-режимом.
 
-Поддерживает **несколько школ**, кэширование, локальную JSON-БД, фоновое обновление, **веб-расписание** и полноценный админ-панель с интерактивными кнопками.
+Поддерживает **несколько школ**, кэширование, локальную JSON-БД, фоновое обновление,
+напоминания об уроках, утренний дайджест, тихие часы и полноценную **админ-панель**.
+
+---
+
+## 🇬🇧 English
+
+An async Telegram bot for school schedules with **automatic substitution (change) alerts**.
+It pulls data from the **Nikasoft** system, detects changes in real time, and notifies
+subscribers. It also serves a **Telegram Mini App** and a public **Svelte PWA** schedule site
+(no login, Web Push, offline). Multi-school, JSON storage, background updates, admin panel.
+Docs are in Russian (see [docs/](docs/README.md)).
+
+---
+
+## 👥 Для кого этот проект
+
+| Аудитория | Что нужно | Куда смотреть |
+|-----------|-----------|---------------|
+| **Пользователи** (родители, ученики, учителя) | Просто открыть бота или сайт | [docs/USAGE.md](docs/USAGE.md) |
+| **Администраторы / self-host** | Развернуть бота и сайт у себя | [docs/INSTALL.md](docs/INSTALL.md) |
+| **Разработчики** | Понять устройство и доработать | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+
+---
+
+## 📸 Скриншоты
+
+> _Плейсхолдеры — замените на реальные PNG в [`docs/assets/screenshots/`](docs/assets/screenshots/)._
+
+| Бот | Публичный сайт |
+|-----|----------------|
+| ![Меню бота](docs/assets/screenshots/bot-menu.png) | ![Главная сайта](docs/assets/screenshots/site-home.png) |
+| ![Расписание в боте](docs/assets/screenshots/bot-schedule.png) | ![Расписание на сайте](docs/assets/screenshots/site-schedule.png) |
+| ![Замены](docs/assets/screenshots/bot-exchanges.png) | ![Календарь](docs/assets/screenshots/site-calendar.png) |
 
 ---
 
 ## ✨ Возможности
 
-- 🏫 **Несколько школ** — гибкое переключение (напр. МАОУ СОШ №133 и №181 г. Екатеринбурга).
-- 📅 **Расписание**: на **Сегодня / Завтра / Неделю** — для **классов**, **преподавателей** и **кабинетов**.
-- 🔄 **Автоматический мониторинг замен** — фоновый сервис проверяет данные (сегодня **и завтра**), `ExchangeDetector` ловит новые замены и шлёт уведомления в формате «до → после» с временем урока (`🔄 6. 13:00-13:45 • Математика (Ищенко К.А., каб. 301) → Биология (Усольцева А.Д., каб. 4022)`); снятие замены помечается как `↩️ … — замена снята`.
-- 👨‍🏫 **Замены в расписании учителей** — расписание преподавателя учитывает его собственные замены (`TEACH_EXCHANGE`, как на сайте): новые предметы, классы и кабинеты с маркером 🔄; в строках показан класс урока — `6. 13:00-13:40 • Литературное чтение (2д)`.
-- 🗓️ **Переносы праздников** — дни `vacation`/`transfer` из `HOLIDAY_TRANSFER` обрабатываются как на сайте: в каникулы занятий нет, перенесённый день работает по расписанию другого дня недели.
-- 🔍 **Свободные кабинеты** — кнопка «Свободный кабинет» в меню кабинетов: какие кабинеты свободны на текущий/следующий урок (с учётом замен и отмен).
-- 💾 **Автосохранение** — выбранные школа и класс запоминаются в локальной JSON-БД.
-- 🔔 **Подписки** — учителя и кабинеты: кнопка «Подписаться» в расписании, уведомления о заменах и список подписок в `/settings`.
-- ⏰ **Напоминания об уроках** — «через N мин начнётся урок …» (тумблер в `/settings`; отдельный asyncio-цикл, без новых зависимостей).
-- 📋 **Утренний дайджест** — расписание на день с заменами за час до **первого урока** (тумблер в `/settings`); привязка к уроку учитывает две смены и не шлётся в выходные.
-- 🗓️ **Навигация по неделям** — листание недельного расписания класса «◀️ Прошлая / Текущая / Следующая ▶️» (±2 недели).
-- 🌙 **Тихие часы** — не беспокоить в заданном окне (по умолчанию 22:00–7:00), вкл/выкл в `/settings`; плюс анти-флуд и обработка Telegram `RetryAfter`.
-- ⚙️ **Гибкие настройки** — смена школы/класса, вкл/выкл уведомлений, напоминаний и тихих часов.
+### 🤖 Telegram-бот
+- 🏫 **Несколько школ** — переключение между школами (напр. МАОУ СОШ №133, №181, №16, №19, №123).
+- 📅 **Расписание** на **Сегодня / Завтра / Неделю** — для **классов**, **учителей** и **кабинетов**.
+- 🔄 **Мониторинг замен** — фоновый сервис проверяет сегодня и завтра, `ExchangeDetector` ловит новые
+  замены и шлёт «до → после» (`🔄 6. 13:00-13:45 • Математика … → Биология …`); снятие — `↩️ … — замена снята`.
+- 👨‍🏫 **Замены у учителей** — расписание преподавателя учитывает его собственные замены (`TEACH_EXCHANGE`).
+- 🗓️ **Переносы праздников** — `vacation`/`transfer` из `HOLIDAY_TRANSFER` обрабатываются как на сайте.
+- 🔍 **Свободные кабинеты** — какие кабинеты свободны на текущий/следующий урок (с учётом замен и отмен).
+- 🔔 **Подписки** — на учителей и кабинеты: уведомления о заменах + список подписок в `/settings`.
+- ⏰ **Напоминания об уроках** и 📋 **утренний дайджест** (за час до первого урока, с учётом смен).
+- 🌙 **Тихие часы** — по умолчанию 22:00–7:00; анти-флуд и обработка Telegram `RetryAfter`.
 - 👑 **Админ-панель** — статус школ, принудительное обновление, статистика пользователей, `/check_exchanges`.
-- 📊 **Мониторинг статуса** — команда `/status` показывает актуальность данных по каждой школе (иконка ✅/⚠️/🔴 «Устарело»).
-- 🌐 **Mini App — веб-версия расписания (Telegram Web App)** — FastAPI-сервер в процессе бота: расписание классов/преподавателей/кабинетов, свободные кабинеты, поиск; вход по подписи `initData`.
-- 🚀 **Публичный сайт расписания (Svelte PWA)** — без входа, на отдельном `.ru`-домене: расписание, поиск, свободные кабинеты, share-ссылки `/s/…`, офлайн-режим и **Web Push** о заменах; мобильное PWA с установкой на домашний экран.
-- 🔍 **Умный поиск** — учителя/кабинеты по имени с пагинацией, кнопками «Обновить»/«Отмена».
-- 📋 **CopyTextButton** — кнопка «Скопировать» к расписанию на день (до 256 символов).
-- 🔄 **Inline-режим** — `@bot 9а` в любом чате отдаёт расписание (включается через @BotFather `/setinline`).
-- 🛠️ **Качество кода** — 346 юнит/интеграционных тестов, ruff и mypy (чистые), CI.
+- 📊 **`/status`** — актуальность данных по каждой школе (✅/⚠️/🔴 «Устарело»).
 
----
+### 🌍 Публичный сайт (Svelte PWA, без входа)
+- 📅 Расписание класса/учителя/кабинета (сегодня/завтра/неделя/месяц) с **свайпами** между днями.
+- 🎨 Настройки оформления: скины (Классика/Минимализм/Тёмная/Контрастная/Молодёжный), акцент, размер шрифта,
+  **5 видов расписания** (Компактный/Карточки/Таблица/Таймлайн/Сейчас и далее).
+- 🔗 Share-ссылки `/s/{school}/{kind}/{name}?date=…`, History-роутинг и SPA-fallback.
+- 📲 Установка на домашний экран, офлайн-индикатор, service worker.
+- 🔔 **Web Push** о заменах (VAPID), с режимом «не беспокоить ночью».
+- 💬 Кнопка «Открыть в Telegram» и тема Telegram WebApp.
 
-## 🛠️ Технологический стек
-
-| Слой | Технология |
-|------|-----------|
-| Язык | **Python 3.11+** |
-| Фреймворк | [python-telegram-bot v22.8](https://github.com/python-telegram-bot/python-telegram-bot) (async API, `Application.builder()`, `Defaults`, `AIORateLimiter`) |
-| HTTP/парсинг | `httpx` (загрузка JS-файлов Nikasoft, `data_loader`), `re` |
-| Веб / Mini App | `fastapi` + `uvicorn` (Telegram WebApp, REST API, `/healthz`) |
-| Публичный сайт | Svelte 5 + Vite + TypeScript (PWA); edge-сервер FastAPI из снапшота; Caddy (авто-TLS) + systemd |
-| Web Push | `pywebpush` + `cryptography` (VAPID), Service Worker |
-| БД | Локальная JSON-БД `FileDB` (потокобезопасная, атомарная и долговечная запись: `fsync` + `.bak`) |
-| Часовой пояс | `zoneinfo` (stdlib) / `TIMEZONE` (`.env`, по умолчанию `Asia/Yekaterinburg` = UTC+5) |
-| Конфигурация | `python-dotenv` |
-
----
-
-## 📁 Структура проекта
-
-```text
-raspisanie/
-├── bot.py                      # Точка входа: приложение, сервисы, polling
-├── manage.sh                   # Установка/обновление/эксплуатация: install, update, doctor, backup…
-├── requirements.txt            # Продакшен-зависимости
-├── requirements-dev.txt         # Тесты/инструменты (pytest, ruff, mypy)
-├── pytest.ini / ruff.toml / mypy.ini
-├── .github/workflows/ci.yml     # CI: ruff + mypy + pytest (3.11–3.13) + coverage
-├── config/
-│   ├── config.py                # .env, TIMEZONE, is_admin(), get_timezone()
-│   └── schools.py               # Школы + get_display_name()/get_school_by_id()
-├── core/
-│   ├── data_loader.py           # Загрузка/парсинг JS Nikasoft
-│   └── background_updater.py    # Фоновое обновление (asyncio + to_thread)
-├── database/
-│   └── file_db.py               # JSON-БД (потокобезопасная, `.corrupt`-бэкап)
-├── handlers/
-│   ├── start.py / admin/ / callbacks/ / common/ / rooms/ / schools/ / teachers/
-│   ├── common/entity_menu.py    # Общая логика учителей/кабинетов
-│   ├── common/menu_builder.py   # Единое главное меню + справка
-│   ├── common/messaging.py      # Нарезка ≤4096, safe-edit, логи ошибок
-│   └── common/requires_school.py# Декоратор @requires_school
-├── services/                    # Бизнес-логика (расписание, замены, уведомления)
-├── web/                         # Mini App + edge: FastAPI API, HMAC-авторизация, статика
-│   ├── api.py                   # /api/* и /healthz (общий create_app для origin и edge)
-│   ├── auth.py                  # валидация initData (Telegram WebApp)
-│   ├── server.py                # uvicorn в общем event loop бота
-│   ├── edge_server.py           # edge-приложение из снапшота (create_edge_app)
-│   ├── edge_ingest.py           # POST /internal/snapshot (HMAC + timestamp)
-│   ├── edge_push.py             # push-proxy edge → origin (X-Edge-Auth)
-│   └── static/                  # Mini App фронтенд (vanilla JS + Telegram WebApp SDK)
-├── frontend/                    # Публичный сайт: Svelte 5 + Vite PWA (сборка → frontend/dist)
-├── deploy/edge/                 # Caddy, systemd, install.sh, edge.env.example, README
-├── data/                        # database.json, exchange_cache.json, notifications_cache.json, snapshot.json
-├── logs/                        # bot.log (ротация 5МБ×3), admin.log
-└── tests/                       # 346 pytest (юнит + интеграционные моки)
-```
+### 🛠️ Инфраструктура
+- 📦 **origin → edge**: бот публикует снапшот данных (HMAC-SHA256 + timestamp), edge отдаёт его
+  как read-only API за Caddy с авто-TLS — быстро из РФ и устойчиво к сбоям канала.
+- 🧪 **868** pytest + **403** vitest, ruff/mypy/svelte-check/eslint чисто, CI на GitHub Actions.
+- 🐍 Python 3.11+ · Node 20 (сборка сайта).
 
 ---
 
 ## 🚀 Быстрый старт
 
-### Вариант 1: одна команда (рекомендуется)
+### Бот — одна команда (рекомендуется)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/itdevlog/raspisanie/main/manage.sh | bash -s -- install
 ```
 
-Скрипт спросит каталог установки (по умолчанию **`/opt/raspisanie`**), склонирует репозиторий, поставит Python-окружение, зависимости, интерактивно настроит `.env` (токен — у [@BotFather](https://t.me/BotFather)) и предложит systemd-сервис (автозапуск). Повторный запуск в тот же каталог обновляет код и доустанавливает недостающее.
-
-Недостающие системные пакеты (**git**, **curl**, **python3-venv/pip**) скрипт предложит установить сам (apt/dnf/yum/apk) — на чистом сервере достаточно `curl`.
-
-Дальнейшее управление — из каталога установки:
+Скрипт поставит окружение, интерактивно настроит `.env` (токен — у [@BotFather](https://t.me/BotFather))
+и предложит systemd-сервис. Дальше:
 
 ```bash
 cd /opt/raspisanie
-
-./manage.sh doctor    # диагностика: venv, .env, токен, сервис, /healthz
-./manage.sh start     # запуск (или systemd уже запустил)
-./manage.sh logs      # логи в реальном времени
+./manage.sh doctor   # диагностика
+./manage.sh logs     # логи
+./manage.sh update   # обновление с авто-откатом
 ```
 
-**Обновление с GitHub** — с бэкапом данных и авто-откатом, если бот не поднялся:
+### Публичный сайт — одна команда на edge-хосте
 
 ```bash
-./manage.sh update
+sudo EDGE_DOMAIN=schedule.example.ru ./manage.sh edge
 ```
 
-Что делает `update`: бэкап `data/` + `.env` → `git pull` → обновление зависимостей → перезапуск → health-check `/healthz` (30 с). Если бот не поднялся — **автоматический откат** к предыдущему коммиту и рестарт.
-
-> ⚠️ `curl | bash` исполняет код от root — стандартная плата за удобство. Код скрипта можно сначала просмотреть:
-> `curl -fsSL <url> | less`
-
-### Вариант 2: через manage.sh из клона
-
-```bash
-git clone https://github.com/itdevlog/raspisanie.git /opt/raspisanie
-cd /opt/raspisanie
-
-./manage.sh install
-```
-
-Все команды:
-
-| Команда | Что делает |
-|---------|------------|
-| `./manage.sh install` | Установка: venv, зависимости, `.env` (интерактив), systemd (с выбором). Вне репозитория — клонирует в `/opt/raspisanie` |
-| `./manage.sh update` | Обновление с GitHub + бэкап + авто-откат при сбое |
-| `./manage.sh start` / `stop` / `restart` | Управление ботом |
-| `./manage.sh status` | Статус сервиса + health-check |
-| `./manage.sh logs` | Логи в реальном времени (Ctrl+C — выход) |
-| `./manage.sh backup` | Бэкап `data/` + `.env` в `backups/` (хранит последние 10) |
-| `./manage.sh restore` | Восстановление из последнего бэкапа |
-| `./manage.sh doctor` | Диагностика: venv, зависимости, `.env`, токен, сервис, `/healthz` |
-| `./manage.sh uninstall` | Остановка + удаление сервиса (с вопросами) |
-
-> ⚙️ Параллельная загрузка школ управляется `MAX_PARALLEL_SCHOOLS` (по умолчанию 4; `1` — последовательно). Загрузка использует `ETag`/`If-Modified-Since`: если файл расписания не изменился, сервер отвечает `304` и данные берутся из кэша.
-
-> 💡 Скрипт работает без systemd (тогда бот стартует в фоне через nohup, PID пишется в `bot.pid`). Флаг `--no-color` отключает цвета.
-
-### Вариант 3: вручную
-
-```bash
-git clone https://github.com/itdevlog/raspisanie.git /opt/raspisanie
-cd /opt/raspisanie
-
-python -m venv .venv
-source .venv/bin/activate        # Linux/macOS
-# .venv\Scripts\activate         # Windows
-
-pip install -r requirements.txt
-```
-
-Скопируйте [.env.example](.env.example) в `.env` и заполните:
-
-```bash
-cp .env.example .env
-```
-
-```env
-# Токен бота (у @BotFather)
-TELEGRAM_TOKEN=123456789:ABCdef...
-
-# ID администраторов через запятую (для /admin)
-ADMIN_IDS=123456789,987654321
-
-# Интервал фонового обновления (сек). По умолчанию 3600 = 1 час
-UPDATE_INTERVAL=3600
-
-# Попыток запросов к Nikasoft при сбоях
-MAX_RETRIES=3
-
-# Сколько школ грузить параллельно (1 — последовательно)
-MAX_PARALLEL_SCHOOLS=4
-
-# Пути к данным и логам
-DB_PATH=./data/database.json
-CACHE_PATH=./data/cache.json
-LOG_LEVEL=INFO
-LOG_FILE=./logs/bot.log
-ADMIN_LOG_FILE=./logs/admin.log
-# Часовой пояс (Екатеринбург = UTC+5)
-TIMEZONE=Asia/Yekaterinburg
-
-# Web App / Mini App
-# 127.0.0.1 — порт бота доступен только через reverse proxy (Caddy)
-WEBAPP_HOST=127.0.0.1
-WEBAPP_PORT=8080
-# Публичный HTTPS-URL фронтенда (см. раздел «Mini App»)
-WEBAPP_URL=
-```
-
-> 💡 Если `TELEGRAM_TOKEN` не задан — бот не упадёт внутри PTB, а выведет понятную ошибку.
-> 💡 Невалидные числовые значения (`UPDATE_INTERVAL`, `MAX_RETRIES`, `ADMIN_IDS`) дают читаемое сообщение вместо краха на импорте.
-
-Запуск:
-
-```bash
-python bot.py
-```
-
-При старте бот создаст директории `data/`, `logs/`, `cache/`, загрузит свежие данные всех активных школ и запустит фоновое обновление через `post_init`.
-
-> 🌐 `python bot.py` запускает **и бота, и веб-сервер** Mini App в одном процессе (порт `WEBAPP_PORT`, по умолчанию `8080`). Проверка живости — `GET /healthz`. Если веб не нужен, задайте `WEBAPP_PORT=0`.
-
-### Запуск под systemd (если ставили вручную)
-
-`/etc/systemd/system/tg-schedule-bot.service`:
-
-```ini
-[Unit]
-Description=Telegram School Schedule Bot
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/raspisanie
-ExecStart=/opt/raspisanie/.venv/bin/python bot.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-systemctl daemon-reload
-systemctl enable --now tg-schedule-bot.service
-journalctl -u tg-schedule-bot.service -f
-```
-
-> ✅ Логирование пишется **и в файл** (`RotatingFileHandler`, ротация 5 МБ × 3 бэкапа), **и в консоль** (видно в `journalctl`). Токен бота не пишется в debug-лог httpx.
+Полные инструкции (бот, Mini App, публичный сайт, HTTPS, несколько ботов) — в
+**[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ---
 
-## 🌐 Mini App (веб-версия)
-
-Бот поднимает FastAPI-сервер (`web/`) в том же процессе и отдаёт веб-версию расписания как Telegram Web App.
-
-**Настройка:**
-
-1. Задайте `WEBAPP_URL` — **публичный HTTPS-URL** (Telegram требует HTTPS для кнопок Mini App). Локально удобно поднять туннель, на сервере — reverse proxy с TLS:
-   ```bash
-   cloudflared tunnel --url http://localhost:8080   # выдаст https://…trycloudflare.com
-   ```
-2. Пропишите полученный URL в `.env`: `WEBAPP_URL=https://schedule.example.com`.
-3. Перезапустите бота. При старте автоматически вызывается `set_chat_menu_button` (кнопка «🌐 Веб-расписание») — если `WEBAPP_URL` не задан, кнопка не добавляется и бот работает как раньше.
-4. Inline-режим (`@bot 9а` в любом чате) включается в **@BotFather → `/setinline`** (имя бота уже задано при создании).
-
-**HTTPS на сервере через Caddy (рекомендуется):**
-
-```bash
-# DNS домена уже указывает на сервер. Задайте WEBAPP_URL в .env:
-#   WEBAPP_URL=https://raspisanie.devlogit.ru
-./manage.sh caddy   # ставит Caddy, выпускает Let's Encrypt сертификат, проксирует на бота
-```
-
-`./manage.sh caddy` берёт домен из `WEBAPP_URL`, создаёт фрагмент `/etc/caddy/conf.d/<instance>.caddy`, включает автопродление сертификата и проверяет `https://<домен>/healthz`. Нужны открытые порты 80 и 443. Альтернатива — nginx + certbot; пример приведён в истории репозитория.
-
-> 🌐 Telegram валидирует URL кнопок Mini App: нужен `https://` с валидным сертификатом на **точное** имя домена. `WEBAPP_URL` без схемы нормализуется ботом (добавляется `https://`).
-
-**Несколько ботов на одном сервере:**
-
-Каждый бот живёт в своём каталоге со своим `.env` и своим портом. Caddy один и слушает 80/443; боты — только на `127.0.0.1`.
-
-```bash
-# бот №1 (/opt/raspisanie): WEBAPP_URL=https://raspisanie.example.com, WEBAPP_PORT=8080
-cd /opt/raspisanie && ./manage.sh caddy
-
-# бот №2 (/opt/peakflow): WEBAPP_URL=https://peakflow.example.com, WEBAPP_PORT=8081
-cd /opt/peakflow && ./manage.sh caddy
-```
-
-Имя инстанса берётся из имени каталога и разводит systemd-юнит `tg-schedule-bot-<instance>`, PID-файл и Caddy-фрагмент. Переопределить можно флагом `./manage.sh --instance peakflow <команда>` или `RASPISANIE_INSTANCE=peakflow`. Базовый `/etc/caddy/Caddyfile` (с `import conf.d/*.caddy`) создаётся один раз и не затирается. `WEBAPP_PORT=80`/`443` запрещён — эти порты нужны Caddy.
-
-> 🔒 `WEBAPP_HOST=127.0.0.1` по умолчанию: порт бота не торчит в интернет, наружу смотрит только Caddy с валидным сертификатом.
-
-**Запуск и проверка:**
-
-- `python bot.py` — бот **и** веб-сервер (порт `WEBAPP_PORT`/`8080`) в одном event loop.
-- `GET /healthz` — проверка живости; `GET /api/schools`, `/api/{school}/schedule/{class|teacher|room}/{name}` — REST API Mini App.
-- Пользовательские данные фронтенда подписаны: сервер валидирует Telegram `initData` (HMAC) и не доверяет неподписанным запросам.
-
----
-
-## 🌍 Публичный сайт (origin → edge)
-
-Публичный (без входа) мобильный сайт расписания на отдельном `.ru`-домене —
-**гео-разделение**: бот и отправка Web Push остаются на **origin** (Германия,
-текущий сервер), а публичный сайт обслуживает **edge** (Москва, Debian) из
-локальной копии данных.
+## 🌍 Архитектура (кратко)
 
 ```
-Origin (Германия): бот + Nikasoft + ExchangeDetector + Web Push
+Origin (сервер с ботом): бот + Nikasoft + ExchangeDetector + Web Push
         │  POST /internal/snapshot  (JSON, HMAC-SHA256 + X-Snapshot-Timestamp)
         ▼
-Edge (Москва): Caddy (.ru, авто-TLS) → FastAPI (read-only API) + Svelte PWA
+Edge (сервер в РФ): Caddy (.ru, авто-TLS) → FastAPI (read-only API) + Svelte PWA
         ▲  push-API проксируется обратно на origin (X-Edge-Auth)
-   Интернет / пользователи в РФ
+   Пользователи
 ```
 
-- **Снапшот** (`services/snapshot.py`) публикуется origin'ом в `EDGE_INGEST_URL`
-  раз в цикл обновления, при старте и после ручного admin-refresh. Edge принимает
-  его на `POST /internal/snapshot` только при валидной подписи, timestamp ±300 с
-  и совпадении `version`.
-- **Устойчивость к деградации канала**: edge отвечает из последней копии даже при
-  устаревшем снапшоте, показывая возраст данных; `GET /healthz` отдаёт
-  `{status, snapshot_age_seconds, generated_at, version, schools_count}`.
-- **Фронтенд** (`frontend/`) — Svelte 5 + Vite + TypeScript PWA: расписание
-  класса/учителя/кабинета (сегодня/завтра/неделя), поиск, свободные кабинеты,
-  share-ссылки `/s/{school}/{kind}/{name}?date=…` (History-роутинг + SPA-fallback),
-  офлайн-индикатор и **опция Web Push о заменах** (VAPID через edge; origin
-  сохраняет подписки при заданных VAPID-ключах и `EDGE_AUTH_SECRET`).
-- **Docker/hosting**: Caddy (авто-TLS) + systemd; разворачивание —
-  `deploy/edge/install.sh` или `sudo EDGE_DOMAIN=<домен> ./manage.sh edge`.
-
-> 🔐 Секреты (`EDGE_INGEST_SECRET`, `EDGE_AUTH_SECRET`, `VAPID_PRIVATE_KEY`) — только
-> в `.env`/`/etc/raspisanie-edge.env`, в репозиторий не коммитятся. NTP обязателен
-> на **обоих** хостах (допуск часов ±300 с).
-
-> 📌 **Деплой**: сотрудник и дата развёртывания — «(указываются при деплое)».
-> Полное руководство — [docs/EDGE.md](docs/EDGE.md), заметки по edge-хосту —
-> [deploy/edge/README.md](deploy/edge/README.md).
-
-> ✅ **Статус**: MVP публичного сайта (план W1–W31) и паритет с оригиналом
-> Nikasoft (W32–W41) реализованы 2026-10-05 ([roadmap.md](roadmap.md) §4.1).
+- **Снапшот** публикуется origin'ом при старте, раз в цикл обновления и после admin-refresh;
+  edge принимает его только при валидной подписи, timestamp ±300 с и совпадении `version`.
+- **Деградация канала** — edge отвечает из последней копии даже при устаревшем снапшоте,
+  показывая возраст данных (`GET /healthz`).
+- Подробнее — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) и [docs/EDGE.md](docs/EDGE.md).
 
 ---
 
@@ -350,45 +138,41 @@ Edge (Москва): Caddy (.ru, авто-TLS) → FastAPI (read-only API) + Sve
 | `/start` | Главное меню: расписание, учителя, кабинеты, смена школы/класса |
 | `/help` | Справка |
 | `/status` | Статус актуальности данных по школам |
-| `/settings` | Настройки: уведомления, напоминания об уроках (`⏰`), дайджест дня (`📋`), тихие часы (`🌙`), список подписок; у админов — `update_notifications` |
+| `/settings` | Уведомления, напоминания (`⏰`), дайджест (`📋`), тихие часы (`🌙`), подписки |
 | `/week <класс>` | Расписание на неделю (напр. `/week 5и`) |
 | `/school` | Информация о школе |
-| `/cancel` | Сбросить текущий ввод/поиск и вернуться в главное меню |
-| `/admin` или `/stats` | Интерактивная админ-панель (`/stats` — статистика пользователей, только для `ADMIN_IDS`) |
+| `/cancel` | Сбросить ввод/поиск и вернуться в главное меню |
+| `/admin` · `/stats` | Админ-панель и статистика (только `ADMIN_IDS`) |
 | `/check_exchanges` | Принудительная проверка и рассылка замен (админ) |
 
 ---
 
-## 🧭 Как это работает (кратко)
+## 🛠️ Технологический стек
 
-1. **Загрузка** — `DataLoader` обращается к `check_url` школы, регуляркой находит актуальный JS-файл (`20261013_12345.js`), скачивает его и парсит JSON-объект `var NIKA=`.
-2. **Фоновое обновление** — `BackgroundUpdater` раз в `UPDATE_INTERVAL` (через `asyncio.to_thread`, не блокируя polling) скачивает свежее расписание, **очищает кэш** и передаёт данные детектору.
-3. **Детект изменений** — `ExchangeDetector` сравнивает новое состояние с предыдущим (ключи уроков как строки), находит новые замены и сохраняет кэш в `data/exchange_cache.json`.
-4. **Уведомления** — `NotificationService` находит получателей через O(N)-индекс `(школа, класс) → [user_id]`, форматирует сообщение с корректной датой и рассылает; кэш отправленных ключей живёт 24 ч.
-
----
-
-## 🧪 Тесты и инструменты
-
-```bash
-pip install -r requirements-dev.txt
-
-.venv/bin/ruff check .        # линтер (чисто)
-.venv/bin/python -m pytest    # 346 тестов
-```
-
-- Юнит: нарезка сообщений, `paginate`, `get_display_name`, матчинг класса (p.11), `FileDB` (битый файл/upsert/delete_one), кэш-уведомления, callback-роутинг, `@requires_school`, exchange round-trip, замены учителей (`TEACH_EXCHANGE`), переносы праздников (`HOLIDAY_TRANSFER`), свободные кабинеты.
-- Интеграционные (pytest-asyncio + моки): навигация, рендер меню сущности, меню свободных кабинетов.
-- CI: `.github/workflows/ci.yml` — ruff + mypy + shellcheck + pytest на матрице Python 3.11/3.12/3.13; на 3.11 дополнительно coverage с порогом 60%.
+| Слой | Технология |
+|------|-----------|
+| Язык | **Python 3.11+** |
+| Бот | [python-telegram-bot v22.8](https://github.com/python-telegram-bot/python-telegram-bot) (async, `Application.builder`, `AIORateLimiter`) |
+| HTTP/парсинг | `httpx`, `re` |
+| Веб / Mini App | `fastapi` + `uvicorn` (REST API, `/healthz`) |
+| Публичный сайт | Svelte 5 + Vite + TypeScript (PWA); edge FastAPI из снапшота; Caddy (авто-TLS) + systemd |
+| Web Push | `pywebpush` + `cryptography` (VAPID), Service Worker |
+| БД | Локальная JSON-БД `FileDB` (потокобезопасная, атомарная запись: `fsync` + `.bak`) |
+| Часовой пояс | `zoneinfo` / `TIMEZONE` (по умолчанию `Asia/Yekaterinburg`) |
 
 ---
 
-## 📚 Ссылки
+## 📚 Документация
 
-- [WIKI.md](WIKI.md) — подробное устройство проекта.
+- [docs/README.md](docs/README.md) — индекс документации.
+- [docs/INSTALL.md](docs/INSTALL.md) — установка и развёртывание.
+- [docs/USAGE.md](docs/USAGE.md) — как пользоваться ботом и сайтом.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — устройство проекта.
+- [docs/EDGE.md](docs/EDGE.md) · [docs/WIDGET.md](docs/WIDGET.md) — edge-сервер и виджет.
 - [CHANGELOG.md](CHANGELOG.md) — история изменений.
-- [roadmap.md](roadmap.md) — что осталось сделать.
 
 ---
 
-Если у вас есть вопросы или предложения — создайте [Issue](https://github.com/itdevlog/raspisanie/issues).
+## 📄 Лицензия
+
+[MIT](LICENSE). Вопросы и предложения — [Issues](https://github.com/itdevlog/raspisanie/issues).

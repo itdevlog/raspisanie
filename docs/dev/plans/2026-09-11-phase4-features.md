@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.11, python-telegram-bot 20.7, pytest 7.4, ruff.
 
-**Spec:** `docs/superpowers/specs/2026-09-11-quality-and-features-design.md` (§7)
+**Spec:** `../specs/2026-09-11-quality-and-features-design.md` (§7)
 
 ## Global Constraints
 

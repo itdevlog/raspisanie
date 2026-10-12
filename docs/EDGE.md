@@ -3,7 +3,7 @@
 Документ для эксплуатации публичного сайта расписания (гео-разделение origin/edge).
 Разворачивание edge-хоста — в [deploy/edge/README.md](../deploy/edge/README.md);
 контракт снапшота и дизайн — в
-[спеке](superpowers/specs/2026-09-24-public-schedule-site-design.md) §1–§9.
+[спеке](dev/specs/2026-09-24-public-schedule-site-design.md) §1–§9.
 
 ---
 

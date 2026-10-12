@@ -1,7 +1,7 @@
 // frontend/src/lib/api/types.ts
 //
 // Response types for the public schedule API (see `web/api.py` and
-// `docs/superpowers/specs/2026-09-24-public-schedule-site-design.md` §5).
+// `docs/dev/specs/2026-09-24-public-schedule-site-design.md` §5).
 //
 // IMPORTANT: field names follow the *actual* server payloads, not the brief's
 // shorthand. Endpoints wrap their lists in an object:

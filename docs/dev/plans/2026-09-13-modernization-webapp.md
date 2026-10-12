@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.11, python-telegram-bot 22.8 (`[rate-limiter]`), FastAPI, uvicorn, httpx, zoneinfo, pytest.
 
-**Spec:** `docs/superpowers/specs/2026-09-13-modernization-webapp-design.md`
+**Spec:** `../specs/2026-09-13-modernization-webapp-design.md`
 
 ## Global Constraints
 

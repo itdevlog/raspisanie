@@ -3,8 +3,8 @@
 **Дата:** 2 октября 2026
 **Статус:** ✅ MVP (W1–W31) реализован 2026-10-05; ✅ паритет (W32–W41) реализован 2026-10-05 (все 41 задача закрыта)
 **Деплой:** сотрудник — «(указывается при деплое)», дата — «(указывается при деплое)»
-**Спека:** [docs/superpowers/specs/2026-09-24-public-schedule-site-design.md](../specs/2026-09-24-public-schedule-site-design.md)
-**Стиль:** как T1–T45 в [DEVELOPMENT_PLAN.md](../../../DEVELOPMENT_PLAN.md) — фазы, сквозные ID, файлы и критерии готовности.
+**Спека:** [../specs/2026-09-24-public-schedule-site-design.md](../specs/2026-09-24-public-schedule-site-design.md)
+**Стиль:** как T1–T45 в [DEVELOPMENT_PLAN.md](../development-plan.md) — фазы, сквозные ID, файлы и критерии готовности.
 **Нумерация:** `W1…W41` (Website), чтобы не путаться с закрытыми `T1–T45`:
 `W1–W31` — базовый публичный сайт (MVP), `W32–W41` — паритет с оригиналом Nikasoft.
 **Как исполнять:** REQUIRED SUB-SKILL: `superpowers:subagent-driven-development` (задача на субагента + ревью) или `superpowers:executing-plans` (самому по шагам); закрытые задачи отмечать `- [x]`.
@@ -344,7 +344,7 @@
   снапшоте `school_133` (метаданные, `shift`, `groups`, `period`, календарь, `/now`,
   поиск классов); обновить спеку, `WIKI.md`, `CHANGELOG.md`, `roadmap.md`.
   *Файлы: tests/test_parity_e2e.py, WIKI.md, CHANGELOG.md, roadmap.md,
-  docs/superpowers/specs/2026-09-24-public-schedule-site-design.md.*
+  ../specs/2026-09-24-public-schedule-site-design.md.*
 
 ---
 
@@ -403,5 +403,5 @@
 ---
 
 **Связанные документы:** [спека](../specs/2026-09-24-public-schedule-site-design.md),
-[DEVELOPMENT_PLAN.md](../../../DEVELOPMENT_PLAN.md), [roadmap.md](../../../roadmap.md),
-[CHANGELOG.md](../../../CHANGELOG.md), [WIKI.md](../../../WIKI.md), [docs/WIDGET.md](../../WIDGET.md).
+[DEVELOPMENT_PLAN.md](../development-plan.md), [roadmap.md](../roadmap.md),
+[CHANGELOG.md](../../../CHANGELOG.md), [WIKI.md](../../ARCHITECTURE.md), [docs/WIDGET.md](../../WIDGET.md).

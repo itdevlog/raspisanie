@@ -5,7 +5,7 @@
   оригиналом Nikasoft W32–W41 закрыт 2026-10-05; гео-разделение, снапшот-реплика A1)
 Обновлено: 2026-10-05 — MVP (W1–W31) реализован: снапшот origin→edge, edge-сервер
   (ingest/API/`/healthz`), Web Push (проводка origin `push_store` в `run_webapp`
-  отложена — см. [docs/EDGE.md](../../EDGE.md) §6 / [WIKI.md](../../../WIKI.md) §13.1),
+  отложена — см. [docs/EDGE.md](../../EDGE.md) §6 / [WIKI.md](../../ARCHITECTURE.md) §13.1),
   Svelte PWA, деплой `deploy/edge/` и CI. Паритет с оригиналом Nikasoft
   (§5.1, §7, план W32–W41) реализован: метаданные `/api/schools`
   (`city`/`updated`/`homepage_url`/`features`), `period`/`shift`/`groups`/

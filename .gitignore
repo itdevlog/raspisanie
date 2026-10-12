@@ -15,3 +15,7 @@ htmlcov/
 .superpowers/
 node_modules/
 frontend/dist/
+
+# локальные бэкапы .env и pid-файлы рантайма
+.env.bak.*
+*.pid

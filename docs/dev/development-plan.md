@@ -41,7 +41,7 @@
 
 ### Главная проблема проекта (устранена в T1)
 
-**CI красный во всех 23 запусках.** `.github/workflows/ci.yml:27` запускает `pytest -q` (консольный скрипт): в этом режиме cwd не попадает в `sys.path`, а в проекте нет `conftest.py`, `pyproject.toml` или `PYTHONPATH`. Локально всё работает только через `python -m pytest` (внутренние прогоны документированы с `PYTHONPATH=.` — `docs/superpowers/plans/2026-09-13-modernization-webapp.md:16,19`). В CI тесты физически не запускались ни разу: любой сломанный код проходил «проверки».
+**CI красный во всех 23 запусках.** `.github/workflows/ci.yml:27` запускает `pytest -q` (консольный скрипт): в этом режиме cwd не попадает в `sys.path`, а в проекте нет `conftest.py`, `pyproject.toml` или `PYTHONPATH`. Локально всё работает только через `python -m pytest` (внутренние прогоны документированы с `PYTHONPATH=.` — `plans/2026-09-13-modernization-webapp.md:16,19`). В CI тесты физически не запускались ни разу: любой сломанный код проходил «проверки».
 
 ---
 
@@ -337,9 +337,9 @@ Fallback `bot_data.get(...) or self.notification_service` поднимает в�
 ## 🔗 Связанные документы
 
 - [roadmap.md](roadmap.md) — исторические фазы и архитектурные рекомендации
-- [CHANGELOG.md](CHANGELOG.md) — история изменений
-- [WIKI.md](WIKI.md) — устройство проекта
-- [docs/WIDGET.md](docs/WIDGET.md) — виджет (в т.ч. рекомендация HMAC, реализуемая в T3)
+- [CHANGELOG.md](../../CHANGELOG.md) — история изменений
+- [ARCHITECTURE.md](../ARCHITECTURE.md) — устройство проекта
+- [docs/WIDGET.md](../WIDGET.md) — виджет (в т.ч. рекомендация HMAC, реализуемая в T3)
 
 ---
 
