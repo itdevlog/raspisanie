@@ -14,8 +14,18 @@
     lessons: Lesson[];
     kind: ScheduleKind;
     showLessonTime?: boolean;
+    /** Lesson number to highlight as the current/next one, or null. */
+    heroNum?: number | null;
+    /** Whether the highlighted lesson is in progress (else upcoming). */
+    heroIsCurrent?: boolean;
   }
-  let { lessons, kind, showLessonTime = true }: Props = $props();
+  let {
+    lessons,
+    kind,
+    showLessonTime = true,
+    heroNum = null,
+    heroIsCurrent = false,
+  }: Props = $props();
 
   const EMPTY_ITEM: LessonItem = {
     subject: null,
@@ -42,7 +52,11 @@
       class:no-time={!showLessonTime}
       class:cancelled={isCancelled(lesson)}
       class:exchange={isExchange(lesson) && !isCancelled(lesson)}
+      class:is-now={lesson.num === heroNum}
     >
+      {#if lesson.num === heroNum}
+        <span class="now-eyebrow">{heroIsCurrent ? 'Сейчас' : 'Далее'}</span>
+      {/if}
       {#if showLessonTime}
         <div class="card-time">
           <span class="num">{lesson.num}</span>
@@ -104,6 +118,21 @@
 
   .card.exchange {
     border-left-color: var(--color-exchange);
+  }
+
+  .card.is-now {
+    border-left-width: 6px;
+    background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+    box-shadow: var(--shadow-md);
+  }
+
+  .now-eyebrow {
+    grid-column: 1 / -1;
+    font-size: var(--text-xs);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-accent);
   }
 
   .card-time {

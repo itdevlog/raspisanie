@@ -275,16 +275,16 @@
     }
   });
 
-  // «Сейчас / далее» needs the server's current/next lesson; fetch it only for
-  // that layout in day mode (today/tomorrow). A failed load leaves `nowHint`
-  // null and the layout falls back to the first lesson.
+  // Every day layout highlights the current/next lesson, so fetch the server's
+  // `/now` hint in day mode (today/tomorrow) regardless of the chosen layout. A
+  // failed load leaves `nowHint` null and nothing is highlighted.
   const nowKey = $derived(
-    `${selection.schoolId ?? ''}|${selection.kind}|${selection.name ?? ''}|${dayDate ?? ''}|${scheduleView}`,
+    `${selection.schoolId ?? ''}|${selection.kind}|${selection.name ?? ''}|${dayDate ?? ''}`,
   );
   $effect(() => {
     void nowKey;
     const dayMode = period !== 'week' && period !== 'month';
-    if (scheduleView === 'nownext' && dayMode && !noPeriodDate && dayDate) {
+    if (dayMode && !noPeriodDate && dayDate) {
       void nowResource.load();
     }
   });

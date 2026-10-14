@@ -15,8 +15,18 @@
     lessons: Lesson[];
     kind: ScheduleKind;
     showLessonTime?: boolean;
+    /** Lesson number to highlight as the current/next one, or null. */
+    heroNum?: number | null;
+    /** Whether the highlighted lesson is in progress (else upcoming). */
+    heroIsCurrent?: boolean;
   }
-  let { lessons, kind, showLessonTime = true }: Props = $props();
+  let {
+    lessons,
+    kind,
+    showLessonTime = true,
+    heroNum = null,
+    heroIsCurrent = false,
+  }: Props = $props();
 
   const EMPTY_ITEM: LessonItem = {
     subject: null,
@@ -69,6 +79,7 @@
       class="tl-item"
       class:cancelled={isCancelled(lesson)}
       class:exchange={isExchange(lesson) && !isCancelled(lesson)}
+      class:is-now={lesson.num === heroNum}
     >
       {#if showLessonTime}
         <div class="tl-time">
@@ -78,6 +89,9 @@
       {/if}
       <span class="tl-marker" aria-hidden="true"></span>
       <div class="tl-card">
+        {#if lesson.num === heroNum}
+          <span class="now-eyebrow">{heroIsCurrent ? 'Сейчас' : 'Далее'}</span>
+        {/if}
         {#each effectiveItems(lesson) as item, i (i)}
           <div class="tl-row">
             <span class="subject" class:method={item.is_method_hour}>{itemSubjectLabel(item)}</span>
@@ -174,6 +188,26 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: var(--color-surface);
+  }
+
+  .tl-item.is-now .tl-card {
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+    box-shadow: var(--shadow-md);
+  }
+
+  .tl-item.is-now .tl-marker::before {
+    transform: scale(1.4);
+  }
+
+  .now-eyebrow {
+    display: block;
+    margin-bottom: var(--space-1);
+    font-size: var(--text-xs);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-accent);
   }
 
   .tl-row {

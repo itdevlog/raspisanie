@@ -57,6 +57,12 @@
     day.lessons.filter((lesson) => !isHiddenFreeLesson(lesson, strikeoutFreeLsn)),
   );
   const state = $derived(dayState({ ...day, lessons: visibleLessons }));
+
+  // Highlight the current/next lesson in every layout (not only «Сейчас и
+  // далее») using the server `/now` hint. Nothing is highlighted when there
+  // is no hint, so an empty/evening day is not mislabelled.
+  const heroNum = $derived(now?.current ?? now?.next ?? null);
+  const heroIsCurrent = $derived(now?.current != null);
 </script>
 
 <section class="day">
@@ -74,11 +80,11 @@
     <StateNotice title="Занятий нет" detail="Расписание на этот день пустое." />
   {:else}
     {#if view === 'cards'}
-      <ScheduleCards lessons={visibleLessons} {kind} {showLessonTime} />
+      <ScheduleCards lessons={visibleLessons} {kind} {showLessonTime} {heroNum} {heroIsCurrent} />
     {:else if view === 'table'}
-      <ScheduleTable lessons={visibleLessons} {kind} {showLessonTime} />
+      <ScheduleTable lessons={visibleLessons} {kind} {showLessonTime} {heroNum} {heroIsCurrent} />
     {:else if view === 'timeline'}
-      <ScheduleTimeline lessons={visibleLessons} {kind} {showLessonTime} />
+      <ScheduleTimeline lessons={visibleLessons} {kind} {showLessonTime} {heroNum} {heroIsCurrent} />
     {:else if view === 'nownext'}
       <ScheduleNowNext lessons={visibleLessons} {kind} {showLessonTime} {now} />
     {/if}

@@ -14,8 +14,18 @@
     lessons: Lesson[];
     kind: ScheduleKind;
     showLessonTime?: boolean;
+    /** Lesson number to highlight as the current/next one, or null. */
+    heroNum?: number | null;
+    /** Whether the highlighted lesson is in progress (else upcoming). */
+    heroIsCurrent?: boolean;
   }
-  let { lessons, kind, showLessonTime = true }: Props = $props();
+  let {
+    lessons,
+    kind,
+    showLessonTime = true,
+    heroNum = null,
+    heroIsCurrent = false,
+  }: Props = $props();
 
   const EMPTY_ITEM: LessonItem = {
     subject: null,
@@ -57,12 +67,16 @@
         <tr
           class:cancelled={isCancelled(lesson)}
           class:exchange={isExchange(lesson) && !isCancelled(lesson)}
+          class:is-now={lesson.num === heroNum}
         >
           {#if showLessonTime && i === 0}
             <td class="num" rowspan={effectiveItems(lesson).length}>{lesson.num}</td>
             <td class="clock" rowspan={effectiveItems(lesson).length}>{lessonTime(lesson)}</td>
           {/if}
           <td>
+            {#if i === 0 && lesson.num === heroNum}
+              <span class="now-eyebrow">{heroIsCurrent ? 'Сейчас' : 'Далее'}</span>
+            {/if}
             <span class="subject" class:method={item.is_method_hour}>{itemSubjectLabel(item)}</span>
             {#if item.groups}
               <span class="group">{item.groups}</span>
@@ -123,6 +137,19 @@
   .grid .clock {
     width: 5rem;
     color: var(--lesson-time);
+  }
+
+  .grid tr.is-now td {
+    background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+  }
+
+  .now-eyebrow {
+    display: block;
+    font-size: var(--text-xs);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-accent);
   }
 
   .subject {

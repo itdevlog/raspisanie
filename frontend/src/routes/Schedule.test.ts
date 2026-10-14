@@ -848,8 +848,9 @@ describe('Schedule screen', () => {
       await waitFor(() => expect(client.getDay).toHaveBeenCalled());
       await waitFor(() => expect(container.querySelector('table.grid')).toBeTruthy());
       expect(container.querySelector('.cards')).toBeNull();
-      // Table view does not request the /now hint.
-      expect(client.getNow).not.toHaveBeenCalled();
+      // Every day layout requests the /now hint (to highlight the current
+      // lesson), the table view included.
+      await waitFor(() => expect(client.getNow).toHaveBeenCalled());
     });
 
     it('renders the «Карточки» view', async () => {
@@ -968,6 +969,57 @@ describe('Schedule screen', () => {
         el.textContent?.trim(),
       );
       expect(subjects).toEqual(['Русский', 'Физика', 'Химия']);
+    });
+
+    it('highlights the current lesson in the «Карточки» view', async () => {
+      const { selection, day } = setup([lesson(1, 'Русский'), lesson(2, 'Физика'), lesson(3, 'Химия')]);
+      const client = makeClient({
+        getDay: vi.fn().mockResolvedValue(day),
+        getNow: vi.fn().mockResolvedValue({
+          server_time: '2026-10-05T10:00:00+03:00',
+          current: { num: 2, time: '09:00-09:45', subject: 'Физика', room: '202', in_minutes: 20 },
+          next: null,
+        }),
+      });
+      const { container, findByText } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), scheduleView: 'cards' },
+      });
+      expect(await findByText('Сейчас')).toBeTruthy();
+      expect(container.querySelector('.card.is-now')?.textContent).toContain('Физика');
+    });
+
+    it('highlights the current lesson in the «Таблица» view', async () => {
+      const { selection, day } = setup([lesson(1, 'Русский'), lesson(2, 'Физика'), lesson(3, 'Химия')]);
+      const client = makeClient({
+        getDay: vi.fn().mockResolvedValue(day),
+        getNow: vi.fn().mockResolvedValue({
+          server_time: '2026-10-05T10:00:00+03:00',
+          current: { num: 2, time: '09:00-09:45', subject: 'Физика', room: '202', in_minutes: 20 },
+          next: null,
+        }),
+      });
+      const { container, findByText } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), scheduleView: 'table' },
+      });
+      expect(await findByText('Сейчас')).toBeTruthy();
+      expect(container.querySelector('tr.is-now')?.textContent).toContain('Физика');
+    });
+
+    it('highlights the current lesson in the «Таймлайн» view', async () => {
+      const { selection, day } = setup([lesson(1, 'Русский'), lesson(2, 'Физика'), lesson(3, 'Химия')]);
+      const client = makeClient({
+        getDay: vi.fn().mockResolvedValue(day),
+        getNow: vi.fn().mockResolvedValue({
+          server_time: '2026-10-05T10:00:00+03:00',
+          current: { num: 2, time: '09:00-09:45', subject: 'Физика', room: '202', in_minutes: 20 },
+          next: null,
+        }),
+      });
+      const { container, findByText } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), scheduleView: 'timeline' },
+      });
+      expect(await findByText('Сейчас')).toBeTruthy();
+      expect(container.querySelector('.tl-item.is-now')?.textContent).toContain('Физика');
     });
 
     it('degrades to the first lesson when the /now hint is unavailable', async () => {
