@@ -30,7 +30,7 @@ describe('settings store', () => {
     expect(store.defaultKind).toBe('class');
     expect(store.strikeoutFreeLsn).toBeNull();
     expect(store.showLessonTime).toBe(true);
-    expect(store.scheduleView).toBe('compact');
+    expect(store.scheduleView).toBe('cards');
     expect(store.pushQuietHours).toBe(true);
   });
 
@@ -125,7 +125,7 @@ describe('settings store', () => {
     });
     const store = createSettingsStore(storage);
     expect(store.current).toEqual(DEFAULT_SETTINGS);
-    expect(store.scheduleView).toBe('compact');
+    expect(store.scheduleView).toBe('cards');
   });
 
   it('applies skin/accent/font as data attributes on the target', () => {

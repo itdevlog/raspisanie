@@ -1,5 +1,5 @@
 <script lang="ts">
-  // /variants — a read-only comparison screen: the SAME day rendered in five
+  // /variants — a read-only comparison screen: the SAME day rendered in four
   // alternative layouts so the best one can be picked before touching the real
   // Schedule screen.
   //
@@ -9,9 +9,9 @@
   // The page always renders, even with no school selected.
   //
   // Each layout is rendered through the SAME components the real Schedule screen
-  // uses ({@link DayView} for «Компактный», {@link ScheduleBody} for the rest),
-  // so the preview can never drift from the live screen. `chrome={false}` hides
-  // the day heading/notices that the section captions already convey.
+  // uses ({@link ScheduleBody}), so the preview can never drift from the live
+  // screen. `chrome={false}` hides the day heading/notices that the section
+  // captions already convey.
   import {
     api as defaultApi,
     selection as defaultSelection,
@@ -23,7 +23,6 @@
     type SelectionStore,
     type TodayStore,
   } from '../lib';
-  import DayView from '../components/DayView.svelte';
   import ScheduleBody from '../components/schedule/ScheduleBody.svelte';
   import StateNotice from '../components/StateNotice.svelte';
 
@@ -97,7 +96,7 @@
 
   <h2>Варианты расписания</h2>
   <p class="intro">
-    Один и тот же день в пяти оформлениях — выберите самый удобный. Вид можно выбрать в настройках
+    Один и тот же день в четырёх оформлениях — выберите самый удобный. Вид можно выбрать в настройках
     («Вид расписания»), экран расписания использует его сразу.
   </p>
 
@@ -111,37 +110,30 @@
     />
   {/if}
 
-  <!-- 1. Compact — the current Schedule look, for reference. -->
-  <section class="variant" data-variant="compact">
-    <h3>1. Компактный (текущий)</h3>
-    <p class="caption">Как выглядит экран расписания сейчас — эталон для сравнения.</p>
-    <DayView {day} kind={day.kind} {strikeoutFreeLsn} />
-  </section>
-
-  <!-- 2. Cards — time column + strong subject, muted teacher, room chip. -->
+  <!-- 1. Cards — time column + strong subject, muted teacher, room chip. -->
   <section class="variant" data-variant="cards">
-    <h3>2. Карточки</h3>
+    <h3>1. Карточки</h3>
     <p class="caption">Каждый урок — отдельная карточка: слева время, справа предмет.</p>
     <ScheduleBody {day} kind={day.kind} view="cards" {strikeoutFreeLsn} chrome={false} />
   </section>
 
-  <!-- 3. Table — dense, aligned columns. -->
+  <!-- 2. Table — dense, aligned columns. -->
   <section class="variant" data-variant="table">
-    <h3>3. Таблица</h3>
+    <h3>2. Таблица</h3>
     <p class="caption">Плотные выровненные столбцы — удобно быстро просматривать.</p>
     <ScheduleBody {day} kind={day.kind} view="table" {strikeoutFreeLsn} chrome={false} />
   </section>
 
-  <!-- 4. Timeline — a vertical time gutter with visible gaps. -->
+  <!-- 3. Timeline — a vertical time gutter with visible gaps. -->
   <section class="variant" data-variant="timeline">
-    <h3>4. Таймлайн</h3>
+    <h3>3. Таймлайн</h3>
     <p class="caption">Вертикальная шкала времени: пустые промежутки видны как разрывы.</p>
     <ScheduleBody {day} kind={day.kind} view="timeline" {strikeoutFreeLsn} chrome={false} />
   </section>
 
-  <!-- 5. Now / next — a hero card for the current/next lesson + the rest. -->
+  <!-- 4. Now / next — a hero card for the current/next lesson + the rest. -->
   <section class="variant" data-variant="now-next">
-    <h3>5. Сейчас / далее</h3>
+    <h3>4. Сейчас / далее</h3>
     <p class="caption">Крупная карточка ближайшего урока, остальные — компактным списком.</p>
     <ScheduleBody {day} kind={day.kind} view="nownext" {strikeoutFreeLsn} chrome={false} />
   </section>

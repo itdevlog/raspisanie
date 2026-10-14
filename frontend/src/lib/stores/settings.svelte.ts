@@ -21,8 +21,8 @@ export type Accent = 'blue' | 'green' | 'purple';
 export type FontSize = 'normal' | 'large';
 /** The section offered first when the app opens. */
 export type DefaultKind = 'class' | 'teacher';
-/** How the real Schedule screen lays out a day. `compact` is the original look. */
-export type ScheduleView = 'compact' | 'cards' | 'table' | 'timeline' | 'nownext';
+/** How the real Schedule screen lays out a day. */
+export type ScheduleView = 'cards' | 'table' | 'timeline' | 'nownext';
 
 /** Persisted user preferences. */
 export interface Settings {
@@ -38,7 +38,7 @@ export interface Settings {
   strikeoutFreeLsn: boolean | null;
   /** Show the lesson number and time in the day/week rows. */
   showLessonTime: boolean;
-  /** Day layout used by the Schedule screen (`compact` reproduces the original). */
+  /** Day layout used by the Schedule screen. */
   scheduleView: ScheduleView;
   /** «Не беспокоить ночью» (Web Push, 22:00–07:00); default on. */
   pushQuietHours: boolean;
@@ -70,7 +70,6 @@ export const DEFAULT_KIND_LABELS: Record<DefaultKind, string> = {
 };
 
 export const SCHEDULE_VIEW_LABELS: Record<ScheduleView, string> = {
-  compact: 'Компактный',
   cards: 'Карточки',
   table: 'Таблица',
   timeline: 'Таймлайн',
@@ -85,7 +84,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultKind: 'class',
   strikeoutFreeLsn: null,
   showLessonTime: true,
-  scheduleView: 'compact',
+  scheduleView: 'cards',
   pushQuietHours: true,
 };
 
@@ -93,13 +92,7 @@ const SKINS: readonly Skin[] = ['classic', 'minimal', 'dark', 'contrast', 'youth
 const ACCENTS: readonly Accent[] = ['blue', 'green', 'purple'];
 const FONT_SIZES: readonly FontSize[] = ['normal', 'large'];
 const DEFAULT_KINDS: readonly DefaultKind[] = ['class', 'teacher'];
-const SCHEDULE_VIEWS: readonly ScheduleView[] = [
-  'compact',
-  'cards',
-  'table',
-  'timeline',
-  'nownext',
-];
+const SCHEDULE_VIEWS: readonly ScheduleView[] = ['cards', 'table', 'timeline', 'nownext'];
 
 /** Element that receives the `data-*` theme attributes (defaults to `<html>`). */
 export interface ThemeAttributeTarget {

@@ -29,17 +29,16 @@ function makeLesson(overrides: Partial<Lesson> = {}): Lesson {
 }
 
 describe('Variants comparison screen', () => {
-  it('renders all five labelled layout sections', () => {
+  it('renders all four labelled layout sections', () => {
     const { container, getByText } = render(Variants, {
       props: { client: makeClient(), selection: makeSelection(), today: makeToday() },
     });
 
-    expect(container.querySelectorAll('[data-variant]')).toHaveLength(5);
-    expect(getByText('1. Компактный (текущий)')).toBeTruthy();
-    expect(getByText('2. Карточки')).toBeTruthy();
-    expect(getByText('3. Таблица')).toBeTruthy();
-    expect(getByText('4. Таймлайн')).toBeTruthy();
-    expect(getByText('5. Сейчас / далее')).toBeTruthy();
+    expect(container.querySelectorAll('[data-variant]')).toHaveLength(4);
+    expect(getByText('1. Карточки')).toBeTruthy();
+    expect(getByText('2. Таблица')).toBeTruthy();
+    expect(getByText('3. Таймлайн')).toBeTruthy();
+    expect(getByText('4. Сейчас / далее')).toBeTruthy();
   });
 
   it('falls back to the built-in sample day when no school is selected', () => {

@@ -114,7 +114,7 @@ describe('App shell', () => {
 
     await fireEvent.click(getByRole('button', { name: 'Показать варианты расписания' }));
 
-    expect(await findByText('1. Компактный (текущий)')).toBeTruthy();
+    expect(await findByText('1. Карточки')).toBeTruthy();
     expect(fake.location.pathname).toBe('/variants');
   });
 

@@ -45,6 +45,6 @@ describe('WeekView', () => {
     const { container } = render(WeekView, {
       props: { week, kind: 'class', strikeoutFreeLsn: false },
     });
-    expect(container.querySelector('.lesson')).toBeNull();
+    expect(container.querySelector('.card')).toBeNull();
   });
 });

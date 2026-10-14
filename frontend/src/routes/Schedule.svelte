@@ -88,7 +88,7 @@
     strikeoutFreeLsn?: boolean;
     /** Show lesson numbers/times (user setting; forwarded to the day/week views). */
     showLessonTime?: boolean;
-    /** Day layout chosen in Settings; defaults to the original «Компактный». */
+    /** Day layout chosen in Settings; defaults to «Карточки». */
     scheduleView?: ScheduleView;
     /** «Не беспокоить ночью» (Web Push) — carried into the initial subscribe. */
     pushQuietHours?: boolean;
@@ -110,7 +110,7 @@
     pushSupported = undefined,
     strikeoutFreeLsn = true,
     showLessonTime = true,
-    scheduleView = 'compact',
+    scheduleView = 'cards',
     pushQuietHours = true,
   }: Props = $props();
 

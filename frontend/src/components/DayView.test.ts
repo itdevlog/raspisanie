@@ -32,7 +32,7 @@ describe('DayView', () => {
     });
     expect(getByText('Математика')).toBeTruthy();
     expect(getByText('Иванов')).toBeTruthy();
-    expect(getByText('каб. 101')).toBeTruthy();
+    expect(getByText('101')).toBeTruthy();
     expect(getByText('08:00–08:45')).toBeTruthy();
   });
 
@@ -40,7 +40,7 @@ describe('DayView', () => {
     const day = makeDay({ lessons: [makeLesson({ has_exchange: true })] });
     const { getByText, container } = render(DayView, { props: { day, kind: 'class' } });
     expect(getByText('Замена')).toBeTruthy();
-    expect(container.querySelector('.lesson.exchange')).toBeTruthy();
+    expect(container.querySelector('.card.exchange')).toBeTruthy();
   });
 
   it('highlights a cancellation and strikes through the subject', () => {
@@ -49,8 +49,8 @@ describe('DayView', () => {
     });
     const { getByText, container } = render(DayView, { props: { day, kind: 'class' } });
     expect(getByText('Отменён')).toBeTruthy();
-    expect(container.querySelector('.lesson.cancelled')).toBeTruthy();
-    expect(container.querySelector('.lesson.exchange')).toBeNull();
+    expect(container.querySelector('.card.cancelled')).toBeTruthy();
+    expect(container.querySelector('.card.exchange')).toBeNull();
   });
 
   it('shows the vacation state with no lessons', () => {
@@ -77,34 +77,6 @@ describe('DayView', () => {
   it('shows an empty state when the day has no lessons', () => {
     const { getByText } = render(DayView, { props: { day: makeDay(), kind: 'class' } });
     expect(getByText('Занятий нет')).toBeTruthy();
-  });
-
-  it('shows the academic period when present', () => {
-    const day = makeDay({
-      period: { b: '01.09.2026', e: '31.05.2027', name: '01.09.2026 - 31.05.2027' },
-    });
-    const { getByText } = render(DayView, { props: { day, kind: 'class' } });
-    expect(getByText('На период: 01.09.2026 - 31.05.2027')).toBeTruthy();
-  });
-
-  it('does not show a period line when the day has none', () => {
-    const { container } = render(DayView, { props: { day: makeDay(), kind: 'class' } });
-    expect(container.querySelector('.period')).toBeNull();
-  });
-
-  it('shows a non-first shift indicator without assuming shift 2', () => {
-    const { getByText, container } = render(DayView, {
-      props: { day: makeDay({ shift: 6, lessons: [makeLesson()] }), kind: 'class' },
-    });
-    expect(getByText('Смена 6')).toBeTruthy();
-    expect(container.querySelector('.shift')?.getAttribute('data-shift')).toBe('6');
-  });
-
-  it('hides the shift indicator for the first shift', () => {
-    const { container } = render(DayView, {
-      props: { day: makeDay({ shift: 1, lessons: [makeLesson()] }), kind: 'class' },
-    });
-    expect(container.querySelector('.shift')).toBeNull();
   });
 
   it('shows group names per lesson item', () => {
@@ -155,22 +127,15 @@ describe('DayView', () => {
     expect(queryByText('M')).toBeNull();
   });
 
-  it('strikes through a free lesson (no subject)', () => {
+  it('renders a card for a subject-less free lesson', () => {
     const lesson = makeLesson({ items: [] });
     const { container } = render(DayView, {
       props: { day: makeDay({ lessons: [lesson] }), kind: 'class' },
     });
-    expect(container.querySelector('.lesson.free')).toBeTruthy();
+    expect(container.querySelector('.card')).toBeTruthy();
   });
 
-  it('does not mark a lesson with a subject as free', () => {
-    const { container } = render(DayView, {
-      props: { day: makeDay({ lessons: [makeLesson()] }), kind: 'class' },
-    });
-    expect(container.querySelector('.lesson.free')).toBeNull();
-  });
-
-  it('strikes free lessons when strikeoutFreeLsn is true (W41)', () => {
+  it('renders free lessons when strikeoutFreeLsn is true (W41)', () => {
     const { container } = render(DayView, {
       props: {
         day: makeDay({ lessons: [makeLesson({ items: [] })] }),
@@ -178,7 +143,7 @@ describe('DayView', () => {
         strikeoutFreeLsn: true,
       },
     });
-    expect(container.querySelector('.lesson.free')).toBeTruthy();
+    expect(container.querySelector('.card')).toBeTruthy();
   });
 
   it('hides free lessons when strikeoutFreeLsn is false (W41 fix)', () => {
@@ -189,9 +154,8 @@ describe('DayView', () => {
         strikeoutFreeLsn: false,
       },
     });
-    expect(container.querySelector('.lesson.free')).toBeNull();
     // The row is not rendered at all; the day collapses to the empty state.
-    expect(container.querySelector('.lesson')).toBeNull();
+    expect(container.querySelector('.card')).toBeNull();
     expect(getByText('Занятий нет')).toBeTruthy();
   });
 
@@ -205,7 +169,7 @@ describe('DayView', () => {
         strikeoutFreeLsn: false,
       },
     });
-    expect(container.querySelector('.lesson')).toBeNull();
+    expect(container.querySelector('.card')).toBeNull();
     expect(queryByText('Отменён')).toBeNull();
     // No "Есть отмены" notice when the cancelled rows are hidden.
     expect(queryByText('Есть отмены')).toBeNull();
@@ -221,18 +185,18 @@ describe('DayView', () => {
         strikeoutFreeLsn: true,
       },
     });
-    expect(container.querySelector('.lesson.cancelled')).toBeTruthy();
+    expect(container.querySelector('.card.cancelled')).toBeTruthy();
     expect(getByText('Отменён')).toBeTruthy();
   });
 
-  it('keeps free rows struck when strikeoutFreeLsn is absent (default)', () => {
+  it('renders free rows when strikeoutFreeLsn is absent (default)', () => {
     const { container } = render(DayView, {
       props: {
         day: makeDay({ lessons: [makeLesson({ items: [] })] }),
         kind: 'class',
       },
     });
-    expect(container.querySelector('.lesson.free')).toBeTruthy();
+    expect(container.querySelector('.card')).toBeTruthy();
   });
 
   it('hides the lesson number and time when showLessonTime is false', () => {

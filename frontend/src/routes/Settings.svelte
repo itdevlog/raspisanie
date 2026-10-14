@@ -76,7 +76,7 @@
   const ACCENTS: Accent[] = ['blue', 'green', 'purple'];
   const FONTS: FontSize[] = ['normal', 'large'];
   const DEFAULT_KINDS: DefaultKind[] = ['class', 'teacher'];
-  const SCHEDULE_VIEWS: ScheduleView[] = ['compact', 'cards', 'table', 'timeline', 'nownext'];
+  const SCHEDULE_VIEWS: ScheduleView[] = ['cards', 'table', 'timeline', 'nownext'];
 
   let pushState = $state<'idle' | 'busy' | 'on'>(untrack(() => pushInitiallyOn) ? 'on' : 'idle');
   let pushNotice = $state<string | null>(null);
@@ -293,8 +293,7 @@
     </div>
 
     <p class="hint" role="note">
-      Так выглядит расписание дня. «Компактный» — привычный вид, остальные — из сравнения вариантов
-      ниже.
+      Так выглядит расписание дня. Другой формат — из сравнения вариантов ниже.
     </p>
   </fieldset>
 

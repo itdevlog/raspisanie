@@ -854,7 +854,7 @@ describe('Schedule screen', () => {
       expect(getByText('Русский')).toBeTruthy();
     });
 
-    it('falls back to the compact list for «Сейчас / далее» in the week view', async () => {
+    it('falls back to «Карточки» for «Сейчас / далее» in the week view', async () => {
       const { selection, day } = setup();
       const client = makeClient({
         getWeek: vi.fn().mockResolvedValue({ days: [day], weekday_num: 5 }),
@@ -871,7 +871,8 @@ describe('Schedule screen', () => {
       await waitFor(() => expect(client.getWeek).toHaveBeenCalled());
 
       expect(await findByText('Математика')).toBeTruthy();
-      // No per-day hero card, and no /now request in week mode.
+      // Each day renders as cards, with no per-day hero card and no /now request.
+      expect(container.querySelector('.cards')).toBeTruthy();
       expect(container.querySelector('.hero')).toBeNull();
       expect(client.getNow).not.toHaveBeenCalled();
     });

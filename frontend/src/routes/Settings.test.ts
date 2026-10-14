@@ -96,16 +96,15 @@ describe('Settings screen', () => {
     expect(settings.showLessonTime).toBe(false);
   });
 
-  it('offers the five schedule views and persists the choice', async () => {
+  it('offers the four schedule views and persists the choice', async () => {
     const settings = makeSettings();
     const { getByRole } = render(Settings, { props: { settings } });
 
-    expect(getByRole('radio', { name: 'Компактный' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Карточки' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Таблица' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Таймлайн' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Сейчас и далее' })).toBeTruthy();
-    expect(settings.scheduleView).toBe('compact');
+    expect(settings.scheduleView).toBe('cards');
 
     await fireEvent.click(getByRole('radio', { name: 'Таймлайн' }));
     expect(settings.scheduleView).toBe('timeline');

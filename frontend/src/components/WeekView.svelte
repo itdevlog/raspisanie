@@ -11,7 +11,7 @@
     strikeoutFreeLsn?: boolean;
     /** Show lesson numbers/times (user setting; forwarded to every day). */
     showLessonTime?: boolean;
-    /** Day layout for every day in the week; defaults to «Компактный». */
+    /** Day layout for every day in the week; defaults to «Карточки». */
     view?: ScheduleView;
   }
   let {
@@ -19,12 +19,12 @@
     kind,
     strikeoutFreeLsn = true,
     showLessonTime = true,
-    view = 'compact',
+    view = 'cards',
   }: Props = $props();
 
   // A hero card per day would be odd in a week grid, so `nownext` falls back to
-  // the compact list for each day (the week has no single "current" lesson).
-  const perDayView = $derived(view === 'nownext' ? 'compact' : view);
+  // the cards list for each day (the week has no single "current" lesson).
+  const perDayView = $derived(view === 'nownext' ? 'cards' : view);
 </script>
 
 <div class="week">
