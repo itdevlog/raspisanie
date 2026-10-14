@@ -7,6 +7,8 @@
 ![Tests](https://img.shields.io/badge/tests-868%20pytest%20%2B%20403%20vitest-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+**🇷🇺 Русский** · **🇬🇧 [English](README.en.md)**
+
 Асинхронный Telegram-бот для просмотра расписания и **автоматических уведомлений о заменах**.
 Тянет данные из системы **Nikasoft (Ника-Люкс)**, следит за изменениями в реальном времени и
 присылает уведомления подписчикам. Дополнительно поднимает **Mini App** (веб-расписание
