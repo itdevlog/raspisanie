@@ -939,6 +939,37 @@ describe('Schedule screen', () => {
       expect(getByText('Русский')).toBeTruthy();
     });
 
+    it('renders the current lesson in its place in the day, not on top', async () => {
+      const { selection, day } = setup([
+        lesson(1, 'Русский'),
+        lesson(2, 'Физика'),
+        lesson(3, 'Химия'),
+      ]);
+      const client = makeClient({
+        getDay: vi.fn().mockResolvedValue(day),
+        getNow: vi.fn().mockResolvedValue({
+          server_time: '2026-10-05T10:00:00+03:00',
+          current: { num: 2, time: '09:00-09:45', subject: 'Физика', room: '202', in_minutes: 20 },
+          next: { num: 3, time: '09:55-10:40', subject: 'Химия', room: '303', in_minutes: 55 },
+        }),
+      });
+
+      const { container, findByText } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), scheduleView: 'nownext' },
+      });
+
+      await waitFor(() => expect(client.getNow).toHaveBeenCalled());
+      expect(await findByText('Сейчас')).toBeTruthy();
+      // Lesson 2 is the gathered hero, but it must keep its chronological slot:
+      // the day reads 1 → 2 → 3, not hero-first.
+      const dayList = container.querySelector('.day');
+      expect(dayList).toBeTruthy();
+      const subjects = Array.from(dayList!.querySelectorAll('.subject')).map((el) =>
+        el.textContent?.trim(),
+      );
+      expect(subjects).toEqual(['Русский', 'Физика', 'Химия']);
+    });
+
     it('degrades to the first lesson when the /now hint is unavailable', async () => {
       const { selection, day } = setup([lesson(1, 'Русский'), lesson(2, 'Физика')]);
       const client = makeClient({

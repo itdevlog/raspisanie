@@ -41,44 +41,51 @@
   const showTeacher = $derived(kind !== 'teacher');
   const showRoom = $derived(kind !== 'room');
   const pick = $derived(pickNowNext(lessons, now));
+  // The hero lesson's position in the day, so it renders in chronological
+  // order instead of being lifted above the rest.
+  const heroIndex = $derived(pick.hero ? lessons.indexOf(pick.hero) : -1);
 </script>
 
-{#if pick.hero}
-  {@const hero = pick.hero}
-  <article
-    class="hero"
-    class:cancelled={isCancelled(hero)}
-    class:exchange={isExchange(hero) && !isCancelled(hero)}
-  >
-    <span class="hero-eyebrow">{pick.heroIsCurrent ? 'Сейчас' : 'Далее'}</span>
-    <div class="hero-top">
-      {#if showLessonTime}
-        <span class="clock hero-clock">{lessonTime(hero)}</span>
-        <span class="num">Урок {hero.num}</span>
-      {/if}
-      {#if lessonStatusLabel(hero)}
-        <span class="badge">{lessonStatusLabel(hero)}</span>
-      {/if}
-    </div>
-    <span class="subject hero-subject" class:method={firstItem(hero).is_method_hour}>
-      {itemSubjectLabel(firstItem(hero))}
-    </span>
-    <div class="hero-meta">
-      {#if firstItem(hero).groups}
-        <span class="group">{firstItem(hero).groups}</span>
-      {/if}
-      {#if showTeacher && firstItem(hero).teacher}
-        <span class="teacher">{firstItem(hero).teacher}</span>
-      {/if}
-      {#if showRoom && firstItem(hero).room}
-        <span class="chip">{firstItem(hero).room}</span>
-      {/if}
-    </div>
-  </article>
-
-  {#if pick.rest.length > 0}
-    <ol class="rest">
-      {#each pick.rest as lesson (lesson.num)}
+{#if lessons.length === 0}
+  <StateNotice title="Занятий нет" detail="Расписание на этот день пустое." />
+{:else}
+  <ol class="rest">
+    {#each lessons as lesson, i (lesson.num)}
+      {#if i === heroIndex}
+        {@const hero = lesson}
+        <li class="hero-item">
+          <article
+            class="hero"
+            class:cancelled={isCancelled(hero)}
+            class:exchange={isExchange(hero) && !isCancelled(hero)}
+          >
+            <span class="hero-eyebrow">{pick.heroIsCurrent ? 'Сейчас' : 'Далее'}</span>
+            <div class="hero-top">
+              {#if showLessonTime}
+                <span class="clock hero-clock">{lessonTime(hero)}</span>
+                <span class="num">Урок {hero.num}</span>
+              {/if}
+              {#if lessonStatusLabel(hero)}
+                <span class="badge">{lessonStatusLabel(hero)}</span>
+              {/if}
+            </div>
+            <span class="subject hero-subject" class:method={firstItem(hero).is_method_hour}>
+              {itemSubjectLabel(firstItem(hero))}
+            </span>
+            <div class="hero-meta">
+              {#if firstItem(hero).groups}
+                <span class="group">{firstItem(hero).groups}</span>
+              {/if}
+              {#if showTeacher && firstItem(hero).teacher}
+                <span class="teacher">{firstItem(hero).teacher}</span>
+              {/if}
+              {#if showRoom && firstItem(hero).room}
+                <span class="chip">{firstItem(hero).room}</span>
+              {/if}
+            </div>
+          </article>
+        </li>
+      {:else}
         <li
           class="rest-item"
           class:cancelled={isCancelled(lesson)}
@@ -98,11 +105,9 @@
             <span class="chip">{firstItem(lesson).room}</span>
           {/if}
         </li>
-      {/each}
-    </ol>
-  {/if}
-{:else}
-  <StateNotice title="Занятий нет" detail="Расписание на этот день пустое." />
+      {/if}
+    {/each}
+  </ol>
 {/if}
 
 <style>
