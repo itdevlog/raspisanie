@@ -91,6 +91,9 @@
           <span class="subject" class:method={firstItem(lesson).is_method_hour}>
             {itemSubjectLabel(firstItem(lesson))}
           </span>
+          {#if lessonStatusLabel(lesson)}
+            <span class="badge">{lessonStatusLabel(lesson)}</span>
+          {/if}
           {#if showRoom && firstItem(lesson).room}
             <span class="chip">{firstItem(lesson).room}</span>
           {/if}

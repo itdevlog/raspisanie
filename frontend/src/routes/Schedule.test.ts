@@ -864,6 +864,52 @@ describe('Schedule screen', () => {
       await waitFor(() => expect(container.querySelector('.cards')).toBeTruthy());
     });
 
+    it('marks replacements and cancellations on the lesson, not above the schedule', async () => {
+      const { selection, day } = setup([
+        { ...lesson(1, 'Математика'), has_exchange: true },
+        { ...lesson(2, 'Физика'), is_cancelled: true },
+      ]);
+      const client = makeClient({ getDay: vi.fn().mockResolvedValue(day) });
+
+      const { container, findByText, queryByText } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), scheduleView: 'cards' },
+      });
+
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+      // Marked beside the lesson...
+      expect(await findByText('Замена')).toBeTruthy();
+      expect(await findByText('Отменён')).toBeTruthy();
+      expect(container.querySelector('.card.exchange')).toBeTruthy();
+      expect(container.querySelector('.card.cancelled')).toBeTruthy();
+      // ...and the summary blocks above the schedule are gone.
+      expect(queryByText('Есть замены')).toBeNull();
+      expect(queryByText('Изменения отмечены ниже.')).toBeNull();
+      expect(queryByText('Есть отмены')).toBeNull();
+    });
+
+    it('marks a cancelled lesson in the «Сейчас / далее» rest list', async () => {
+      const { selection, day } = setup([
+        lesson(1, 'Русский'),
+        { ...lesson(2, 'Физика'), is_cancelled: true },
+      ]);
+      const client = makeClient({
+        getDay: vi.fn().mockResolvedValue(day),
+        getNow: vi.fn().mockResolvedValue({
+          server_time: '2026-10-05T10:00:00+03:00',
+          current: { num: 1, time: '08:00-08:45', subject: 'Русский', room: '101', in_minutes: 10 },
+          next: null,
+        }),
+      });
+
+      const { findByText, queryByText } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), scheduleView: 'nownext' },
+      });
+
+      await waitFor(() => expect(client.getNow).toHaveBeenCalled());
+      expect(await findByText('Отменён')).toBeTruthy();
+      expect(queryByText('Есть отмены')).toBeNull();
+    });
+
     it('uses /now to feature the current lesson in «Сейчас / далее»', async () => {
       const { selection, day } = setup([
         lesson(1, 'Русский'),

@@ -9,8 +9,6 @@
   import {
     dayState,
     dayTitle,
-    isCancelled,
-    isExchange,
     isHiddenFreeLesson,
   } from '../../lib/schedule-view';
   import ScheduleCards from './ScheduleCards.svelte';
@@ -59,8 +57,6 @@
     day.lessons.filter((lesson) => !isHiddenFreeLesson(lesson, strikeoutFreeLsn)),
   );
   const state = $derived(dayState({ ...day, lessons: visibleLessons }));
-  const hasExchanges = $derived(visibleLessons.some((lesson) => isExchange(lesson)));
-  const hasCancellations = $derived(visibleLessons.some((lesson) => isCancelled(lesson)));
 </script>
 
 <section class="day">
@@ -77,16 +73,6 @@
   {:else if chrome && state === 'empty'}
     <StateNotice title="Занятий нет" detail="Расписание на этот день пустое." />
   {:else}
-    {#if chrome && hasExchanges}<StateNotice
-        title="Есть замены"
-        detail="Изменения отмечены ниже."
-      />{/if}
-    {#if chrome && hasCancellations}<StateNotice
-        tone="error"
-        title="Есть отмены"
-        detail="Отменённые уроки зачёркнуты."
-      />{/if}
-
     {#if view === 'cards'}
       <ScheduleCards lessons={visibleLessons} {kind} {showLessonTime} />
     {:else if view === 'table'}
