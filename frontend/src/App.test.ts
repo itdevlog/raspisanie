@@ -240,11 +240,12 @@ describe('App shell', () => {
       getClasses: vi.fn().mockResolvedValue({ classes: ['5А', '6Б'] }),
     });
 
-    const { findByRole } = render(App, {
+    const { findByRole, getByRole } = render(App, {
       props: { client, selection, today: makeToday(), router },
     });
 
-    await fireEvent.click(await findByRole('button', { name: '6Б' }));
+    await fireEvent.click(await findByRole('button', { name: '6' }));
+    await fireEvent.click(getByRole('button', { name: 'Б' }));
 
     await waitFor(() => expect(selection.name).toBe('6Б'));
     expect(selection.kind).toBe('class');

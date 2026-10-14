@@ -3,8 +3,11 @@
   //
   // The active kind is the source of truth (`selection.kind`); a compact kind
   // switcher (Классы/Учителя/Кабинеты) lets the user jump between sections
-  // without going back to the landing. Favorites of the kind are shown first as
-  // starred rows; a search box filters the full name list client-side.
+  // without going back to the landing. Classes use a two-step picker (grade
+  // strip, then letter buttons) instead of the long row scroll; a search box
+  // filters the full name list client-side and temporarily brings the rows
+  // back. Favorites of the kind are shown first as starred rows; the selected
+  // entity is highlighted wherever it appears.
   //
   // Tapping a name opens its schedule via `onOpenEntity(kind, name)`, wired by
   // the shell to `selection.selectEntity(...)` + `openSchedule()`.
@@ -13,6 +16,8 @@
     selection as defaultSelection,
     favorites as defaultFavorites,
     createAsync,
+    groupClassesByGrade,
+    parseClassName,
     KIND_PLURAL_LABELS,
     type FavoritesStore,
     type ScheduleApiClient,
@@ -69,6 +74,8 @@
   };
 
   let query = $state('');
+  /** Grade chosen in the two-step class picker (`null` = show the grade strip). */
+  let selectedGrade = $state<string | null>(null);
 
   // Names for the ACTIVE kind within the selected school.
   const listResource = createAsync<string[]>(async () => {
@@ -90,10 +97,11 @@
   const listKey = $derived(`${selection.schoolId ?? ''}|${selection.kind}`);
 
   // Load the active kind's list whenever the selected school/kind changes, and
-  // drop any stale query so the new section starts from a clean filter.
+  // drop any stale query/grade so the new section starts from a clean filter.
   $effect(() => {
     void listKey;
     query = '';
+    selectedGrade = null;
     if (!selection.schoolId) {
       listResource.reset();
       return;
@@ -130,7 +138,39 @@
     }
     return allNames.filter((name) => name.toLowerCase().includes(normalized));
   });
+
+  // Two-step class picker: grades first, then the letters within one grade.
+  const gradeGroups = $derived(kind === 'class' ? groupClassesByGrade(allNames) : []);
+  const selectedGroup = $derived(
+    gradeGroups.find((group) => group.grade === selectedGrade) ?? null,
+  );
 </script>
+
+{#snippet favoriteRows()}
+  <li class="section-label" aria-hidden="true">Избранное</li>
+  {#each favoriteItems as favorite (favorite.name)}
+    <li class="row-item favorite">
+      <button
+        type="button"
+        class="row row-open nika-btn nika-btn-light"
+        class:is-selected={selection.name === favorite.name}
+        aria-current={selection.name === favorite.name ? 'true' : undefined}
+        onclick={() => openEntity(favorite.name)}
+      >
+        <span class="star" aria-hidden="true">★</span>
+        <span class="row-name">{favorite.name}</span>
+      </button>
+      <button
+        type="button"
+        class="row-remove"
+        aria-label={`Удалить из избранного: ${favorite.name}`}
+        onclick={() => removeFavorite(favorite.name)}
+      >
+        ×
+      </button>
+    </li>
+  {/each}
+{/snippet}
 
 <section class="list">
   <button
@@ -185,36 +225,60 @@
       <StateNotice tone="muted" title={KIND_EMPTY[kind]} detail={KIND_EMPTY_DETAIL[kind]} />
     {:else if filteredNames.length === 0}
       <p class="empty" role="status">Ничего не найдено</p>
+    {:else if kind === 'class' && query === '' && gradeGroups.length > 0}
+      {#if favoriteItems.length > 0}
+        <ul class="rows">
+          {@render favoriteRows()}
+        </ul>
+      {/if}
+      {#if selectedGrade === null}
+        <div class="grades" role="group" aria-label="Параллели">
+          {#each gradeGroups as group (group.grade)}
+            <button
+              type="button"
+              class="grade nika-btn nika-btn-light"
+              onclick={() => (selectedGrade = group.grade)}
+            >
+              {group.grade}
+            </button>
+          {/each}
+        </div>
+      {:else}
+        <h3 class="grade-heading">{selectedGrade}</h3>
+        <div class="letters" role="group" aria-label={`Параллель ${selectedGrade}`}>
+          {#each selectedGroup?.classes ?? [] as className (className)}
+            <button
+              type="button"
+              class="letter nika-btn nika-btn-light"
+              aria-current={selection.name === className}
+              onclick={() => openEntity(className)}
+            >
+              {parseClassName(className)?.letter || className}
+            </button>
+          {/each}
+        </div>
+        <div class="actions">
+          <button
+            type="button"
+            class="grades-reset nika-btn nika-btn-light"
+            onclick={() => (selectedGrade = null)}
+          >
+            Все параллели
+          </button>
+        </div>
+      {/if}
     {:else}
       <ul class="rows">
         {#if favoriteItems.length > 0}
-          <li class="section-label" aria-hidden="true">Избранное</li>
-          {#each favoriteItems as favorite (favorite.name)}
-            <li class="row-item favorite">
-              <button
-                type="button"
-                class="row row-open nika-btn nika-btn-light"
-                onclick={() => openEntity(favorite.name)}
-              >
-                <span class="star" aria-hidden="true">★</span>
-                <span class="row-name">{favorite.name}</span>
-              </button>
-              <button
-                type="button"
-                class="row-remove"
-                aria-label={`Удалить из избранного: ${favorite.name}`}
-                onclick={() => removeFavorite(favorite.name)}
-              >
-                ×
-              </button>
-            </li>
-          {/each}
+          {@render favoriteRows()}
         {/if}
         {#each filteredNames as name (name)}
           <li class="row-item">
             <button
               type="button"
               class="row row-open nika-btn nika-btn-light"
+              class:is-selected={selection.name === name}
+              aria-current={selection.name === name ? 'true' : undefined}
               onclick={() => openEntity(name)}
             >
               <span class="row-name">{name}</span>
@@ -351,6 +415,33 @@
 
   .row-remove:hover {
     background: var(--color-cancel-soft);
+  }
+
+  /* Two-step class picker: grade strip, then the letters of one grade. */
+  .grades,
+  .letters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-4);
+  }
+
+  .grade,
+  .letter {
+    flex: 1 0 3.5rem;
+    min-width: 44px;
+  }
+
+  .grade-heading {
+    font-size: var(--text-lg);
+    margin: 0 0 var(--space-3);
+  }
+
+  /* Highlight the selected entity (rows and letter buttons alike). */
+  .is-selected,
+  .letter[aria-current='true'] {
+    border-color: var(--color-accent);
+    background-image: var(--nika-pressed-light-image);
   }
 
   .actions {

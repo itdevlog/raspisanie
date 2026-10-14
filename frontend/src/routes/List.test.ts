@@ -1,7 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, screen, waitFor } from '@testing-library/svelte';
 import List from './List.svelte';
 import { makeClient, makeFavorites, makeSelection } from '../test-helpers';
+
+/** Base props for the screen: a stub client with a school selected. */
+function baseProps() {
+  const selection = makeSelection();
+  selection.selectSchool('gym1');
+  return {
+    client: makeClient(),
+    selection,
+    favorites: makeFavorites(),
+    onOpenEntity: vi.fn(),
+  };
+}
 
 describe('List screen (per-kind rows)', () => {
   beforeEach(() => {
@@ -16,12 +28,13 @@ describe('List screen (per-kind rows)', () => {
       getClasses: vi.fn().mockResolvedValue({ classes: ['5А', '6Б'] }),
     });
 
-    const { findByRole } = render(List, {
+    const { findByRole, getByRole } = render(List, {
       props: { client, selection, favorites: makeFavorites(), onOpenEntity },
     });
 
     expect(await findByRole('heading', { name: 'Классы' })).toBeTruthy();
-    await fireEvent.click(await findByRole('button', { name: '6Б' }));
+    await fireEvent.click(await findByRole('button', { name: '6' }));
+    await fireEvent.click(getByRole('button', { name: 'Б' }));
     expect(onOpenEntity).toHaveBeenCalledWith('class', '6Б');
   });
 
@@ -76,12 +89,9 @@ describe('List screen (per-kind rows)', () => {
       getRooms: vi.fn().mockResolvedValue({ rooms: ['101', '202'] }),
     });
 
-    const { findByRole, queryByRole } = render(List, {
+    const { findByRole } = render(List, {
       props: { client, selection, favorites: makeFavorites() },
     });
-
-    expect(await findByRole('button', { name: '5А' })).toBeTruthy();
-    expect(queryByRole('button', { name: 'Свободные кабинеты' })).toBeNull();
 
     selection.selectKind('room');
     await waitFor(() => expect(client.getRooms).toHaveBeenCalledWith('gym1'));
@@ -119,7 +129,7 @@ describe('List screen (per-kind rows)', () => {
     expect(await findByText('Учителя не найдены')).toBeTruthy();
   });
 
-  it('switches the active kind through the compact switcher', async () => {
+  it('switches the active kind through the kind switcher', async () => {
     const selection = makeSelection();
     selection.selectSchool('gym1');
     const onKindChange = vi.fn();
@@ -143,5 +153,31 @@ describe('List screen (per-kind rows)', () => {
 
     await fireEvent.click(await findByRole('button', { name: 'На главную' }));
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('picks a class in two steps: grade, then letter', async () => {
+    const onOpenEntity = vi.fn();
+    render(List, { props: { ...baseProps(), onOpenEntity } });
+    await fireEvent.click(await screen.findByRole('button', { name: '6' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Б' }));
+    expect(onOpenEntity).toHaveBeenCalledWith('class', '6Б');
+  });
+
+  it('still lets search filter all classes', async () => {
+    render(List, { props: baseProps() });
+    await fireEvent.input(await screen.findByRole('searchbox', { name: 'Поиск' }), {
+      target: { value: '6' },
+    });
+    expect(screen.getByRole('button', { name: '6Б' })).toBeTruthy();
+  });
+
+  it('highlights the selected entity', async () => {
+    const selection = makeSelection();
+    // The list loads names only for a selected school.
+    selection.selectSchool('gym1');
+    selection.selectEntity('class', '5А');
+    render(List, { props: { ...baseProps(), selection } });
+    await fireEvent.click(await screen.findByRole('button', { name: '5' }));
+    expect(screen.getByRole('button', { name: 'А' }).getAttribute('aria-current')).toBe('true');
   });
 });
