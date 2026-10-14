@@ -26,6 +26,10 @@
     favorites as defaultFavorites,
     settings as defaultSettings,
     createAsync,
+    enablePush,
+    disablePush,
+    getPermission,
+    isPushSupported,
     telegramEnv,
     initTelegramWebApp,
     initTelegramBackButton,
@@ -47,6 +51,12 @@
     favorites?: FavoritesStore;
     settings?: SettingsStore;
     router?: RouteStore;
+    /** Injectable push opt-in (tests); defaults to the real {@link enablePush}. */
+    pushEnable?: typeof enablePush;
+    /** Injectable push opt-out (tests); defaults to the real {@link disablePush}. */
+    pushDisable?: typeof disablePush;
+    /** Test seam: force whether the header bell is shown; defaults to Web Push support. */
+    pushSupported?: boolean;
     /** Injectable Telegram WebApp env (tests); defaults to the real `window.Telegram`. */
     telegram?: TelegramEnv;
     /** Element to receive Telegram theme CSS variables; defaults to `<html>`. */
@@ -59,6 +69,9 @@
     favorites = defaultFavorites,
     settings = defaultSettings,
     router = defaultRoute,
+    pushEnable = enablePush,
+    pushDisable = disablePush,
+    pushSupported: injectedPushSupported = undefined,
     telegram = typeof window === 'undefined' ? { webApp: undefined } : telegramEnv(),
     themeTarget = typeof document === 'undefined' ? undefined : document.documentElement,
   }: Props = $props();
@@ -95,6 +108,13 @@
   // A `null` user override follows the school feature flag; an explicit
   // true/false wins (the user's strike-through preference).
   const strikeoutFreeLsn = $derived(settings.strikeoutFreeLsn ?? schoolStrikeoutFreeLsn);
+
+  // The header bell is a master on/off switch for push. It is shown only where
+  // Web Push is usable; `pushSupported` is injectable so tests can force it.
+  const pushSupported = $derived(injectedPushSupported ?? isPushSupported());
+  // ON reflects both the user's switch and the browser permission: a denied
+  // permission means notifications cannot be on, so the bell reads muted.
+  const bellOn = $derived(settings.notificationsEnabled && getPermission() !== 'denied');
 
   // Mirror the chosen skin/accent/font onto `<html>` at start and on change.
   $effect(() => {
@@ -241,13 +261,36 @@
   // A bare `/schedule` (no entity) falls back to the landing instead of a broken
   // screen.
   const showSchedule = $derived(
-    currentRoute.view === 'schedule' &&
-      currentRoute.school !== null &&
-      currentRoute.name !== null,
+    currentRoute.view === 'schedule' && currentRoute.school !== null && currentRoute.name !== null,
   );
 
   function goHome(): void {
     router.goTo('home');
+  }
+
+  /**
+   * Toggle the master push switch from the header bell. Turning off drops the
+   * subscription; turning on flips the flag and, when an entity is selected,
+   * subscribes it (a push subscription is always per class/teacher/room, so a
+   * bare switch cannot subscribe on its own).
+   */
+  async function toggleNotifications(): Promise<void> {
+    if (bellOn) {
+      await pushDisable();
+      settings.setNotificationsEnabled(false);
+      return;
+    }
+    settings.setNotificationsEnabled(true);
+    const schoolId = selection.schoolId;
+    const name = selection.name;
+    if (schoolId && name) {
+      await pushEnable({
+        schoolId,
+        name,
+        kind: selection.kind,
+        quiet: settings.pushQuietHours,
+      });
+    }
   }
 </script>
 
@@ -257,6 +300,35 @@
   <header class="app-header">
     <div class="header-row">
       <h1 class="app-header-title">{selectedSchool?.name ?? 'Расписание'}</h1>
+      {#if pushSupported}
+        <button
+          type="button"
+          class="bell nika-btn nika-btn-light"
+          class:on={bellOn}
+          aria-label="Уведомления"
+          aria-pressed={bellOn}
+          onclick={toggleNotifications}
+        >
+          <svg class="bell-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M13.73 21a2 2 0 0 1-3.46 0"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+      {/if}
       <button
         type="button"
         class="gear nika-btn nika-btn-light"
@@ -282,7 +354,7 @@
     <Settings
       {settings}
       {selection}
-      schoolStrikeoutFreeLsn={schoolStrikeoutFreeLsn}
+      {schoolStrikeoutFreeLsn}
       onBack={goHome}
       onOpenVariants={() => router.goTo('variants')}
     />
@@ -380,6 +452,29 @@
     padding: 0;
     font-size: var(--text-lg);
     line-height: 1;
+  }
+
+  /* Push master switch: an inline SVG so it recolours with the active skin,
+     sized/aligned to the gear so the header row stays even. */
+  .bell {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    color: var(--color-muted);
+  }
+
+  .bell.on {
+    color: var(--color-accent);
+  }
+
+  .bell-icon {
+    display: block;
+    width: 22px;
+    height: 22px;
   }
 
   .app-header-subtitle {

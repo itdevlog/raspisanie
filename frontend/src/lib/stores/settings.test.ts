@@ -32,6 +32,7 @@ describe('settings store', () => {
     expect(store.showLessonTime).toBe(true);
     expect(store.scheduleView).toBe('cards');
     expect(store.pushQuietHours).toBe(true);
+    expect(store.notificationsEnabled).toBe(true);
   });
 
   it('persists each change under the namespaced key', () => {
@@ -46,6 +47,7 @@ describe('settings store', () => {
     store.setShowLessonTime(false);
     store.setScheduleView('timeline');
     store.setPushQuietHours(false);
+    store.setNotificationsEnabled(false);
 
     expect(store.skin).toBe('dark');
     expect(store.accent).toBe('purple');
@@ -55,6 +57,7 @@ describe('settings store', () => {
     expect(store.showLessonTime).toBe(false);
     expect(store.scheduleView).toBe('timeline');
     expect(store.pushQuietHours).toBe(false);
+    expect(store.notificationsEnabled).toBe(false);
 
     const raw = storage.getItem('raspisanie:settings');
     expect(raw).not.toBeNull();
@@ -67,6 +70,7 @@ describe('settings store', () => {
       showLessonTime: false,
       scheduleView: 'timeline',
       pushQuietHours: false,
+      notificationsEnabled: false,
     });
   });
 
@@ -77,6 +81,23 @@ describe('settings store', () => {
 
     store.setPushQuietHours(false);
     expect(createSettingsStore(storage).pushQuietHours).toBe(false);
+  });
+
+  it('persists notificationsEnabled across a new store and defaults it on', () => {
+    const storage = memoryStorage();
+    const store = createSettingsStore(storage);
+    expect(store.notificationsEnabled).toBe(true);
+
+    store.setNotificationsEnabled(false);
+    expect(store.notificationsEnabled).toBe(false);
+    expect(createSettingsStore(storage).notificationsEnabled).toBe(false);
+  });
+
+  it('falls back to the default notificationsEnabled for a non-boolean', () => {
+    const store = createSettingsStore(
+      memoryStorage({ 'raspisanie:settings': JSON.stringify({ notificationsEnabled: 'yes' }) }),
+    );
+    expect(store.notificationsEnabled).toBe(true);
   });
 
   it('persists the schedule view across a new store', () => {
@@ -154,10 +175,12 @@ describe('settings store', () => {
     const store = createSettingsStore(storage);
     store.setSkin('dark');
     store.setAccent('green');
+    store.setNotificationsEnabled(false);
 
     store.reset();
 
     expect(store.current).toEqual(DEFAULT_SETTINGS);
+    expect(store.notificationsEnabled).toBe(true);
     expect(storage.getItem('raspisanie:settings')).toBeNull();
   });
 });

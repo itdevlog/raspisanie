@@ -546,6 +546,94 @@ describe('App shell', () => {
     await waitFor(() => expect(fake.location.search).toContain('date=05.10.2026'));
   });
 
+  describe('notification bell', () => {
+    it('shows the bell in the header when push is supported', async () => {
+      const { findByRole } = render(App, {
+        props: { ...baseProps(), settings: makeSettings(), pushSupported: true },
+      });
+
+      expect(await findByRole('button', { name: 'Уведомления' })).toBeTruthy();
+    });
+
+    it('hides the bell when push is not supported', async () => {
+      const { findByRole, queryByRole } = render(App, {
+        props: { ...baseProps(), settings: makeSettings(), pushSupported: false },
+      });
+
+      // The header is rendered before the absence is asserted.
+      await findByRole('button', { name: 'Настройки' });
+      expect(queryByRole('button', { name: 'Уведомления' })).toBeNull();
+    });
+
+    it('reflects the ON state with the accent class and aria-pressed', async () => {
+      const settings = makeSettings();
+      const { findByRole } = render(App, {
+        props: { ...baseProps(), settings, pushSupported: true },
+      });
+
+      const bell = await findByRole('button', { name: 'Уведомления' });
+      expect(bell.getAttribute('aria-pressed')).toBe('true');
+      expect(bell.classList.contains('on')).toBe(true);
+    });
+
+    it('renders the bell off when notifications are disabled', async () => {
+      const settings = makeSettings();
+      settings.setNotificationsEnabled(false);
+      const { findByRole } = render(App, {
+        props: { ...baseProps(), settings, pushSupported: true },
+      });
+
+      const bell = await findByRole('button', { name: 'Уведомления' });
+      expect(bell.getAttribute('aria-pressed')).toBe('false');
+      expect(bell.classList.contains('on')).toBe(false);
+    });
+
+    it('disables push and clears the flag when turned off', async () => {
+      const settings = makeSettings();
+      const pushDisable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+      const { findByRole } = render(App, {
+        props: { ...baseProps(), settings, pushSupported: true, pushDisable },
+      });
+
+      await fireEvent.click(await findByRole('button', { name: 'Уведомления' }));
+
+      await waitFor(() => expect(pushDisable).toHaveBeenCalled());
+      expect(settings.notificationsEnabled).toBe(false);
+    });
+
+    it('enables push for the selected entity when turned on', async () => {
+      const settings = makeSettings();
+      settings.setNotificationsEnabled(false);
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('class', '5А');
+      const pushEnable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+      const { findByRole } = render(App, {
+        props: {
+          client: makeClient(),
+          selection,
+          today: makeToday(),
+          router: makeRouter().router,
+          settings,
+          pushSupported: true,
+          pushEnable,
+        },
+      });
+
+      await fireEvent.click(await findByRole('button', { name: 'Уведомления' }));
+
+      await waitFor(() =>
+        expect(pushEnable).toHaveBeenCalledWith({
+          schoolId: 'gym1',
+          name: '5А',
+          kind: 'class',
+          quiet: true,
+        }),
+      );
+      expect(settings.notificationsEnabled).toBe(true);
+    });
+  });
+
   describe('W24 Telegram WebApp', () => {
     it('works in a regular browser with no SDK (no crash, BackButton inert)', async () => {
       const fake = makeFakeEnv('/list/room');

@@ -42,6 +42,8 @@ export interface Settings {
   scheduleView: ScheduleView;
   /** «Не беспокоить ночью» (Web Push, 22:00–07:00); default on. */
   pushQuietHours: boolean;
+  /** Master switch for Web Push notifications; default on. */
+  notificationsEnabled: boolean;
 }
 
 /** Human-readable labels, shared by the Settings screen and its tests. */
@@ -86,6 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showLessonTime: true,
   scheduleView: 'cards',
   pushQuietHours: true,
+  notificationsEnabled: true,
 };
 
 const SKINS: readonly Skin[] = ['classic', 'minimal', 'dark', 'contrast', 'youth'];
@@ -133,6 +136,10 @@ function sanitizeSettings(raw: unknown): Settings {
       typeof obj.pushQuietHours === 'boolean'
         ? obj.pushQuietHours
         : DEFAULT_SETTINGS.pushQuietHours,
+    notificationsEnabled:
+      typeof obj.notificationsEnabled === 'boolean'
+        ? obj.notificationsEnabled
+        : DEFAULT_SETTINGS.notificationsEnabled,
   };
 }
 
@@ -181,6 +188,9 @@ export function createSettingsStore(storage?: StorageLike | null) {
     get pushQuietHours(): boolean {
       return state.pushQuietHours;
     },
+    get notificationsEnabled(): boolean {
+      return state.notificationsEnabled;
+    },
     setSkin(skin: Skin): void {
       persist({ ...state, skin });
     },
@@ -205,6 +215,9 @@ export function createSettingsStore(storage?: StorageLike | null) {
     },
     setPushQuietHours(pushQuietHours: boolean): void {
       persist({ ...state, pushQuietHours });
+    },
+    setNotificationsEnabled(notificationsEnabled: boolean): void {
+      persist({ ...state, notificationsEnabled });
     },
     /**
      * Mirror the current settings onto the theme target (defaults to `<html>`)
