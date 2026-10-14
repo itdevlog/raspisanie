@@ -30,6 +30,8 @@
     supportsServiceWorker,
     offlineState,
     connectivityEnv,
+    isSecondShift,
+    shiftLabel,
     shiftMonth,
     swipe,
     watchConnectivity,
@@ -67,6 +69,8 @@
     onOpenDay?: (date: string) => void;
     /** Return to the list view (the kind tab bar's landing screen). */
     onBack?: () => void;
+    /** Return to the home screen (the school/entity landing screen). */
+    onHome?: () => void;
     /** Browser origin used when building the share link; defaults to `location`. */
     origin?: string;
     /** Injectable navigator for tests; defaults to the global `navigator`. */
@@ -101,6 +105,7 @@
     pinnedDate = null,
     onOpenDay,
     onBack,
+    onHome,
     origin = typeof window === 'undefined' ? '' : window.location.origin,
     navigatorLike = undefined,
     connectivity = typeof window === 'undefined' ? undefined : connectivityEnv(),
@@ -481,7 +486,16 @@
     ← к списку
   </button>
 
-  <h2>Расписание{selection.name ? ` ${selection.name}` : ''}</h2>
+  <button class="back nika-btn nika-btn-light" aria-label="На главную" onclick={() => onHome?.()}>
+    ← на главную
+  </button>
+
+  <h2>
+    Расписание{selection.name ? ` ${selection.name}` : ''}
+    {#if dayResource.data && isSecondShift(dayResource.data.shift)}<span class="shift-badge"
+        >{shiftLabel(dayResource.data.shift)}</span
+      >{/if}
+  </h2>
 
   {#if !selection.schoolId}
     <StateNotice title="Школа не выбрана" detail="Сначала выберите школу в списке." />
@@ -615,6 +629,7 @@
             {showLessonTime}
             view={scheduleView}
             now={nowHint}
+            showHeading={false}
           />
         {/if}
       </div>
@@ -666,6 +681,22 @@
     text-transform: uppercase;
     letter-spacing: 0.02em;
     margin: 0 0 var(--space-4);
+  }
+
+  /* Compact «смена» badge next to the schedule name (second shift only). */
+  .shift-badge {
+    display: inline-block;
+    margin-left: var(--space-2);
+    padding: 2px var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    font-size: var(--text-sm);
+    font-weight: normal;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--color-muted);
+    vertical-align: middle;
   }
 
   .pinned {

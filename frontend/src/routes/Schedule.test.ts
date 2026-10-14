@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, screen, waitFor, within } from '@testing-library/svelte';
 import Schedule from './Schedule.svelte';
 import {
   fireSwipe,
@@ -15,6 +15,14 @@ import type { DaySchedule } from '../lib/api/types';
 
 function dayFor(date: string, overrides: Partial<DaySchedule> = {}): DaySchedule {
   return makeDay({ date, ...overrides });
+}
+
+/** Base props for the screen: a stub client and a selected class entity. */
+function baseProps() {
+  const selection = makeSelection();
+  selection.selectSchool('gym1');
+  selection.selectEntity('class', '5А');
+  return { client: makeClient(), selection, today: makeToday('05.10.2026') };
 }
 
 describe('Schedule screen', () => {
@@ -419,7 +427,7 @@ describe('Schedule screen', () => {
       selection.selectSchool('gym1');
       selection.selectEntity('class', '5А');
 
-      const { getByRole, findByText } = render(Schedule, {
+      const { getByRole, findByText, queryByText } = render(Schedule, {
         props: { client, selection, today: makeToday('05.10.2026'), onOpenDay },
       });
       await waitFor(() => expect(client.getDay).toHaveBeenCalled());
@@ -434,8 +442,10 @@ describe('Schedule screen', () => {
         expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '05.10.2026'),
       );
       expect(onOpenDay).toHaveBeenCalledWith('05.10.2026');
-      // The day view replaced the calendar.
-      expect(await findByText('Понедельник, 05.10.2026')).toBeTruthy();
+      // The day view replaced the calendar; the date shows only in the day nav
+      // (the body heading is suppressed).
+      expect(await findByText('05.10.2026, Понедельник')).toBeTruthy();
+      expect(queryByText('Понедельник, 05.10.2026')).toBeNull();
     });
 
     it('navigates months across the year boundary', async () => {
@@ -636,6 +646,50 @@ describe('Schedule screen', () => {
 
     await fireEvent.click(getByRole('button', { name: 'К списку' }));
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders both «К списку» and «На главную» controls wired to handlers', async () => {
+    const onBack = vi.fn();
+    const onHome = vi.fn();
+    render(Schedule, { props: { ...baseProps(), onBack, onHome } });
+    await fireEvent.click(await screen.findByRole('button', { name: 'К списку' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'На главную' }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(onHome).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a shift badge only for the second shift', async () => {
+    const second = render(Schedule, {
+      props: {
+        ...baseProps(),
+        client: makeClient({ getDay: vi.fn().mockResolvedValue(dayFor('05.10.2026', { shift: 2 })) }),
+      },
+    });
+    const secondHeading = within(second.container.querySelector('h2') as HTMLElement);
+    expect(await secondHeading.findByText('Смена 2')).toBeTruthy();
+
+    const first = render(Schedule, {
+      props: {
+        ...baseProps(),
+        client: makeClient({ getDay: vi.fn().mockResolvedValue(dayFor('05.10.2026', { shift: 1 })) }),
+      },
+    });
+    // Wait for the day payload before asserting the badge is absent.
+    const firstBody = within(first.container);
+    expect(await firstBody.findByText('Занятий нет')).toBeTruthy();
+    expect(firstBody.queryByText('Смена 2')).toBeNull();
+  });
+
+  it('shows the date only in the day navigation (no duplicate body heading)', async () => {
+    const client = makeClient({ getDay: vi.fn().mockResolvedValue(dayFor('05.10.2026')) });
+    const { container, findByText, queryByText } = render(Schedule, {
+      props: { ...baseProps(), client },
+    });
+
+    // The day payload is rendered, and the date lives only in the day nav.
+    expect(await findByText('Занятий нет')).toBeTruthy();
+    expect(within(container).getByText('05.10.2026, Понедельник')).toBeTruthy();
+    expect(queryByText('Понедельник, 05.10.2026')).toBeNull();
   });
 
   // Swipe navigation: day cursor, week offset and month cursor.
