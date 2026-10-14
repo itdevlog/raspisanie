@@ -16,6 +16,7 @@ export * from './telegram';
 export * from './schedule-view';
 export * from './sample-day';
 export * from './calendar';
+export * from './class-list';
 export * from './swipe';
 export * from './async.svelte';
 export * from './stores/persisted';
