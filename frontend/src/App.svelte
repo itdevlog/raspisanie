@@ -149,6 +149,16 @@
     }
   });
 
+  // Auto-favorite: any opened entity (its schedule shown for a school+name) is
+  // added to favorites. `favorites.add` is idempotent, so re-opening the same
+  // entity is a no-op and a single extra effect run after the write is stable.
+  $effect(() => {
+    const current = router.route;
+    if (current.view === 'schedule' && current.school && current.name) {
+      favorites.add(current.school, current.kind, current.name);
+    }
+  });
+
   /**
    * Open the schedule tab. When an entity is selected, encode it in the URL
    * (share scheme); otherwise switch to the bare schedule view.

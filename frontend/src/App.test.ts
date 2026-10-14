@@ -6,6 +6,7 @@ import {
   makeCalendarDay,
   makeClient,
   makeFakeEnv,
+  makeFavorites,
   makeRouter,
   makeSelection,
   makeSettings,
@@ -306,6 +307,13 @@ describe('App shell', () => {
     await waitFor(() =>
       expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '05.10.2026'),
     );
+  });
+
+  it('adds an opened entity to favorites automatically', async () => {
+    const favorites = makeFavorites();
+    const { router } = makeRouter(makeFakeEnv('/s/gym1/class/5%D0%90').env);
+    render(App, { props: { ...baseProps(), favorites, router } });
+    await waitFor(() => expect(favorites.has('gym1', 'class', '5А')).toBe(true));
   });
 
   it('threads strikeout_free_lsn=false from /api/schools into the schedule (W41 fix)', async () => {
