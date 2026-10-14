@@ -50,6 +50,9 @@
       <span class="detail">{summaryLine(current)}</span>
       <span class="hint">осталось {formatDuration(current.in_minutes)}</span>
     </p>
+    <p class="next-hint">
+      Дальше: {next ? summaryLine(next) : 'на сегодня уроков нет'}
+    </p>
   {:else if next}
     <p class="lesson" role="status">
       <strong>До начала</strong>
@@ -116,6 +119,13 @@
   .hint {
     display: block;
     margin-top: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+
+  /* Compact «what comes next» line under a running lesson. */
+  .next-hint {
+    margin: 0 0 var(--space-4);
     font-size: var(--text-sm);
     color: var(--color-muted);
   }

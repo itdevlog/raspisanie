@@ -61,6 +61,36 @@ describe('NowWidget', () => {
     expect(getByText('Уроков нет')).toBeTruthy();
   });
 
+  it('shows what comes next while a lesson is running', () => {
+    const { getByText } = render(NowWidget, {
+      props: {
+        data: nowWith({ current: currentLesson, next: nextLesson }),
+        status: 'ready',
+        error: null,
+      },
+    });
+    expect(getByText('Идёт урок')).toBeTruthy();
+    expect(getByText(/Дальше: 3\. Математика · каб\. 101/)).toBeTruthy();
+  });
+
+  it('states there is nothing more today when the running lesson is the last', () => {
+    const { getByText } = render(NowWidget, {
+      props: {
+        data: nowWith({ current: currentLesson, next: null }),
+        status: 'ready',
+        error: null,
+      },
+    });
+    expect(getByText('Дальше: на сегодня уроков нет')).toBeTruthy();
+  });
+
+  it('does not show a «Дальше» line when no lesson is running', () => {
+    const { queryByText } = render(NowWidget, {
+      props: { data: nowWith({ next: nextLesson }), status: 'ready', error: null },
+    });
+    expect(queryByText(/Дальше/)).toBeNull();
+  });
+
   it('shows a loading state before the first response', () => {
     const { getByText } = render(NowWidget, {
       props: { data: null, status: 'loading', error: null },

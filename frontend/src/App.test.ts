@@ -89,6 +89,28 @@ describe('App shell', () => {
     expect(link.getAttribute('href')).toContain('http');
   });
 
+  it('places the school-site link on the «Обновлено» row, not the title row', async () => {
+    const client = makeClient({
+      getSchools: vi.fn().mockResolvedValue({
+        today: '05.10.2026',
+        schools: [
+          {
+            id: 'gym1',
+            name: 'Гимназия №1',
+            loaded: true,
+            updated: '01.09.2026 10:00',
+            homepage_url: 'https://gym1.example.ru',
+          },
+        ],
+      }),
+    });
+
+    const { findByRole } = render(App, { props: { ...baseProps(), client } });
+    const link = await findByRole('link', { name: 'Школьный сайт' });
+    expect(link.closest('.header-row')).toBeNull();
+    expect(link.closest('.app-header-sub')).not.toBeNull();
+  });
+
   it('hides the school-site link when there is no homepage', async () => {
     // Школа без homepage_url.
     const client = makeClient({

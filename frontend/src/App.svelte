@@ -257,9 +257,6 @@
   <header class="app-header">
     <div class="header-row">
       <h1 class="app-header-title">{selectedSchool?.name ?? 'Расписание'}</h1>
-      {#if showHomepageLink && selectedSchool}
-        <a class="site-link" href={selectedSchool.homepage_url}>Школьный сайт</a>
-      {/if}
       <button
         type="button"
         class="gear nika-btn nika-btn-light"
@@ -269,8 +266,15 @@
         <span aria-hidden="true">⚙</span>
       </button>
     </div>
-    {#if selectedSchool?.updated}
-      <p class="app-header-subtitle">Обновлено {selectedSchool.updated}</p>
+    {#if selectedSchool?.updated || (showHomepageLink && selectedSchool)}
+      <div class="app-header-sub">
+        {#if selectedSchool?.updated}
+          <span class="app-header-subtitle">Обновлено {selectedSchool.updated}</span>
+        {/if}
+        {#if showHomepageLink && selectedSchool}
+          <a class="site-link" href={selectedSchool.homepage_url}>Школьный сайт</a>
+        {/if}
+      </div>
     {/if}
   </header>
 
@@ -379,10 +383,20 @@
   }
 
   .app-header-subtitle {
-    margin: 2px 0 0;
+    margin: 0;
     font-size: var(--text-sm);
     font-style: italic;
     font-weight: normal;
     opacity: 0.95;
+  }
+
+  /* Second header row: the «Обновлено» timestamp with the school-site link. */
+  .app-header-sub {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
+    margin-top: 2px;
   }
 </style>

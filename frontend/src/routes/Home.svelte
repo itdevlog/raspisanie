@@ -314,20 +314,17 @@
 
   /* Home menu: «Классы» and «Учителя» sit side by side (spec §2); «Кабинеты»
      spans both columns on its own row. Stays within the 40rem layout width. */
+  /* Three quick sections share one row; they stay within the 40rem layout. */
   .sections {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: var(--space-3);
     margin: var(--space-4) 0;
   }
 
   .section-btn {
     font-size: var(--text-lg);
-    padding: var(--space-4);
-  }
-
-  .section-btn[data-section='room'] {
-    grid-column: 1 / -1;
+    padding: var(--space-4) var(--space-2);
   }
 
   [role='status'] {
