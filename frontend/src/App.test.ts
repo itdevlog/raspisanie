@@ -13,6 +13,33 @@ import {
 } from './test-helpers';
 import { createRouteStore } from './lib/stores/route.svelte';
 
+/**
+ * Base App props: a selected school carrying homepage metadata, opened on a
+ * schedule deep link so the only «Школьный сайт» link on screen can be the
+ * header's (the landing still carries its own until Task 7 removes it).
+ */
+function baseProps() {
+  const selection = makeSelection();
+  selection.selectSchool('gym1');
+  const fake = makeFakeEnv('/s/gym1/class/5%D0%90');
+  const router = createRouteStore(fake.env);
+  const client = makeClient({
+    getSchools: vi.fn().mockResolvedValue({
+      today: '05.10.2026',
+      schools: [
+        {
+          id: 'gym1',
+          name: 'Гимназия №1',
+          loaded: true,
+          homepage_url: 'https://gym1.example.ru',
+          features: { homepage: true },
+        },
+      ],
+    }),
+  });
+  return { client, selection, today: makeToday(), router };
+}
+
 describe('App shell', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -51,6 +78,51 @@ describe('App shell', () => {
 
     expect(await findByRole('heading', { name: 'Гимназия №1' })).toBeTruthy();
     expect(await findByText('Обновлено 01.09.2026 10:00')).toBeTruthy();
+  });
+
+  it('shows a school-site link in the header when the school has a homepage', async () => {
+    // school с homepage_url и features.homepage !== false
+    const { findByRole } = render(App, { props: baseProps() });
+    const link = await findByRole('link', { name: 'Школьный сайт' });
+    expect(link.getAttribute('href')).toContain('http');
+  });
+
+  it('hides the school-site link when there is no homepage', async () => {
+    // Школа без homepage_url.
+    const client = makeClient({
+      getSchools: vi.fn().mockResolvedValue({
+        today: '05.10.2026',
+        schools: [{ id: 'gym1', name: 'Гимназия №1', loaded: true, homepage_url: null }],
+      }),
+    });
+
+    const { findByRole, queryByRole } = render(App, { props: { ...baseProps(), client } });
+
+    // The header reflects the loaded school before the absence is checked.
+    await findByRole('heading', { name: 'Гимназия №1' });
+    expect(queryByRole('link', { name: 'Школьный сайт' })).toBeNull();
+  });
+
+  it('hides the school-site link when features.homepage is false', async () => {
+    const client = makeClient({
+      getSchools: vi.fn().mockResolvedValue({
+        today: '05.10.2026',
+        schools: [
+          {
+            id: 'gym1',
+            name: 'Гимназия №1',
+            loaded: true,
+            homepage_url: 'https://gym1.example.ru',
+            features: { homepage: false },
+          },
+        ],
+      }),
+    });
+
+    const { findByRole, queryByRole } = render(App, { props: { ...baseProps(), client } });
+
+    await findByRole('heading', { name: 'Гимназия №1' });
+    expect(queryByRole('link', { name: 'Школьный сайт' })).toBeNull();
   });
 
   it('opens the settings screen from the header gear', async () => {
@@ -190,6 +262,16 @@ describe('App shell', () => {
 
     await fireEvent.click(await findByRole('button', { name: 'К списку' }));
     await waitFor(() => expect(fake.location.pathname).toBe('/list/class'));
+  });
+
+  it('routes the schedule «На главную» control home', async () => {
+    const fake = makeFakeEnv('/s/gym1/class/5%D0%90');
+    const router = createRouteStore(fake.env);
+
+    const { findByRole } = render(App, { props: { ...baseProps(), router } });
+
+    await fireEvent.click(await findByRole('button', { name: 'На главную' }));
+    await waitFor(() => expect(fake.location.pathname).toBe('/'));
   });
 
   it('opens a share deep link at the linked entity and date', async () => {

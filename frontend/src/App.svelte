@@ -85,6 +85,12 @@
     schoolsResource.data?.schools.find((school) => school.id === selection.schoolId) ?? null,
   );
   const schoolStrikeoutFreeLsn = $derived(selectedSchool?.features?.strikeout_free_lsn ?? true);
+  // The header offers the school homepage when the school has one and the
+  // feature is enabled; missing `features`/`homepage` mirrors the server
+  // default (enabled).
+  const showHomepageLink = $derived(
+    !!selectedSchool?.homepage_url && (selectedSchool?.features?.homepage ?? true),
+  );
   // A `null` user override follows the school feature flag; an explicit
   // true/false wins (the user's strike-through preference).
   const strikeoutFreeLsn = $derived(settings.strikeoutFreeLsn ?? schoolStrikeoutFreeLsn);
@@ -237,6 +243,9 @@
   <header class="app-header">
     <div class="header-row">
       <h1 class="app-header-title">{selectedSchool?.name ?? 'Расписание'}</h1>
+      {#if showHomepageLink && selectedSchool}
+        <a class="site-link" href={selectedSchool.homepage_url}>Школьный сайт</a>
+      {/if}
       <button
         type="button"
         class="gear nika-btn nika-btn-light"
@@ -276,6 +285,7 @@
       pushQuietHours={settings.pushQuietHours}
       onOpenDay={openDay}
       onBack={backToList}
+      onHome={goHome}
     />
   {:else if view === 'list'}
     <List
@@ -333,8 +343,21 @@
     line-height: 1.2;
   }
 
+  /* Both header controls share a consistent 44px height in the centred row. */
+  .site-link,
   .gear {
     flex: none;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  /* Stay legible on every header palette (skins recolour the header text). */
+  .site-link {
+    color: inherit;
+  }
+
+  .gear {
     min-width: 44px;
     padding: 0;
     font-size: var(--text-lg);
