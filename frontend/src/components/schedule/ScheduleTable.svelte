@@ -92,6 +92,7 @@
 <style>
   .grid {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
     font-size: var(--text-sm);
   }
@@ -99,9 +100,10 @@
   .grid th,
   .grid td {
     text-align: left;
-    padding: var(--space-2);
+    padding: var(--space-2) var(--space-1);
     border-bottom: 1px solid var(--color-border);
     vertical-align: top;
+    overflow-wrap: anywhere;
   }
 
   .grid thead th {
@@ -113,14 +115,13 @@
   }
 
   .grid .num {
-    width: 2.5rem;
+    width: 2.25rem;
     font-weight: bold;
     color: var(--lesson-num);
   }
 
   .grid .clock {
-    width: 6.5rem;
-    white-space: nowrap;
+    width: 5rem;
     color: var(--lesson-time);
   }
 
@@ -154,7 +155,6 @@
     font-size: var(--text-xs);
     font-weight: bold;
     color: var(--lesson-room);
-    white-space: nowrap;
   }
 
   .badge {
