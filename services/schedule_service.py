@@ -170,7 +170,8 @@ class ScheduleService(BaseScheduleService):
         schedule_data = self._get_schedule_data(eff_period_id, class_id, day_num, week_num)
         schedule_data = self.exchange_service.apply_exchanges_to_schedule(
             self.school_data['CLASSES'][class_id], schedule_data, date)
-        payload['lessons'] = self._lessons_payload(schedule_data)
+        payload['lessons'] = self._lessons_payload(
+            schedule_data, class_name=self.school_data['CLASSES'][class_id], date=date)
         return payload
 
     def get_week(self, class_name: str, week_offset: int = 0,

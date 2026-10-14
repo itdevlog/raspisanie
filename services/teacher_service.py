@@ -116,7 +116,7 @@ class TeacherService(BaseScheduleService):
             return payload
 
         schedule_data = self._get_teacher_schedule_data(eff_period_id, teacher_id, day_num, date)
-        payload['lessons'] = self._lessons_payload(schedule_data)
+        payload['lessons'] = self._lessons_payload(schedule_data, date=date)
         return payload
 
     def get_week(self, teacher_name: str, week_offset: int = 0,

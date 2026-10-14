@@ -366,13 +366,17 @@ class ExchangeDetector:
         subject: str = original.get('subject', '') if original else ''
         return subject or f"Урок {lesson_num}"
 
-    def _get_original_lesson(self, class_name: str, lesson_num: int | None,
+    @staticmethod
+    def _get_original_lesson(class_name: str, lesson_num: int | None,
                              date: datetime | None, school_data: dict | None = None) -> dict | None:
         """Исходный урок (предмет, преподаватель, кабинет) из CLASS_SCHEDULE.
 
         Ищет учебный период по дате и ключ `день*100 + урок` в расписании
         класса. Возвращает None, если данных нет — вызовы деградируют
         к заглушкам («Урок N», без деталей), а не падают.
+
+        Статический метод: не требует состояния детектора (кэша на диске) и
+        переиспользуется дневным payload'ом для diff'а «было → стало».
         """
         if not school_data or lesson_num is None:
             return None

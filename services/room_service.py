@@ -115,7 +115,7 @@ class RoomService(BaseScheduleService):
             return payload
 
         schedule_data = self._get_room_schedule_data(eff_period_id, room_id, day_num, date)
-        payload['lessons'] = self._lessons_payload(schedule_data)
+        payload['lessons'] = self._lessons_payload(schedule_data, date=date)
         return payload
 
     def get_week(self, room_name: str, week_offset: int = 0,

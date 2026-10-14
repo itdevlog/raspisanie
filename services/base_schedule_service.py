@@ -223,12 +223,19 @@ class BaseScheduleService:
                         merged[key] = name
         return merged
 
-    def _lessons_payload(self, schedule_data: list[dict]) -> list[dict]:
+    def _lessons_payload(self, schedule_data: list[dict], *,
+                         class_name: str | None = None,
+                         date: datetime | None = None) -> list[dict]:
         """Преобразует внутренние lesson-словари в JSON-payload.
 
         data['s'/'t'/'r'] — параллельные списки: s[0] идёт с t[0] и r[0] (группы).
         Дедупликация не нужна: группы валидны по отдельности. Имена неизвестных
         id (замены TEACH_EXCHANGE кладут имена, не id) — показываем как есть.
+
+        Если у урока есть замена/отмена и известны ``class_name``/``date``, в
+        payload добавляется опциональное поле ``exchange`` с diff'ом
+        «было → стало» (см. ``_lesson_exchange``). Для обычных уроков поле
+        отсутствует — payload обратно совместим.
         """
         lessons = []
         group_names = self._group_names()
@@ -258,15 +265,66 @@ class BaseScheduleService:
                     'groups': group_name,
                     'is_method_hour': subject_id == 'M',
                 })
-            lessons.append({
+            has_exchange = lesson.get('has_exchange', False)
+            is_cancelled = lesson.get('is_cancelled', False)
+            entry = {
                 'num': lesson['lesson_num'],
                 'start': times[0],
                 'end': times[1],
                 'items': items,
-                'has_exchange': lesson.get('has_exchange', False),
-                'is_cancelled': lesson.get('is_cancelled', False),
-            })
+                'has_exchange': has_exchange,
+                'is_cancelled': is_cancelled,
+            }
+            # Опционально: diff замены «было → стало» для popover фронтенда.
+            # class_name известен из аргумента (расписание класса) либо из
+            # самого урока (расписания учителя/кабинета — там он на уроке).
+            entity = lesson.get('class_name') or class_name
+            if date is not None and entity and (has_exchange or is_cancelled):
+                entry['exchange'] = self._lesson_exchange(
+                    lesson, items, entity, date, is_cancelled=is_cancelled)
+            lessons.append(entry)
         return lessons
+
+    def _lesson_exchange(self, lesson: dict, items: list[dict], class_name: str,
+                         date: datetime, *, is_cancelled: bool = False) -> dict:
+        """Diff урока «было → стало» для дневного payload.
+
+        «Было» берётся тем же lookup'ом, что и детектор замен
+        (``ExchangeDetector._get_original_lesson`` — исходный урок из
+        ``CLASS_SCHEDULE``). «Стало» — из уже применённых ``items`` (именно их
+        показывает payload как новый предмет/учителя/кабинет). Неизвестные
+        значения — ``None`` (не выдумываем). Для отменённого урока новых
+        значений нет: ``new_*`` = ``None``, флаг ``is_cancelled`` = True.
+        """
+        from services.exchange_detector import ExchangeDetector
+
+        original = ExchangeDetector._get_original_lesson(
+            class_name, lesson.get('lesson_num'), date, self.school_data) or {}
+        if is_cancelled:
+            new_subject = new_teacher = new_room = None
+        else:
+            new_subject = self._join_item_field(items, 'subject')
+            new_teacher = self._join_item_field(items, 'teacher')
+            new_room = self._join_item_field(items, 'room')
+        return {
+            'original_subject': original.get('subject') or None,
+            'original_teacher': original.get('teacher') or None,
+            'original_room': original.get('room') or None,
+            'new_subject': new_subject,
+            'new_teacher': new_teacher,
+            'new_room': new_room,
+            'is_cancelled': bool(is_cancelled),
+        }
+
+    @staticmethod
+    def _join_item_field(items: list[dict], field: str) -> str | None:
+        """', '-объединение непустых значений поля item'ов (без дублей)."""
+        values: list[str] = []
+        for item in items:
+            value = item.get(field)
+            if value and value not in values:
+                values.append(value)
+        return ', '.join(values) or None
 
     @property
     def weekday_num(self) -> int:
