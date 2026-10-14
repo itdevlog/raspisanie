@@ -4,8 +4,8 @@
 Проверяем четыре требования брифа:
 - `setup_services` создаёт `SnapshotExporter` и кладёт его в
   `bot_data['snapshot_exporter']` (ключ читает W5);
-- `_post_init` публикует снапшот после первичной загрузки `schools_data`,
-  вызывая синхронный `publish` через `asyncio.to_thread`;
+- `_publish_start_snapshot` публикует снапшот после первичной загрузки
+  `schools_data`, вызывая синхронный `publish` через `asyncio.to_thread`;
 - выключенный сервис (`EDGE_INGEST_URL` пуст) логирует info и не публикует;
 - ошибка публикации не роняет старт бота.
 """
@@ -94,9 +94,9 @@ def test_setup_services_registers_snapshot_exporter(monkeypatch, tmp_path):
     assert created and created[0][0] is b.config  # по Config
 
 
-# --- _post_init: публикация после загрузки ----------------------------------
+# --- _publish_start_snapshot: публикация после загрузки ---------------------
 
-def test_post_init_publishes_snapshot_via_to_thread():
+def test_start_snapshot_publishes_via_to_thread():
     """Снапшот публикуется после загрузки, синхронный publish — в отдельном потоке."""
     schools_data = {'school_133': {'SCHOOL_NAME': 'Школа'}}
     schools_config = {'school_133': {'name': 'Школа'}}
@@ -109,7 +109,7 @@ def test_post_init_publishes_snapshot_via_to_thread():
     }
     b = _make_post_init_bot(bot_data)
 
-    asyncio.run(b._post_init(b.application))
+    asyncio.run(b._publish_start_snapshot())
 
     assert len(exporter.calls) == 1
     snapshot = exporter.calls[0]
@@ -120,7 +120,7 @@ def test_post_init_publishes_snapshot_via_to_thread():
     assert exporter.thread_idents[0] != main_ident
 
 
-def test_post_init_publishes_even_when_schools_data_empty():
+def test_start_snapshot_publishes_even_when_schools_data_empty():
     """Данные пусты — снапшот всё равно собирается и публикуется (без фильтра)."""
     exporter = _RecordingExporter()
     bot_data = {
@@ -130,7 +130,7 @@ def test_post_init_publishes_even_when_schools_data_empty():
     }
     b = _make_post_init_bot(bot_data)
 
-    asyncio.run(b._post_init(b.application))
+    asyncio.run(b._publish_start_snapshot())
 
     assert len(exporter.calls) == 1
     assert exporter.calls[0]['schools'] == {}
@@ -166,7 +166,7 @@ def test_disabled_exporter_logs_info_and_does_not_publish(caplog):
     b = _make_post_init_bot(bot_data)
 
     with caplog.at_level(logging.INFO):
-        asyncio.run(b._post_init(b.application))
+        asyncio.run(b._publish_start_snapshot())
 
     assert any(
         'EDGE_INGEST_URL' in rec.message and rec.levelno == logging.INFO
@@ -176,7 +176,7 @@ def test_disabled_exporter_logs_info_and_does_not_publish(caplog):
 
 # --- ошибка публикации не роняет старт --------------------------------------
 
-def test_post_init_publish_error_does_not_crash_startup(caplog):
+def test_start_snapshot_publish_error_does_not_crash_startup(caplog):
     exporter = _RecordingExporter(error=RuntimeError('edge down'))
     bot_data = {
         'schools_data': {'s1': {}},
@@ -186,13 +186,13 @@ def test_post_init_publish_error_does_not_crash_startup(caplog):
     b = _make_post_init_bot(bot_data)
 
     with caplog.at_level(logging.ERROR):
-        asyncio.run(b._post_init(b.application))  # не должно бросить
+        asyncio.run(b._publish_start_snapshot())  # не должно бросить
 
     assert len(exporter.calls) == 1
     assert any(rec.levelno == logging.ERROR for rec in caplog.records)
 
 
-def test_post_init_without_exporter_still_starts():
+def test_start_snapshot_without_exporter_still_starts():
     """Без экспортёра (нестандартная сборка) старт не падает."""
     b = _make_post_init_bot({'schools_data': {}})
-    asyncio.run(b._post_init(b.application))
+    asyncio.run(b._publish_start_snapshot())

@@ -1,5 +1,6 @@
 # File: c:\Users\set\Downloads\telegram-schedule-bot1001\telegram-schedule-bot\bot.py
 import asyncio
+import contextlib
 import logging
 import logging.handlers
 import os
@@ -111,8 +112,10 @@ class ScheduleBot:
         # Инициализируем базу данных и сервисы
         self.setup_services()
 
-        # Загружаем данные при старте
-        self.load_schools_data()
+        # Первичная загрузка расписания НЕ выполняется здесь: она может занять
+        # десятки секунд (недоступный хост школы), а до старта event loop
+        # блокировала бы подъём веб-сервера. Загрузка запускается в `run_async`
+        # уже после старта веб-сервера — см. комментарий там.
 
     def setup_logging(self):
         """Настройка логирования: ротация файла + вывод в консоль.
@@ -400,10 +403,17 @@ class ScheduleBot:
         except Exception as e:
             self.logger.error(f"Ошибка установки кнопки меню: {e}")
 
-        # Публикуем стартовый снапшот на edge после первичной загрузки
-        # schools_data (она синхронна и уже прошла до event loop). Синхронный
-        # publish уходит в to_thread, чтобы не блокировать loop; ошибки/пустой
-        # URL не должны мешать старту.
+        self.background_updater.start_periodic_updates()
+
+    async def _publish_start_snapshot(self):
+        """Публикует стартовый снапшот школ на edge после первичной загрузки.
+
+        Вызывается из `run_async` уже после `load_schools_data`, чтобы ушёл
+        заполненный снапшот (в `_post_init` он был бы пустым, так как загрузка
+        теперь идёт параллельно старту веб-сервера). Синхронный publish уходит
+        в to_thread, чтобы не блокировать loop; ошибки/пустой URL не должны
+        мешать старту.
+        """
         try:
             exporter = self.application.bot_data.get('snapshot_exporter')
             if exporter is not None and not exporter.enabled:
@@ -419,7 +429,13 @@ class ScheduleBot:
         except Exception as e:
             self.logger.error(f"Ошибка публикации стартового снапшота: {e}")
 
-        self.background_updater.start_periodic_updates()
+    def _log_available_schools(self):
+        """Логирует статус школ уже после первичной загрузки данных."""
+        self.logger.info("🏫 Доступные школы:")
+        for school in SCHOOLS_CONFIG.values():
+            if school.get('active', True):
+                status = "✅" if school['id'] in self.application.bot_data.get('schools_data', {}) else "❌"
+                self.logger.info(f"   {status} {school['name']} ({school['city']})")
 
     async def _do_shutdown(self):
         """Выполняет шаги очистки по порядку."""
@@ -456,11 +472,6 @@ class ScheduleBot:
         self.logger.info("   /help - Помощь")
         self.logger.info("   /week <класс> - Расписание на неделю")
         self.logger.info("   /school - Информация о школе")
-        self.logger.info("🏫 Доступные школы:")
-        for school in SCHOOLS_CONFIG.values():
-            if school.get('active', True):
-                status = "✅" if school['id'] in self.application.bot_data.get('schools_data', {}) else "❌"
-                self.logger.info(f"   {status} {school['name']} ({school['city']})")
 
         await self.application.initialize()
 
@@ -473,12 +484,27 @@ class ScheduleBot:
             await self.application.updater.start_polling()
         await self.application.start()
 
+        # Поднимаем веб-сервер (или wait_forever) ОТДЕЛЬНОЙ задачей, чтобы
+        # `/healthz` отвечал сразу, не дожидаясь первичной загрузки расписания.
+        # Иначе при недоступном хосте школы старт превышал HEALTH_TIMEOUT и
+        # `manage.sh update` откатывал деплой (регрессия:
+        # tests/test_startup_web_healthz.py). Загрузка идёт параллельно в потоке,
+        # веб отдаёт данные лениво из bot_data по мере готовности.
+        if getattr(self.config, 'WEBAPP_PORT', 0):
+            web_task = asyncio.create_task(run_webapp(self.application, self.config))
+        else:
+            web_task = asyncio.create_task(wait_forever())
+
         try:
-            if getattr(self.config, 'WEBAPP_PORT', 0):
-                await run_webapp(self.application, self.config)
-            else:
-                await wait_forever()
+            await asyncio.to_thread(self.load_schools_data)
+            await self._publish_start_snapshot()
+            self._log_available_schools()
+            await web_task
         finally:
+            if not web_task.done():
+                web_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await web_task
             await self._shutdown()
 
     def run(self):
