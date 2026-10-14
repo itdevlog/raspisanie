@@ -312,9 +312,11 @@
     background: var(--color-cancel-soft);
   }
 
-  /* Large, stacked section buttons — the original home menu. */
+  /* Home menu: «Классы» and «Учителя» sit side by side (spec §2); «Кабинеты»
+     spans both columns on its own row. Stays within the 40rem layout width. */
   .sections {
     display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: var(--space-3);
     margin: var(--space-4) 0;
   }
@@ -322,6 +324,10 @@
   .section-btn {
     font-size: var(--text-lg);
     padding: var(--space-4);
+  }
+
+  .section-btn[data-section='room'] {
+    grid-column: 1 / -1;
   }
 
   [role='status'] {

@@ -45,4 +45,22 @@ describe('FavoriteSummary', () => {
     expect(await screen.findByText('Завтра')).toBeTruthy();
     expect(client.getNow).toHaveBeenLastCalledWith('gym1', 'class', '5А', '06.10.2026');
   });
+
+  it('does not show the «Завтра» note when the tomorrow request fails', async () => {
+    const client = makeClient({
+      getNow: vi
+        .fn()
+        .mockResolvedValueOnce({
+          server_time: '2026-10-05T18:00:00+03:00',
+          current: null,
+          next: null,
+        })
+        .mockRejectedValueOnce(new Error('boom')),
+    });
+    render(FavoriteSummary, {
+      props: { client, schoolId: 'gym1', kind: 'class', name: '5А', today: '05.10.2026' },
+    });
+    expect(await screen.findByText('Не удалось загрузить текущий урок')).toBeTruthy();
+    expect(screen.queryByText('Завтра')).toBeNull();
+  });
 });

@@ -32,8 +32,11 @@
     if (!tomorrow) {
       return response;
     }
+    // Only label the view «Завтра» once the fallback request has resolved;
+    // a rejection leaves `note` null so it never sits beside the error state.
+    const tomorrowResponse = await client.getNow(schoolId, kind, name, tomorrow);
     note = 'Завтра';
-    return client.getNow(schoolId, kind, name, tomorrow);
+    return tomorrowResponse;
   });
 
   const nowKey = $derived(`${schoolId}|${kind}|${name}|${today}`);

@@ -486,14 +486,19 @@
     ← к списку
   </button>
 
-  <button class="back nika-btn nika-btn-light" aria-label="На главную" onclick={() => onHome?.()}>
+  <button
+    type="button"
+    class="back nika-btn nika-btn-light"
+    aria-label="На главную"
+    onclick={() => onHome?.()}
+  >
     ← на главную
   </button>
 
   <h2>
     Расписание{selection.name ? ` ${selection.name}` : ''}
-    {#if dayResource.data && isSecondShift(dayResource.data.shift)}<span class="shift-badge"
-        >{shiftLabel(dayResource.data.shift)}</span
+    {#if period !== 'week' && period !== 'month' && dayResource.data && isSecondShift(dayResource.data.shift)}<span
+        class="shift-badge">{shiftLabel(dayResource.data.shift)}</span
       >{/if}
   </h2>
 

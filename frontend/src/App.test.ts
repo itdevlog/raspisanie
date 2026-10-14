@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
+import { flushSync, tick } from 'svelte';
 import App from './App.svelte';
 import {
   makeCalendar,
@@ -315,6 +316,19 @@ describe('App shell', () => {
     const { router } = makeRouter(makeFakeEnv('/s/gym1/class/5%D0%90').env);
     render(App, { props: { ...baseProps(), favorites, router } });
     await waitFor(() => expect(favorites.has('gym1', 'class', '5А')).toBe(true));
+  });
+
+  it('honors removing an auto-favorited entity while its schedule stays open', async () => {
+    const favorites = makeFavorites();
+    const { router } = makeRouter(makeFakeEnv('/s/gym1/class/5%D0%90').env);
+    render(App, { props: { ...baseProps(), favorites, router } });
+    // The auto-favorite effect runs on open.
+    await waitFor(() => expect(favorites.has('gym1', 'class', '5А')).toBe(true));
+    // The user removes it via the schedule's own toggle, then Svelte flushes the
+    // pending effect. The write is untracked, so it must not be re-added.
+    flushSync(() => favorites.remove('gym1', 'class', '5А'));
+    await tick();
+    expect(favorites.has('gym1', 'class', '5А')).toBe(false);
   });
 
   it('threads strikeout_free_lsn=false from /api/schools into the schedule (W41 fix)', async () => {

@@ -20,7 +20,7 @@ describe('List screen (per-kind rows)', () => {
     localStorage.clear();
   });
 
-  it('renders one full-width row per name and opens a schedule', async () => {
+  it('picks a class in two steps (grade then letter) and opens its schedule', async () => {
     const selection = makeSelection();
     selection.selectSchool('gym1');
     const onOpenEntity = vi.fn();

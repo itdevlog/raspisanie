@@ -128,6 +128,13 @@ describe('settings store', () => {
     expect(store.scheduleView).toBe('cards');
   });
 
+  it('rolls a stored «compact» scheduleView back to «Карточки» (cards)', () => {
+    const store = createSettingsStore(
+      memoryStorage({ 'raspisanie:settings': JSON.stringify({ scheduleView: 'compact' }) }),
+    );
+    expect(store.scheduleView).toBe('cards');
+  });
+
   it('applies skin/accent/font as data attributes on the target', () => {
     const store = createSettingsStore(null);
     store.setSkin('minimal');

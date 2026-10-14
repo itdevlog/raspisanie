@@ -837,7 +837,7 @@ describe('Schedule screen', () => {
       return { selection, day: dayFor('05.10.2026', { lessons }) };
     }
 
-    it('renders the selected «Таблица» view instead of the compact list', async () => {
+    it('renders the selected «Таблица» view as a table', async () => {
       const { selection, day } = setup();
       const client = makeClient({ getDay: vi.fn().mockResolvedValue(day) });
 

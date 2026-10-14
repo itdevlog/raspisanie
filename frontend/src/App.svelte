@@ -17,6 +17,7 @@
   import Tools from './routes/Tools.svelte';
   import Settings from './routes/Settings.svelte';
   import Variants from './routes/Variants.svelte';
+  import { untrack } from 'svelte';
   import {
     api as defaultApi,
     route as defaultRoute,
@@ -151,11 +152,14 @@
 
   // Auto-favorite: any opened entity (its schedule shown for a school+name) is
   // added to favorites. `favorites.add` is idempotent, so re-opening the same
-  // entity is a no-op and a single extra effect run after the write is stable.
+  // entity is a no-op. The write is untracked: reading the favorites state here
+  // would re-subscribe the effect, so removing the entity from the schedule's
+  // own toggle would immediately re-add it.
   $effect(() => {
     const current = router.route;
     if (current.view === 'schedule' && current.school && current.name) {
-      favorites.add(current.school, current.kind, current.name);
+      const { school, kind, name } = current;
+      untrack(() => favorites.add(school, kind, name));
     }
   });
 
