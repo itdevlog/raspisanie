@@ -3,7 +3,14 @@
 // Pure presentation helpers for the W20 schedule screens. Kept framework-free so
 // they can be unit-tested directly and reused by several components.
 
-import type { DaySchedule, Lesson, LessonItem, PeriodInfo, ScheduleKind } from './api/types';
+import type {
+  DaySchedule,
+  Lesson,
+  LessonExchange,
+  LessonItem,
+  PeriodInfo,
+  ScheduleKind,
+} from './api/types';
 
 /** Human-readable Russian labels for the schedule entity kinds. */
 export const KIND_LABELS: Record<ScheduleKind, string> = {
@@ -182,6 +189,62 @@ export function lessonStatusLabel(lesson: Lesson): string {
     return 'Замена';
   }
   return '';
+}
+
+/**
+ * One row of the «было → стало» diff shown in the exchange popover.
+ *
+ * `from`/`to` are display-ready; an unknown side is the em dash «—» so the row
+ * still communicates that a change happened (the backend sends `null` rather
+ * than fabricating a value).
+ */
+export interface ExchangeDiffLine {
+  /** Field caption, e.g. «Предмет». */
+  label: string;
+  /** «Было» value, or «—» when unknown. */
+  from: string;
+  /** «Стало» value, or «—» when unknown. */
+  to: string;
+}
+
+/** The exchange diff fields, in display order, with their «было»/«стало» keys. */
+type ExchangeStringField =
+  | 'original_subject'
+  | 'original_teacher'
+  | 'original_room'
+  | 'new_subject'
+  | 'new_teacher'
+  | 'new_room';
+
+const EXCHANGE_FIELDS: ReadonlyArray<readonly [string, ExchangeStringField, ExchangeStringField]> =
+  [
+    ['Предмет', 'original_subject', 'new_subject'],
+    ['Учитель', 'original_teacher', 'new_teacher'],
+    ['Кабинет', 'original_room', 'new_room'],
+  ];
+
+/**
+ * Build the «было → стало» rows for a lesson's {@link LessonExchange}.
+ *
+ * A field is omitted when it did not change (partial exchanges keep the
+ * unchanged side on both ends). Cancelled lessons have no "new" side, so they
+ * yield no rows — the caller shows a single cancellation note instead. Never
+ * throws; an unknown (`null`) side becomes «—».
+ */
+export function exchangeDiffLines(exchange: LessonExchange): ExchangeDiffLine[] {
+  if (exchange.is_cancelled) {
+    return [];
+  }
+  const lines: ExchangeDiffLine[] = [];
+  for (const [label, fromKey, toKey] of EXCHANGE_FIELDS) {
+    const from = exchange[fromKey];
+    const to = exchange[toKey];
+    if (from === to || (from == null && to == null)) {
+      continue;
+    }
+    lines.push({ label, from: from ?? '—', to: to ?? '—' });
+  }
+  return lines;
 }
 
 /** Title-case-ish weekday display: the server sends a `day_name` string. */

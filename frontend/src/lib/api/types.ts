@@ -81,6 +81,32 @@ export interface LessonItem {
   is_method_hour: boolean;
 }
 
+/**
+ * «Было → стало» diff for an exchanged/cancelled lesson, carried on
+ * {@link Lesson.exchange}.
+ *
+ * Only the backend produces this for lessons with `has_exchange` or
+ * `is_cancelled`; every field may be `null` when the value is unknown (the
+ * backend never fabricates values — see `services/base_schedule_service.py`).
+ * For a cancelled lesson `new_*` are all `null` (there is no "new" side).
+ */
+export interface LessonExchange {
+  /** «Было» subject, or `null` when the original lesson could not be resolved. */
+  original_subject: string | null;
+  /** «Было» teacher, or `null`. */
+  original_teacher: string | null;
+  /** «Было» room, or `null`. */
+  original_room: string | null;
+  /** «Стало» subject, or `null` (always `null` when cancelled). */
+  new_subject: string | null;
+  /** «Стало» teacher, or `null`. */
+  new_teacher: string | null;
+  /** «Стало» room, or `null`. */
+  new_room: string | null;
+  /** True when the lesson is cancelled rather than substituted. */
+  is_cancelled: boolean;
+}
+
 /** One lesson entry in a day payload. */
 export interface Lesson {
   num: number;
@@ -91,6 +117,12 @@ export interface Lesson {
   items: LessonItem[];
   has_exchange: boolean;
   is_cancelled: boolean;
+  /**
+   * W42 — optional «было → стало» diff, present only for exchanged/cancelled
+   * lessons. `undefined`/`null` for ordinary lessons; `null` sides mean the
+   * value is unknown, not that it is unchanged.
+   */
+  exchange?: LessonExchange | null;
 }
 
 /**

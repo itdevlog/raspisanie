@@ -11,7 +11,7 @@ import {
   makeSelection,
   makeToday,
 } from '../test-helpers';
-import type { DaySchedule } from '../lib/api/types';
+import type { DaySchedule, Lesson } from '../lib/api/types';
 
 function dayFor(date: string, overrides: Partial<DaySchedule> = {}): DaySchedule {
   return makeDay({ date, ...overrides });
@@ -810,7 +810,7 @@ describe('Schedule screen', () => {
 
   // «Вид расписания» setting: the day screen renders through ScheduleBody.
   describe('schedule view setting', () => {
-    function lesson(num: number, subject: string) {
+    function lesson(num: number, subject: string): Lesson {
       return {
         num,
         start: '08:00',
@@ -886,6 +886,38 @@ describe('Schedule screen', () => {
       expect(queryByText('Есть замены')).toBeNull();
       expect(queryByText('Изменения отмечены ниже.')).toBeNull();
       expect(queryByText('Есть отмены')).toBeNull();
+    });
+
+    it('opens the exchange diff from the lesson badge in the «Карточки» view', async () => {
+      const { selection, day } = setup([
+        {
+          ...lesson(1, 'Биология'),
+          has_exchange: true,
+          exchange: {
+            original_subject: 'Математика',
+            original_teacher: 'Иванов',
+            original_room: '101',
+            new_subject: 'Биология',
+            new_teacher: 'Петрова',
+            new_room: '202',
+            is_cancelled: false,
+          },
+        },
+      ]);
+      const client = makeClient({ getDay: vi.fn().mockResolvedValue(day) });
+
+      const { findByRole, findByText, queryByText } = render(Schedule, {
+        props: { client, selection, today: makeToday('05.10.2026'), scheduleView: 'cards' },
+      });
+
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+      // The «было → стало» details stay hidden until the badge is tapped.
+      expect(queryByText('Математика')).toBeNull();
+
+      await fireEvent.click(await findByRole('button', { name: 'Замена' }));
+
+      expect(await findByText('Математика')).toBeTruthy(); // было
+      expect(await findByText('Петрова')).toBeTruthy(); // стало
     });
 
     it('marks a cancelled lesson in the «Сейчас / далее» rest list', async () => {

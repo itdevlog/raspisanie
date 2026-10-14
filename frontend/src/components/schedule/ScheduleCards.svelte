@@ -2,13 +2,8 @@
   // «Карточки» layout — one card per lesson: a fixed-width time column plus a
   // strong subject, muted teacher and room chip. Extracted from `/variants`.
   import type { Lesson, LessonItem, ScheduleKind } from '../../lib/api/types';
-  import {
-    isCancelled,
-    isExchange,
-    itemSubjectLabel,
-    lessonStatusLabel,
-    lessonTime,
-  } from '../../lib/schedule-view';
+  import { isCancelled, isExchange, itemSubjectLabel, lessonTime } from '../../lib/schedule-view';
+  import ExchangeBadge from '../ExchangeBadge.svelte';
 
   interface Props {
     lessons: Lesson[];
@@ -79,9 +74,7 @@
           </div>
         {/each}
       </div>
-      {#if lessonStatusLabel(lesson)}
-        <span class="badge">{lessonStatusLabel(lesson)}</span>
-      {/if}
+      <ExchangeBadge {lesson} />
     </li>
   {/each}
 </ul>
@@ -204,16 +197,6 @@
     white-space: nowrap;
   }
 
-  .badge {
-    display: inline-block;
-    padding: 1px var(--space-2);
-    border-radius: 999px;
-    font-size: var(--text-xs);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
   .clock,
   .num {
     font-variant-numeric: tabular-nums;
@@ -226,15 +209,5 @@
 
   .exchange .subject {
     color: var(--color-exchange);
-  }
-
-  .cancelled .badge {
-    color: var(--color-cancel);
-    background: var(--color-cancel-soft);
-  }
-
-  .exchange .badge {
-    color: var(--color-exchange);
-    background: var(--color-exchange-soft);
   }
 </style>

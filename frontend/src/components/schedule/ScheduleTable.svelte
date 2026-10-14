@@ -2,13 +2,8 @@
   // «Таблица» layout — dense, aligned columns. Multi-item lessons use a
   // `rowspan` on the shared number/time cells. Extracted from `/variants`.
   import type { Lesson, LessonItem, ScheduleKind } from '../../lib/api/types';
-  import {
-    isCancelled,
-    isExchange,
-    itemSubjectLabel,
-    lessonStatusLabel,
-    lessonTime,
-  } from '../../lib/schedule-view';
+  import { isCancelled, isExchange, itemSubjectLabel, lessonTime } from '../../lib/schedule-view';
+  import ExchangeBadge from '../ExchangeBadge.svelte';
 
   interface Props {
     lessons: Lesson[];
@@ -81,8 +76,8 @@
             {#if item.groups}
               <span class="group">{item.groups}</span>
             {/if}
-            {#if i === 0 && lessonStatusLabel(lesson)}
-              <span class="badge">{lessonStatusLabel(lesson)}</span>
+            {#if i === 0}
+              <ExchangeBadge {lesson} />
             {/if}
           </td>
           {#if showTeacher}
@@ -184,16 +179,6 @@
     color: var(--lesson-room);
   }
 
-  .badge {
-    display: inline-block;
-    padding: 1px var(--space-2);
-    border-radius: 999px;
-    font-size: var(--text-xs);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
   .grid .subject {
     font-size: var(--text-sm);
   }
@@ -205,15 +190,5 @@
 
   .exchange .subject {
     color: var(--color-exchange);
-  }
-
-  .cancelled .badge {
-    color: var(--color-cancel);
-    background: var(--color-cancel-soft);
-  }
-
-  .exchange .badge {
-    color: var(--color-exchange);
-    background: var(--color-exchange-soft);
   }
 </style>

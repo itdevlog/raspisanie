@@ -8,11 +8,11 @@
     isCancelled,
     isExchange,
     itemSubjectLabel,
-    lessonStatusLabel,
     lessonTime,
     pickNowNext,
     type NowHint,
   } from '../../lib/schedule-view';
+  import ExchangeBadge from '../ExchangeBadge.svelte';
   import StateNotice from '../StateNotice.svelte';
 
   interface Props {
@@ -65,9 +65,7 @@
                 <span class="clock hero-clock">{lessonTime(hero)}</span>
                 <span class="num">Урок {hero.num}</span>
               {/if}
-              {#if lessonStatusLabel(hero)}
-                <span class="badge">{lessonStatusLabel(hero)}</span>
-              {/if}
+              <ExchangeBadge lesson={hero} />
             </div>
             <span class="subject hero-subject" class:method={firstItem(hero).is_method_hour}>
               {itemSubjectLabel(firstItem(hero))}
@@ -98,9 +96,7 @@
           <span class="subject" class:method={firstItem(lesson).is_method_hour}>
             {itemSubjectLabel(firstItem(lesson))}
           </span>
-          {#if lessonStatusLabel(lesson)}
-            <span class="badge">{lessonStatusLabel(lesson)}</span>
-          {/if}
+          <ExchangeBadge {lesson} />
           {#if showRoom && firstItem(lesson).room}
             <span class="chip">{firstItem(lesson).room}</span>
           {/if}
@@ -233,16 +229,6 @@
     white-space: nowrap;
   }
 
-  .badge {
-    display: inline-block;
-    padding: 1px var(--space-2);
-    border-radius: 999px;
-    font-size: var(--text-xs);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
   .clock,
   .num {
     font-variant-numeric: tabular-nums;
@@ -255,15 +241,5 @@
 
   .exchange .subject {
     color: var(--color-exchange);
-  }
-
-  .cancelled .badge {
-    color: var(--color-cancel);
-    background: var(--color-cancel-soft);
-  }
-
-  .exchange .badge {
-    color: var(--color-exchange);
-    background: var(--color-exchange-soft);
   }
 </style>

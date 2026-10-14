@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import type { Lesson, LessonItem } from './api/types';
+import type { Lesson, LessonExchange, LessonItem } from './api/types';
 import {
   dayState,
   dayTitle,
   entityHeading,
+  exchangeDiffLines,
   isCancelled,
   isExchange,
   isFreeLesson,
@@ -192,6 +193,52 @@ describe('schedule-view helpers', () => {
     expect(isHiddenFreeLesson(makeLesson({ is_cancelled: true }), false)).toBe(true);
     // A normal lesson is never hidden.
     expect(isHiddenFreeLesson(makeLesson(), false)).toBe(false);
+  });
+
+  describe('exchangeDiffLines', () => {
+    function exchange(overrides: Partial<LessonExchange> = {}): LessonExchange {
+      return {
+        original_subject: 'Математика',
+        original_teacher: 'Иванов',
+        original_room: '101',
+        new_subject: 'Биология',
+        new_teacher: 'Петрова',
+        new_room: '202',
+        is_cancelled: false,
+        ...overrides,
+      };
+    }
+
+    it('lists every changed field as было → стало', () => {
+      expect(exchangeDiffLines(exchange())).toEqual([
+        { label: 'Предмет', from: 'Математика', to: 'Биология' },
+        { label: 'Учитель', from: 'Иванов', to: 'Петрова' },
+        { label: 'Кабинет', from: '101', to: '202' },
+      ]);
+    });
+
+    it('omits a field whose value is unchanged (partial exchange)', () => {
+      const lines = exchangeDiffLines(exchange({ new_subject: 'Математика', new_room: '101' }));
+      expect(lines).toEqual([{ label: 'Учитель', from: 'Иванов', to: 'Петрова' }]);
+    });
+
+    it('shows «—» for a side the backend could not resolve', () => {
+      const lines = exchangeDiffLines(
+        exchange({ original_subject: null, original_teacher: null, original_room: null }),
+      );
+      expect(lines).toEqual([
+        { label: 'Предмет', from: '—', to: 'Биология' },
+        { label: 'Учитель', from: '—', to: 'Петрова' },
+        { label: 'Кабинет', from: '—', to: '202' },
+      ]);
+    });
+
+    it('has no lines for a cancelled lesson (there is no new side)', () => {
+      const lines = exchangeDiffLines(
+        exchange({ is_cancelled: true, new_subject: null, new_teacher: null, new_room: null }),
+      );
+      expect(lines).toEqual([]);
+    });
   });
 
   describe('pickNowNext', () => {

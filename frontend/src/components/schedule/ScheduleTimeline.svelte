@@ -2,14 +2,9 @@
   // «Таймлайн» layout — a vertical time gutter with a dot per lesson and the
   // inter-lesson gaps drawn as visible breaks. Extracted from `/variants`.
   import type { Lesson, LessonItem, ScheduleKind } from '../../lib/api/types';
-  import {
-    isCancelled,
-    isExchange,
-    itemSubjectLabel,
-    lessonStatusLabel,
-    lessonTime,
-  } from '../../lib/schedule-view';
+  import { isCancelled, isExchange, itemSubjectLabel, lessonTime } from '../../lib/schedule-view';
   import { formatDuration } from '../../lib/format';
+  import ExchangeBadge from '../ExchangeBadge.svelte';
 
   interface Props {
     lessons: Lesson[];
@@ -106,9 +101,7 @@
             {/if}
           </div>
         {/each}
-        {#if lessonStatusLabel(lesson)}
-          <span class="badge">{lessonStatusLabel(lesson)}</span>
-        {/if}
+        <ExchangeBadge {lesson} />
       </div>
     </li>
   {/each}
@@ -250,16 +243,6 @@
     white-space: nowrap;
   }
 
-  .badge {
-    display: inline-block;
-    padding: 1px var(--space-2);
-    border-radius: 999px;
-    font-size: var(--text-xs);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
   .clock,
   .num {
     font-variant-numeric: tabular-nums;
@@ -268,10 +251,6 @@
   .tl-card .subject {
     flex-basis: 100%;
     font-size: var(--text-base);
-  }
-
-  .tl-card .badge {
-    margin-top: var(--space-1);
   }
 
   .tl-gap {
@@ -322,15 +301,5 @@
 
   .exchange .subject {
     color: var(--color-exchange);
-  }
-
-  .cancelled .badge {
-    color: var(--color-cancel);
-    background: var(--color-cancel-soft);
-  }
-
-  .exchange .badge {
-    color: var(--color-exchange);
-    background: var(--color-exchange-soft);
   }
 </style>
