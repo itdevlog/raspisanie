@@ -74,4 +74,23 @@ describe('NowWidget', () => {
     });
     expect(getByText('Сеть недоступна')).toBeTruthy();
   });
+
+  it('renders the note badge beside the heading when given', () => {
+    const { getByText } = render(NowWidget, {
+      props: {
+        data: nowWith({ current: currentLesson }),
+        status: 'ready',
+        error: null,
+        note: 'Завтра',
+      },
+    });
+    expect(getByText('Завтра')).toBeTruthy();
+  });
+
+  it('has no note badge by default', () => {
+    const { container } = render(NowWidget, {
+      props: { data: nowWith({ current: currentLesson }), status: 'ready', error: null },
+    });
+    expect(container.querySelector('.note')).toBeNull();
+  });
 });

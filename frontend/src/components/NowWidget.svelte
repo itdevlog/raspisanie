@@ -13,8 +13,10 @@
     data: NowResponse | null;
     status: AsyncStatus;
     error: string | null;
+    /** Optional badge beside the «Сейчас» heading (e.g. «Завтра»). */
+    note?: string | null;
   }
-  let { data, status, error }: Props = $props();
+  let { data, status, error, note = null }: Props = $props();
 
   /** `2. Физика · каб. 202 · 09:00-09:45`, skipping absent fields. */
   function summaryLine(lesson: LessonSummary): string {
@@ -33,7 +35,10 @@
 </script>
 
 <section class="now">
-  <h3>Сейчас</h3>
+  <h3>
+    Сейчас
+    {#if note}<span class="note">{note}</span>{/if}
+  </h3>
 
   {#if status === 'error'}
     <StateNotice tone="error" title="Не удалось загрузить текущий урок" detail={error ?? ''} />
@@ -66,6 +71,21 @@
     font-weight: 600;
     letter-spacing: -0.011em;
     margin: 0 0 var(--space-2);
+  }
+
+  /* Small pill beside the heading, e.g. «Завтра» on the tomorrow fallback. */
+  .note {
+    display: inline-block;
+    margin-left: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    vertical-align: middle;
   }
 
   .lesson {
