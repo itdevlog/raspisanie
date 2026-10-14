@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, screen, waitFor } from '@testing-library/svelte';
 import Home from './Home.svelte';
 import {
   makeClient,
@@ -23,9 +23,21 @@ function schoolWithMeta(overrides: Partial<School> = {}): School {
     loaded: true,
     city: 'Москва',
     updated: '01.09.2026 10:00',
-    homepage_url: 'https://gym1.example.ru',
-    features: { teachers: true, classrooms: true, rooms: true, homepage: true },
     ...overrides,
+  };
+}
+
+/** Base props for the screen: a stub client with a school selected. */
+function baseProps() {
+  const selection = makeSelection();
+  selection.selectSchool('gym1');
+  return {
+    client: makeClient(),
+    selection,
+    today: makeToday('05.10.2026'),
+    favorites: makeFavorites(),
+    onOpenList: vi.fn(),
+    onOpenEntity: vi.fn(),
   };
 }
 
@@ -106,56 +118,22 @@ describe('Home screen (landing)', () => {
       });
     }
 
-    it('shows the school city and the yellow school-site button', async () => {
+    it('shows the school city; name and «Обновлено» live in the header', async () => {
       const selection = makeSelection();
       selection.selectSchool('gym1');
 
-      const { findByText, findByRole, queryByText } = render(Home, {
+      const { findByText, queryByText } = render(Home, {
         props: { client: metaClient(schoolWithMeta()), selection, today: makeToday() },
       });
 
       // The school name and «Обновлено» live in the app header, not here.
       expect(await findByText('Москва')).toBeTruthy();
       expect(queryByText('Обновлено 01.09.2026 10:00')).toBeNull();
-      const link = await findByRole('link', { name: 'Школьный сайт' });
-      expect(link.getAttribute('href')).toBe('https://gym1.example.ru');
-    });
-
-    it('hides the site button when features.homepage is false', async () => {
-      const selection = makeSelection();
-      selection.selectSchool('gym1');
-
-      const { findByText, queryByRole } = render(Home, {
-        props: {
-          client: metaClient(schoolWithMeta({ features: { homepage: false } })),
-          selection,
-          today: makeToday(),
-        },
-      });
-
-      expect(await findByText('Москва')).toBeTruthy();
-      expect(queryByRole('link', { name: 'Школьный сайт' })).toBeNull();
-    });
-
-    it('hides the site button when there is no homepage_url', async () => {
-      const selection = makeSelection();
-      selection.selectSchool('gym1');
-
-      const { findByText, queryByRole } = render(Home, {
-        props: {
-          client: metaClient(schoolWithMeta({ homepage_url: null })),
-          selection,
-          today: makeToday(),
-        },
-      });
-
-      expect(await findByText('Москва')).toBeTruthy();
-      expect(queryByRole('link', { name: 'Школьный сайт' })).toBeNull();
     });
   });
 
   describe('section buttons', () => {
-    it('opens the class and teacher lists', async () => {
+    it('opens the class, teacher and room lists', async () => {
       const selection = makeSelection();
       selection.selectSchool('gym1');
       const onOpenList = vi.fn();
@@ -169,6 +147,40 @@ describe('Home screen (landing)', () => {
 
       await fireEvent.click(await findByRole('button', { name: 'Учителя' }));
       expect(onOpenList).toHaveBeenCalledWith('teacher');
+
+      await fireEvent.click(await findByRole('button', { name: 'Кабинеты' }));
+      expect(onOpenList).toHaveBeenCalledWith('room');
+    });
+  });
+
+  describe('sections and favorite summary cards', () => {
+    it('offers Классы, Учителя and Кабинеты sections', async () => {
+      render(Home, { props: baseProps() });
+      expect(await screen.findByRole('button', { name: 'Классы' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Учителя' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Кабинеты' })).toBeTruthy();
+    });
+
+    it('no longer renders the school-site link (moved to the header)', async () => {
+      render(Home, { props: baseProps() });
+      await screen.findByRole('button', { name: 'Классы' });
+      expect(screen.queryByRole('link', { name: 'Школьный сайт' })).toBeNull();
+    });
+
+    it('renders a now summary card for each favorite', async () => {
+      // два избранных (class + room), getNow мокается → две сводки
+      const client = makeClient({
+        getNow: vi.fn().mockResolvedValue(NOW_CURRENT),
+      });
+      const favorites = makeFavorites();
+      favorites.add('gym1', 'class', '7В');
+      favorites.add('gym1', 'room', '303');
+
+      render(Home, { props: { ...baseProps(), client, favorites } });
+
+      expect(await screen.findAllByRole('heading', { name: 'Сейчас' })).toHaveLength(2);
+      expect(client.getNow).toHaveBeenCalledWith('gym1', 'class', '7В', '05.10.2026');
+      expect(client.getNow).toHaveBeenCalledWith('gym1', 'room', '303', '05.10.2026');
     });
   });
 
@@ -255,41 +267,4 @@ describe('Home screen (landing)', () => {
     });
   });
 
-  describe('current-lesson widget', () => {
-    it('renders the running lesson from /now for the saved class', async () => {
-      const client = makeClient({ getNow: vi.fn().mockResolvedValue(NOW_CURRENT) });
-      const selection = makeSelection();
-      selection.selectSchool('gym1');
-      selection.selectEntity('class', '5А');
-
-      const { findByText } = render(Home, {
-        props: { client, selection, today: makeToday('05.10.2026') },
-      });
-
-      expect(await findByText('Идёт урок')).toBeTruthy();
-      expect(await findByText(/Физика/)).toBeTruthy();
-      await waitFor(() =>
-        expect(client.getNow).toHaveBeenCalledWith('gym1', 'class', '5А', '05.10.2026'),
-      );
-    });
-
-    it('handles a day with no lessons left', async () => {
-      const client = makeClient({
-        getNow: vi.fn().mockResolvedValue({
-          server_time: '2026-10-05T20:00:00+03:00',
-          current: null,
-          next: null,
-        } satisfies NowResponse),
-      });
-      const selection = makeSelection();
-      selection.selectSchool('gym1');
-      selection.selectEntity('class', '5А');
-
-      const { findByText } = render(Home, {
-        props: { client, selection, today: makeToday('05.10.2026') },
-      });
-
-      expect(await findByText('Уроков нет')).toBeTruthy();
-    });
-  });
 });

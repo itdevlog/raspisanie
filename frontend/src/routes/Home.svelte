@@ -4,11 +4,10 @@
   //   * quick school-number buttons (the school switcher — the selected
   //     school's name and «Обновлено» live in the app header);
   //   * the selected school's city, when known;
-  //   * large section buttons «Классы» / «Учителя» (→ per-kind list) and
-  //     «Школьный сайт» (yellow, only when `features.homepage`);
-  //   * favorites of ALL kinds as tappable rows (tap opens the schedule,
-  //     star/× removes);
-  //   * a compact «Сейчас» widget for the saved class, when there is one.
+  //   * large section buttons «Классы» / «Учителя» / «Кабинеты» (→ per-kind
+  //     list); the «Школьный сайт» link lives in the app header (Task 4);
+  //   * favorites of ALL kinds as cards: a tappable header (star + name + kind,
+  //     × removes) over a per-favorite «Сейчас» summary.
   import {
     api as defaultApi,
     selection as defaultSelection,
@@ -18,7 +17,6 @@
     KIND_LABELS,
     type Favorite,
     type FavoritesStore,
-    type NowResponse,
     type ScheduleApiClient,
     type ScheduleKind,
     type School,
@@ -26,7 +24,7 @@
     type SelectionStore,
     type TodayStore,
   } from '../lib';
-  import NowWidget from '../components/NowWidget.svelte';
+  import FavoriteSummary from '../components/FavoriteSummary.svelte';
   import StateNotice from '../components/StateNotice.svelte';
 
   interface Props {
@@ -55,38 +53,8 @@
     return response;
   });
 
-  // W39: current/next lesson for the saved class, from GET .../now.
-  const nowResource = createAsync<NowResponse>(async () => {
-    const schoolId = selection.schoolId;
-    const name = selection.name;
-    if (!schoolId || !name || selection.kind !== 'class') {
-      throw new Error('Класс не сохранён');
-    }
-    const date = today.today;
-    if (!date) {
-      throw new Error('Не удалось определить дату');
-    }
-    return client.getNow(schoolId, 'class', name, date);
-  });
-
-  /** The saved entity is a class (only then do we show the «Сейчас» widget). */
-  const savedClass = $derived(
-    selection.schoolId !== null && selection.kind === 'class' && selection.name !== null,
-  );
-
-  const nowKey = $derived(
-    `${selection.schoolId ?? ''}|${selection.kind}|${selection.name ?? ''}|${today.today}|${schoolsResource.status}`,
-  );
-
   $effect(() => {
     void schoolsResource.load();
-  });
-
-  $effect(() => {
-    void nowKey;
-    if (savedClass) {
-      void nowResource.load();
-    }
   });
 
   function handleSchoolChange(schoolId: string) {
@@ -118,11 +86,6 @@
 
   const selectedSchool = $derived(
     schoolsResource.data?.schools.find((school) => school.id === selection.schoolId) ?? null,
-  );
-
-  // Missing `features`/`homepage` mirrors the server default (enabled).
-  const showHomepageLink = $derived(
-    Boolean(selectedSchool?.homepage_url && (selectedSchool.features?.homepage ?? true)),
   );
 
   // Favorites of every kind for the selected school (insertion order).
@@ -172,25 +135,34 @@
           <h3 id="favorites-heading">Избранное</h3>
           <ul class="favorite-list">
             {#each favoriteItems as favorite (favorite.kind + '|' + favorite.name)}
-              <li class="favorite-row">
-                <button
-                  type="button"
-                  class="favorite-open nika-btn nika-btn-light"
-                  aria-label={`Открыть расписание: ${favorite.name}`}
-                  onclick={() => onOpenEntity?.(favorite.kind, favorite.name)}
-                >
-                  <span class="star" aria-hidden="true">★</span>
-                  <span class="favorite-name">{favorite.name}</span>
-                  <span class="favorite-kind">{KIND_LABELS[favorite.kind]}</span>
-                </button>
-                <button
-                  type="button"
-                  class="favorite-remove"
-                  aria-label={`Удалить из избранного: ${favorite.name}`}
-                  onclick={() => removeFavorite(favorite.kind, favorite.name)}
-                >
-                  ×
-                </button>
+              <li class="favorite-card">
+                <div class="favorite-header">
+                  <button
+                    type="button"
+                    class="favorite-open nika-btn nika-btn-light"
+                    aria-label={`Открыть расписание: ${favorite.name}`}
+                    onclick={() => onOpenEntity?.(favorite.kind, favorite.name)}
+                  >
+                    <span class="star" aria-hidden="true">★</span>
+                    <span class="favorite-name">{favorite.name}</span>
+                    <span class="favorite-kind">{KIND_LABELS[favorite.kind]}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="favorite-remove"
+                    aria-label={`Удалить из избранного: ${favorite.name}`}
+                    onclick={() => removeFavorite(favorite.kind, favorite.name)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <FavoriteSummary
+                  {client}
+                  schoolId={favorite.schoolId}
+                  kind={favorite.kind}
+                  name={favorite.name}
+                  today={today.today}
+                />
               </li>
             {/each}
           </ul>
@@ -214,20 +186,15 @@
         >
           Учителя
         </button>
-        {#if showHomepageLink}
-          <a
-            class="section-btn nika-btn nika-btn-yellow"
-            data-section="site"
-            href={selectedSchool?.homepage_url ?? ''}
-          >
-            Школьный сайт
-          </a>
-        {/if}
+        <button
+          type="button"
+          class="section-btn nika-btn nika-btn-blue"
+          data-section="room"
+          onclick={() => onOpenList?.('room')}
+        >
+          Кабинеты
+        </button>
       </nav>
-
-      {#if savedClass}
-        <NowWidget data={nowResource.data} status={nowResource.status} error={nowResource.error} />
-      {/if}
     {/if}
   {/if}
 </section>
@@ -276,19 +243,28 @@
     margin-bottom: var(--space-5);
   }
 
-  /* Favorites: large light pills with a yellow star on the left. */
+  /* Favorites: cards — a tappable header over a per-favorite «Сейчас» summary. */
   .favorite-list {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: var(--space-2);
+    gap: var(--space-3);
   }
 
-  .favorite-row {
+  .favorite-card {
+    border: 1px solid var(--color-border);
+    border-radius: var(--nika-radius);
+    background: var(--color-surface);
+    box-shadow: var(--nika-shadow);
+    padding: var(--space-3);
+  }
+
+  .favorite-header {
     display: flex;
     align-items: stretch;
     gap: var(--space-1);
+    margin-bottom: var(--space-3);
   }
 
   .favorite-open {
