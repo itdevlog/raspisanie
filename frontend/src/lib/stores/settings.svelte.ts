@@ -42,7 +42,7 @@ export interface Settings {
   scheduleView: ScheduleView;
   /** «Не беспокоить ночью» (Web Push, 22:00–07:00); default on. */
   pushQuietHours: boolean;
-  /** Master switch for Web Push notifications; default on. */
+  /** Master switch for Web Push notifications; default off (opt-in). */
   notificationsEnabled: boolean;
 }
 
@@ -88,7 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showLessonTime: true,
   scheduleView: 'cards',
   pushQuietHours: true,
-  notificationsEnabled: true,
+  notificationsEnabled: false,
 };
 
 const SKINS: readonly Skin[] = ['classic', 'minimal', 'dark', 'contrast', 'youth'];

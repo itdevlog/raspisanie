@@ -42,6 +42,26 @@ function baseProps() {
   return { client, selection, today: makeToday(), router };
 }
 
+/**
+ * Stub `window.Notification` so `getPermission()` reads the given value, and
+ * return a restore fn. jsdom has no Notification by default, so tests that need
+ * a granted permission (to render a control ON) install one explicitly.
+ */
+function withNotificationPermission(permission: NotificationPermission): () => void {
+  const original = Object.getOwnPropertyDescriptor(window, 'Notification');
+  Object.defineProperty(window, 'Notification', {
+    configurable: true,
+    value: { permission, requestPermission: vi.fn().mockResolvedValue(permission) },
+  });
+  return () => {
+    if (original) {
+      Object.defineProperty(window, 'Notification', original);
+    } else {
+      delete (window as { Notification?: unknown }).Notification;
+    }
+  };
+}
+
 describe('App shell', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -566,19 +586,24 @@ describe('App shell', () => {
     });
 
     it('reflects the ON state with the accent class and aria-pressed', async () => {
-      const settings = makeSettings();
-      const { findByRole } = render(App, {
-        props: { ...baseProps(), settings, pushSupported: true },
-      });
+      const restore = withNotificationPermission('granted');
+      try {
+        const settings = makeSettings();
+        settings.setNotificationsEnabled(true);
+        const { findByRole } = render(App, {
+          props: { ...baseProps(), settings, pushSupported: true },
+        });
 
-      const bell = await findByRole('button', { name: 'Уведомления' });
-      expect(bell.getAttribute('aria-pressed')).toBe('true');
-      expect(bell.classList.contains('on')).toBe(true);
+        const bell = await findByRole('button', { name: 'Уведомления' });
+        expect(bell.getAttribute('aria-pressed')).toBe('true');
+        expect(bell.classList.contains('on')).toBe(true);
+      } finally {
+        restore();
+      }
     });
 
-    it('renders the bell off when notifications are disabled', async () => {
+    it('renders the bell off by default (notifications default to off)', async () => {
       const settings = makeSettings();
-      settings.setNotificationsEnabled(false);
       const { findByRole } = render(App, {
         props: { ...baseProps(), settings, pushSupported: true },
       });
@@ -588,22 +613,49 @@ describe('App shell', () => {
       expect(bell.classList.contains('on')).toBe(false);
     });
 
-    it('disables push and clears the flag when turned off', async () => {
+    it('disables the bell and hints «Выберите класс» when no class is selected', async () => {
       const settings = makeSettings();
-      const pushDisable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
-      const { findByRole } = render(App, {
-        props: { ...baseProps(), settings, pushSupported: true, pushDisable },
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      const fake = makeFakeEnv('/');
+      const router = createRouteStore(fake.env);
+      const { findByRole, findByText } = render(App, {
+        props: {
+          client: makeClient(),
+          selection,
+          today: makeToday(),
+          router,
+          settings,
+          pushSupported: true,
+        },
       });
 
-      await fireEvent.click(await findByRole('button', { name: 'Уведомления' }));
+      const bell = await findByRole('button', { name: 'Уведомления' });
+      expect(bell.hasAttribute('disabled')).toBe(true);
+      expect(await findByText(/Выберите класс/)).toBeTruthy();
+    });
 
-      await waitFor(() => expect(pushDisable).toHaveBeenCalled());
-      expect(settings.notificationsEnabled).toBe(false);
+    it('disables push and clears the flag when turned off', async () => {
+      const restore = withNotificationPermission('granted');
+      try {
+        const settings = makeSettings();
+        settings.setNotificationsEnabled(true);
+        const pushDisable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+        const { findByRole } = render(App, {
+          props: { ...baseProps(), settings, pushSupported: true, pushDisable },
+        });
+
+        await fireEvent.click(await findByRole('button', { name: 'Уведомления' }));
+
+        await waitFor(() => expect(pushDisable).toHaveBeenCalled());
+        expect(settings.notificationsEnabled).toBe(false);
+      } finally {
+        restore();
+      }
     });
 
     it('enables push for the selected entity when turned on', async () => {
       const settings = makeSettings();
-      settings.setNotificationsEnabled(false);
       const selection = makeSelection();
       selection.selectSchool('gym1');
       selection.selectEntity('class', '5А');
@@ -631,6 +683,97 @@ describe('App shell', () => {
         }),
       );
       expect(settings.notificationsEnabled).toBe(true);
+    });
+
+    it('keeps the bell and the Settings push control in sync', async () => {
+      const restore = withNotificationPermission('granted');
+      try {
+        const settings = makeSettings();
+        const selection = makeSelection();
+        selection.selectSchool('gym1');
+        selection.selectEntity('class', '5А');
+        const fake = makeFakeEnv('/settings');
+        const router = createRouteStore(fake.env);
+        const pushEnable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+        const pushDisable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+
+        const { findByRole, getByRole, findByText } = render(App, {
+          props: {
+            client: makeClient(),
+            selection,
+            today: makeToday(),
+            router,
+            settings,
+            pushSupported: true,
+            pushEnable,
+            pushDisable,
+          },
+        });
+
+        // Default: both controls read OFF.
+        expect((await findByRole('button', { name: 'Уведомления' })).getAttribute('aria-pressed')).toBe(
+          'false',
+        );
+
+        // Enable from Settings: the shared flag flips and the bell lights up.
+        await fireEvent.click(await findByRole('button', { name: 'Включить уведомления' }));
+        await waitFor(() => expect(settings.notificationsEnabled).toBe(true));
+        await waitFor(() =>
+          expect(getByRole('button', { name: 'Уведомления' }).getAttribute('aria-pressed')).toBe('true'),
+        );
+
+        // Disable from the bell: Settings falls back to «Включить».
+        await fireEvent.click(getByRole('button', { name: 'Уведомления' }));
+        await waitFor(() => expect(settings.notificationsEnabled).toBe(false));
+        expect(await findByText('Включить уведомления')).toBeTruthy();
+      } finally {
+        restore();
+      }
+    });
+
+    it('keeps the bell and the Schedule push control in sync', async () => {
+      const restore = withNotificationPermission('granted');
+      try {
+        const settings = makeSettings();
+        const selection = makeSelection();
+        selection.selectSchool('gym1');
+        selection.selectEntity('class', '5А');
+        const fake = makeFakeEnv('/s/gym1/class/5%D0%90');
+        const router = createRouteStore(fake.env);
+        const client = makeClient();
+        const pushEnable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+
+        const { getByRole } = render(App, {
+          props: {
+            client,
+            selection,
+            today: makeToday(),
+            router,
+            settings,
+            pushSupported: true,
+            pushEnable,
+            pushDisable: vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' }),
+          },
+        });
+
+        await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+        expect(getByRole('button', { name: 'Уведомления' }).getAttribute('aria-pressed')).toBe('false');
+
+        // Enable from the Schedule screen: the shared flag flips and the bell lights up.
+        await fireEvent.click(getByRole('button', { name: 'Включить уведомления' }));
+        await waitFor(() => expect(settings.notificationsEnabled).toBe(true));
+        await waitFor(() =>
+          expect(getByRole('button', { name: 'Уведомления' }).getAttribute('aria-pressed')).toBe('true'),
+        );
+
+        // Turn off from the bell: the Schedule button returns to «Включить».
+        await fireEvent.click(getByRole('button', { name: 'Уведомления' }));
+        await waitFor(() =>
+          expect(getByRole('button', { name: 'Включить уведомления' })).toBeTruthy(),
+        );
+      } finally {
+        restore();
+      }
     });
   });
 

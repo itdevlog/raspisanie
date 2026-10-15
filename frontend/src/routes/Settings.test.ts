@@ -114,11 +114,12 @@ describe('Settings screen', () => {
     const selection = makeSelection();
     selection.selectSchool('gym1');
     selection.selectEntity('class', '5А');
+    const settings = makeSettings();
     const pushEnable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
 
     const { getByRole, findByText } = render(Settings, {
       props: {
-        settings: makeSettings(),
+        settings,
         selection,
         origin: 'https://rasp.example.ru',
         pushEnable,
@@ -138,7 +139,19 @@ describe('Settings screen', () => {
         quiet: true,
       }),
     );
+    // Enabling from Settings flips the shared flag other controls read.
+    await waitFor(() => expect(settings.notificationsEnabled).toBe(true));
     expect(await findByText('Выключить уведомления')).toBeTruthy();
+  });
+
+  it('disables the push control and hints «Выберите класс» without a saved class', () => {
+    const { getByRole, getByText } = render(Settings, {
+      props: { settings: makeSettings(), pushSupported: true },
+    });
+
+    const button = getByRole('button', { name: 'Включить уведомления' });
+    expect(button.hasAttribute('disabled')).toBe(true);
+    expect(getByText(/Выберите класс/)).toBeTruthy();
   });
 
   it('shows «не беспокоить ночью» on by default and persists the toggle', async () => {
@@ -160,11 +173,13 @@ describe('Settings screen', () => {
     const selection = makeSelection();
     selection.selectSchool('gym1');
     selection.selectEntity('class', '5А');
+    const settings = makeSettings();
+    settings.setNotificationsEnabled(true);
     const pushEnable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
 
     const { getByRole } = render(Settings, {
       props: {
-        settings: makeSettings(),
+        settings,
         selection,
         origin: 'https://rasp.example.ru',
         pushEnable,
@@ -239,15 +254,17 @@ describe('Settings screen', () => {
     );
   });
 
-  it('disables push through the injected handler', async () => {
+  it('disables push through the injected handler and clears the shared flag', async () => {
     const selection = makeSelection();
     selection.selectSchool('gym1');
     selection.selectEntity('class', '5А');
+    const settings = makeSettings();
+    settings.setNotificationsEnabled(true);
     const pushDisable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
 
     const { getByRole } = render(Settings, {
       props: {
-        settings: makeSettings(),
+        settings,
         selection,
         pushEnable: vi.fn(),
         pushDisable,
@@ -258,6 +275,7 @@ describe('Settings screen', () => {
 
     await fireEvent.click(getByRole('button', { name: 'Выключить уведомления' }));
     await waitFor(() => expect(pushDisable).toHaveBeenCalled());
+    await waitFor(() => expect(settings.notificationsEnabled).toBe(false));
   });
 
   it('shows a muted notice when push is unsupported', () => {

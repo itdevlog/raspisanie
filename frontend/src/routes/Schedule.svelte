@@ -96,6 +96,10 @@
     scheduleView?: ScheduleView;
     /** «Не беспокоить ночью» (Web Push) — carried into the initial subscribe. */
     pushQuietHours?: boolean;
+    /** Master push flag from the shell; this screen never owns it. */
+    notificationsEnabled?: boolean;
+    /** Publish the master push flag when this screen enables/disables push. */
+    onNotificationsChange?: (on: boolean) => void;
   }
   let {
     client = defaultApi,
@@ -117,6 +121,8 @@
     showLessonTime = true,
     scheduleView = 'cards',
     pushQuietHours = true,
+    notificationsEnabled = false,
+    onNotificationsChange,
   }: Props = $props();
 
   let period = $state<Period>('today');
@@ -433,7 +439,13 @@
     pushSupported ??
       (supportsServiceWorker() && (typeof window === 'undefined' || 'Notification' in window)),
   );
-  const isPushOn = $derived(pushState === 'on' || getPermission() === 'granted');
+  const isPushOn = $derived(
+    notificationsEnabled && (pushState === 'on' || getPermission() === 'granted'),
+  );
+  /** Push is class-only (MVP) and needs a saved class name. */
+  const savedClass = $derived(
+    selection.schoolId !== null && selection.kind === 'class' && selection.name !== null,
+  );
   const offline = $derived(offlineState({ online, fromCache }));
 
   /** Enable notifications for the selected class (MVP = class-only). */
@@ -441,6 +453,7 @@
     const schoolId = selection.schoolId;
     const name = selection.name;
     if (!schoolId || !name) {
+      pushNotice = 'Выберите класс, чтобы включить уведомления.';
       return;
     }
     pushState = 'busy';
@@ -456,8 +469,10 @@
     });
     if (result.ok) {
       pushState = 'on';
+      onNotificationsChange?.(true);
     } else {
       pushState = 'idle';
+      onNotificationsChange?.(false);
       pushNotice = result.error ?? 'Не удалось включить уведомления';
     }
   }
@@ -468,6 +483,7 @@
     const result = await pushDisable();
     if (result.ok) {
       pushState = 'idle';
+      onNotificationsChange?.(false);
       pushNotice = 'Уведомления выключены';
     } else {
       pushState = 'on';
@@ -657,11 +673,14 @@
         <button
           type="button"
           class="push nika-btn nika-btn-light"
-          disabled={pushState === 'busy'}
+          disabled={pushState === 'busy' || (!isPushOn && !savedClass)}
           onclick={isPushOn ? handleDisablePush : handleEnablePush}
         >
           {isPushOn ? 'Выключить уведомления' : 'Включить уведомления'}
         </button>
+        {#if !isPushOn && !savedClass}
+          <p class="share-notice" role="status">Выберите класс, чтобы включить уведомления.</p>
+        {/if}
         {#if pushNotice}
           <p class="share-notice" role="status">{pushNotice}</p>
         {/if}

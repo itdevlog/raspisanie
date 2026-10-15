@@ -112,9 +112,19 @@
   // The header bell is a master on/off switch for push. It is shown only where
   // Web Push is usable; `pushSupported` is injectable so tests can force it.
   const pushSupported = $derived(injectedPushSupported ?? isPushSupported());
-  // ON reflects both the user's switch and the browser permission: a denied
-  // permission means notifications cannot be on, so the bell reads muted.
-  const bellOn = $derived(settings.notificationsEnabled && getPermission() !== 'denied');
+  // Local submit state. The `pushState` rune is what re-renders the bell after a
+  // subscribe: the browser permission read (`getPermission`) is not reactive.
+  let pushState = $state<'idle' | 'busy' | 'on'>('idle');
+  let pushNotice = $state<string | null>(null);
+  // Push is class-only (MVP), so the master switch needs a selected class.
+  const hasNotificationTarget = $derived(
+    selection.schoolId !== null && selection.name !== null && selection.kind === 'class',
+  );
+  // The single on/off rule shared with Schedule and Settings: the user's flag
+  // AND a live subscription (local `pushState`) or a granted permission.
+  const bellOn = $derived(
+    settings.notificationsEnabled && (pushState === 'on' || getPermission() === 'granted'),
+  );
 
   // Mirror the chosen skin/accent/font onto `<html>` at start and on change.
   $effect(() => {
@@ -270,26 +280,45 @@
 
   /**
    * Toggle the master push switch from the header bell. Turning off drops the
-   * subscription; turning on flips the flag and, when an entity is selected,
-   * subscribes it (a push subscription is always per class/teacher/room, so a
-   * bare switch cannot subscribe on its own).
+   * subscription and clears the shared flag; turning on requires a selected
+   * class, then subscribes it and lights the flag so every control agrees.
    */
   async function toggleNotifications(): Promise<void> {
     if (bellOn) {
-      await pushDisable();
-      settings.setNotificationsEnabled(false);
+      pushState = 'busy';
+      pushNotice = null;
+      const result = await pushDisable();
+      if (result.ok) {
+        pushState = 'idle';
+        settings.setNotificationsEnabled(false);
+        pushNotice = 'Уведомления выключены';
+      } else {
+        pushState = 'on';
+        pushNotice = result.error ?? 'Не удалось выключить уведомления';
+      }
       return;
     }
-    settings.setNotificationsEnabled(true);
     const schoolId = selection.schoolId;
     const name = selection.name;
-    if (schoolId && name) {
-      await pushEnable({
-        schoolId,
-        name,
-        kind: selection.kind,
-        quiet: settings.pushQuietHours,
-      });
+    if (!schoolId || !name || selection.kind !== 'class') {
+      pushNotice = 'Выберите класс, чтобы включить уведомления.';
+      return;
+    }
+    pushState = 'busy';
+    pushNotice = null;
+    const result = await pushEnable({
+      schoolId,
+      name,
+      kind: 'class',
+      quiet: settings.pushQuietHours,
+    });
+    if (result.ok) {
+      pushState = 'on';
+      settings.setNotificationsEnabled(true);
+    } else {
+      pushState = 'idle';
+      settings.setNotificationsEnabled(false);
+      pushNotice = result.error ?? 'Не удалось включить уведомления';
     }
   }
 </script>
@@ -307,6 +336,7 @@
           class:on={bellOn}
           aria-label="Уведомления"
           aria-pressed={bellOn}
+          disabled={pushState === 'busy' || (!bellOn && !hasNotificationTarget)}
           onclick={toggleNotifications}
         >
           <svg class="bell-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -348,6 +378,12 @@
         {/if}
       </div>
     {/if}
+    {#if pushSupported && !bellOn && !hasNotificationTarget}
+      <p class="bell-hint" role="status">Выберите класс, чтобы включить уведомления.</p>
+    {/if}
+    {#if pushNotice}
+      <p class="bell-hint" role="status">{pushNotice}</p>
+    {/if}
   </header>
 
   {#if view === 'settings'}
@@ -355,6 +391,9 @@
       {settings}
       {selection}
       {schoolStrikeoutFreeLsn}
+      {pushSupported}
+      {pushEnable}
+      {pushDisable}
       onBack={goHome}
       onOpenVariants={() => router.goTo('variants')}
     />
@@ -373,6 +412,11 @@
       showLessonTime={settings.showLessonTime}
       scheduleView={settings.scheduleView}
       pushQuietHours={settings.pushQuietHours}
+      {pushSupported}
+      {pushEnable}
+      {pushDisable}
+      notificationsEnabled={settings.notificationsEnabled}
+      onNotificationsChange={(on) => settings.setNotificationsEnabled(on)}
       onOpenDay={openDay}
       onBack={backToList}
       onHome={goHome}
@@ -469,6 +513,18 @@
 
   .bell.on {
     color: var(--color-accent);
+  }
+
+  .bell:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .bell-hint {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-sm);
+    color: inherit;
+    opacity: 0.9;
   }
 
   .bell-icon {

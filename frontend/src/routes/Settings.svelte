@@ -95,7 +95,9 @@
     pushSupported ??
       (supportsServiceWorker() && (typeof window === 'undefined' || 'Notification' in window)),
   );
-  const isPushOn = $derived(pushState === 'on' || getPermission() === 'granted');
+  const isPushOn = $derived(
+    settings.notificationsEnabled && (pushState === 'on' || getPermission() === 'granted'),
+  );
   /** Push is class-only (MVP) and needs a saved class name. */
   const savedClass = $derived(
     selection.schoolId !== null && selection.kind === 'class' && selection.name !== null,
@@ -166,8 +168,10 @@
     });
     if (result.ok) {
       pushState = 'on';
+      settings.setNotificationsEnabled(true);
     } else {
       pushState = 'idle';
+      settings.setNotificationsEnabled(false);
       pushNotice = result.error ?? 'Не удалось включить уведомления';
     }
   }
@@ -201,6 +205,7 @@
     const result = await pushDisable();
     if (result.ok) {
       pushState = 'idle';
+      settings.setNotificationsEnabled(false);
       pushNotice = 'Уведомления выключены';
     } else {
       pushState = 'on';

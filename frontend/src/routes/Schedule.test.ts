@@ -222,8 +222,9 @@ describe('Schedule screen', () => {
     selection.selectSchool('gym1');
     selection.selectEntity('class', '5А');
     const pushEnable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+    const onNotificationsChange = vi.fn();
 
-    const { getByRole, findByText } = render(Schedule, {
+    const { getByRole } = render(Schedule, {
       props: {
         client,
         selection,
@@ -232,6 +233,7 @@ describe('Schedule screen', () => {
         pushEnable,
         pushDisable: vi.fn(),
         pushSupported: true,
+        onNotificationsChange,
       },
     });
 
@@ -247,7 +249,8 @@ describe('Schedule screen', () => {
         quiet: true,
       }),
     );
-    expect(await findByText('Выключить уведомления')).toBeTruthy();
+    // Enabling publishes the shared flag the bell (and the other screens) read.
+    await waitFor(() => expect(onNotificationsChange).toHaveBeenCalledWith(true));
   });
 
   it('carries the «не беспокоить ночью» setting into the initial subscribe', async () => {
@@ -276,12 +279,13 @@ describe('Schedule screen', () => {
     await waitFor(() => expect(pushEnable).toHaveBeenCalledWith(expect.objectContaining({ quiet: false })));
   });
 
-  it('disables push through the injected handler', async () => {
+  it('disables push through the injected handler and clears the shared flag', async () => {
     const client = makeClient();
     const selection = makeSelection();
     selection.selectSchool('gym1');
     selection.selectEntity('class', '5А');
     const pushDisable = vi.fn().mockResolvedValue({ ok: true, state: 'subscribed' });
+    const onNotificationsChange = vi.fn();
 
     const { getByRole, findByText } = render(Schedule, {
       props: {
@@ -292,7 +296,9 @@ describe('Schedule screen', () => {
         pushDisable,
         // Pretend a subscription already exists so the button offers opt-out.
         pushInitiallyOn: true,
+        notificationsEnabled: true,
         pushSupported: true,
+        onNotificationsChange,
       },
     });
 
@@ -300,6 +306,7 @@ describe('Schedule screen', () => {
     expect(await findByText('Выключить уведомления')).toBeTruthy();
     await fireEvent.click(getByRole('button', { name: 'Выключить уведомления' }));
     await waitFor(() => expect(pushDisable).toHaveBeenCalled());
+    await waitFor(() => expect(onNotificationsChange).toHaveBeenCalledWith(false));
   });
 
   it('does not offer push for teacher/room (MVP class-only)', async () => {
