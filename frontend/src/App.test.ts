@@ -613,13 +613,13 @@ describe('App shell', () => {
       expect(bell.classList.contains('on')).toBe(false);
     });
 
-    it('disables the bell and hints «Выберите класс» when no class is selected', async () => {
+    it('hints «Выберите класс» only after tapping the bell when no class is selected', async () => {
       const settings = makeSettings();
       const selection = makeSelection();
       selection.selectSchool('gym1');
       const fake = makeFakeEnv('/');
       const router = createRouteStore(fake.env);
-      const { findByRole, findByText } = render(App, {
+      const { findByRole, findByText, queryByText } = render(App, {
         props: {
           client: makeClient(),
           selection,
@@ -631,7 +631,14 @@ describe('App shell', () => {
       });
 
       const bell = await findByRole('button', { name: 'Уведомления' });
-      expect(bell.hasAttribute('disabled')).toBe(true);
+      // The bell stays tappable (so it can explain itself) but reads muted.
+      expect(bell.hasAttribute('disabled')).toBe(false);
+      expect(bell.classList.contains('inactive')).toBe(true);
+      // No persistent hint in the header until the user asks.
+      expect(queryByText(/Выберите класс/)).toBeNull();
+
+      await fireEvent.click(bell);
+
       expect(await findByText(/Выберите класс/)).toBeTruthy();
     });
 

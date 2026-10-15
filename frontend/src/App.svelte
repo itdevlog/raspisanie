@@ -334,9 +334,10 @@
           type="button"
           class="bell nika-btn nika-btn-light"
           class:on={bellOn}
+          class:inactive={!hasNotificationTarget}
           aria-label="Уведомления"
           aria-pressed={bellOn}
-          disabled={pushState === 'busy' || (!bellOn && !hasNotificationTarget)}
+          disabled={pushState === 'busy'}
           onclick={toggleNotifications}
         >
           <svg class="bell-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -377,9 +378,6 @@
           <a class="site-link" href={selectedSchool.homepage_url}>Школьный сайт</a>
         {/if}
       </div>
-    {/if}
-    {#if pushSupported && !bellOn && !hasNotificationTarget}
-      <p class="bell-hint" role="status">Выберите класс, чтобы включить уведомления.</p>
     {/if}
     {#if pushNotice}
       <p class="bell-hint" role="status">{pushNotice}</p>
@@ -513,6 +511,12 @@
 
   .bell.on {
     color: var(--color-accent);
+  }
+
+  /* Muted while there is no class to subscribe; still tappable so a tap can
+     explain why nothing happens. */
+  .bell.inactive {
+    opacity: 0.6;
   }
 
   .bell:disabled {
