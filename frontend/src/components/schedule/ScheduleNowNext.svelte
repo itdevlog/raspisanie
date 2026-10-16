@@ -33,9 +33,9 @@
     is_method_hour: false,
   };
 
-  /** The lesson's first item (or a placeholder) for the hero layout. */
-  function firstItem(lesson: Lesson): LessonItem {
-    return lesson.items[0] ?? EMPTY_ITEM;
+  /** A lesson's items, or a single placeholder so free slots still render. */
+  function effectiveItems(lesson: Lesson): LessonItem[] {
+    return lesson.items.length > 0 ? lesson.items : [EMPTY_ITEM];
   }
 
   const showTeacher = $derived(kind !== 'teacher');
@@ -67,19 +67,25 @@
               {/if}
               <ExchangeBadge lesson={hero} />
             </div>
-            <span class="subject hero-subject" class:method={firstItem(hero).is_method_hour}>
-              {itemSubjectLabel(firstItem(hero))}
-            </span>
-            <div class="hero-meta">
-              {#if firstItem(hero).groups}
-                <span class="group">{firstItem(hero).groups}</span>
-              {/if}
-              {#if showTeacher && firstItem(hero).teacher}
-                <span class="teacher">{firstItem(hero).teacher}</span>
-              {/if}
-              {#if showRoom && firstItem(hero).room}
-                <span class="chip">{firstItem(hero).room}</span>
-              {/if}
+            <div class="hero-items">
+              {#each effectiveItems(hero) as item (item)}
+                <div class="hero-entry">
+                  <span class="subject hero-subject" class:method={item.is_method_hour}>
+                    {itemSubjectLabel(item)}
+                  </span>
+                  <div class="hero-meta">
+                    {#if item.groups}
+                      <span class="group">{item.groups}</span>
+                    {/if}
+                    {#if showTeacher && item.teacher}
+                      <span class="teacher">{item.teacher}</span>
+                    {/if}
+                    {#if showRoom && item.room}
+                      <span class="chip">{item.room}</span>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
             </div>
           </article>
         </li>
@@ -93,13 +99,25 @@
             <span class="num">{lesson.num}</span>
             <span class="clock">{lessonTime(lesson)}</span>
           {/if}
-          <span class="subject" class:method={firstItem(lesson).is_method_hour}>
-            {itemSubjectLabel(firstItem(lesson))}
-          </span>
+          <div class="rest-body">
+            {#each effectiveItems(lesson) as item (item)}
+              <div class="rest-row">
+                <span class="subject" class:method={item.is_method_hour}
+                  >{itemSubjectLabel(item)}</span
+                >
+                {#if item.groups}
+                  <span class="group">{item.groups}</span>
+                {/if}
+                {#if showTeacher && item.teacher}
+                  <span class="teacher">{item.teacher}</span>
+                {/if}
+                {#if showRoom && item.room}
+                  <span class="chip">{item.room}</span>
+                {/if}
+              </div>
+            {/each}
+          </div>
           <ExchangeBadge {lesson} />
-          {#if showRoom && firstItem(lesson).room}
-            <span class="chip">{firstItem(lesson).room}</span>
-          {/if}
         </li>
       {/if}
     {/each}
@@ -163,6 +181,18 @@
     gap: var(--space-2);
   }
 
+  /* A split lesson renders one block per group; the stacked gap keeps each
+     group's subject/teacher/room visually distinct. */
+  .hero-items {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .hero-entry {
+    display: grid;
+    gap: var(--space-1);
+  }
+
   .rest {
     list-style: none;
     margin: var(--space-3) 0 0;
@@ -176,6 +206,20 @@
     gap: var(--space-2);
     padding: var(--space-2) 0;
     border-bottom: 1px solid var(--color-border);
+  }
+
+  .rest-body {
+    flex: 1;
+    min-width: 8rem;
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .rest-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2);
   }
 
   .rest-item .num {
