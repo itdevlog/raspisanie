@@ -96,8 +96,9 @@
     scheduleView?: ScheduleView;
     /** «Не беспокоить ночью» (Web Push) — carried into the initial subscribe. */
     pushQuietHours?: boolean;
-    /** Master push flag from the shell; this screen never owns it. */
-    notificationsEnabled?: boolean;
+    /** Master push flag from the shell; this screen never owns it. `null` =
+     *  never chosen → defer to the browser permission. */
+    notificationsEnabled?: boolean | null;
     /** Publish the master push flag when this screen enables/disables push. */
     onNotificationsChange?: (on: boolean) => void;
   }
@@ -121,7 +122,7 @@
     showLessonTime = true,
     scheduleView = 'cards',
     pushQuietHours = true,
-    notificationsEnabled = false,
+    notificationsEnabled = null,
     onNotificationsChange,
   }: Props = $props();
 
@@ -449,7 +450,7 @@
       (supportsServiceWorker() && (typeof window === 'undefined' || 'Notification' in window)),
   );
   const isPushOn = $derived(
-    notificationsEnabled && (pushState === 'on' || getPermission() === 'granted'),
+    (notificationsEnabled ?? true) && (pushState === 'on' || getPermission() === 'granted'),
   );
   /** Push is class-only (MVP) and needs a saved class name. */
   const savedClass = $derived(

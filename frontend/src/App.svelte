@@ -120,10 +120,12 @@
   const hasNotificationTarget = $derived(
     selection.schoolId !== null && selection.name !== null && selection.kind === 'class',
   );
-  // The single on/off rule shared with Schedule and Settings: the user's flag
-  // AND a live subscription (local `pushState`) or a granted permission.
+  // The single on/off rule shared with Schedule and Settings: an unset flag
+  // (null — never chosen) defers to the browser permission, an explicit false
+  // keeps notifications off, and an explicit true requires a live subscription.
   const bellOn = $derived(
-    settings.notificationsEnabled && (pushState === 'on' || getPermission() === 'granted'),
+    (settings.notificationsEnabled ?? true) &&
+      (pushState === 'on' || getPermission() === 'granted'),
   );
 
   // Mirror the chosen skin/accent/font onto `<html>` at start and on change.

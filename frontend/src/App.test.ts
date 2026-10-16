@@ -602,7 +602,7 @@ describe('App shell', () => {
       }
     });
 
-    it('renders the bell off by default (notifications default to off)', async () => {
+    it('renders the bell off when the flag is unset and permission is not granted', async () => {
       const settings = makeSettings();
       const { findByRole } = render(App, {
         props: { ...baseProps(), settings, pushSupported: true },
@@ -611,6 +611,40 @@ describe('App shell', () => {
       const bell = await findByRole('button', { name: 'Уведомления' });
       expect(bell.getAttribute('aria-pressed')).toBe('false');
       expect(bell.classList.contains('on')).toBe(false);
+    });
+
+    it('defers to a granted permission when the flag was never chosen (null renders ON)', async () => {
+      const restore = withNotificationPermission('granted');
+      try {
+        const settings = makeSettings();
+        expect(settings.notificationsEnabled).toBeNull();
+        const { findByRole } = render(App, {
+          props: { ...baseProps(), settings, pushSupported: true },
+        });
+
+        const bell = await findByRole('button', { name: 'Уведомления' });
+        expect(bell.getAttribute('aria-pressed')).toBe('true');
+        expect(bell.classList.contains('on')).toBe(true);
+      } finally {
+        restore();
+      }
+    });
+
+    it('renders the bell off for an explicit false even when permission is granted', async () => {
+      const restore = withNotificationPermission('granted');
+      try {
+        const settings = makeSettings();
+        settings.setNotificationsEnabled(false);
+        const { findByRole } = render(App, {
+          props: { ...baseProps(), settings, pushSupported: true },
+        });
+
+        const bell = await findByRole('button', { name: 'Уведомления' });
+        expect(bell.getAttribute('aria-pressed')).toBe('false');
+        expect(bell.classList.contains('on')).toBe(false);
+      } finally {
+        restore();
+      }
     });
 
     it('hints «Выберите класс» only after tapping the bell when no class is selected', async () => {
@@ -696,6 +730,9 @@ describe('App shell', () => {
       const restore = withNotificationPermission('granted');
       try {
         const settings = makeSettings();
+        // Explicitly off (not the null "never chosen" default, which would defer
+        // to the granted permission and start ON).
+        settings.setNotificationsEnabled(false);
         const selection = makeSelection();
         selection.selectSchool('gym1');
         selection.selectEntity('class', '5А');
@@ -717,7 +754,7 @@ describe('App shell', () => {
           },
         });
 
-        // Default: both controls read OFF.
+        // Explicitly off: both controls read OFF.
         expect((await findByRole('button', { name: 'Уведомления' })).getAttribute('aria-pressed')).toBe(
           'false',
         );
@@ -742,6 +779,9 @@ describe('App shell', () => {
       const restore = withNotificationPermission('granted');
       try {
         const settings = makeSettings();
+        // Explicitly off so the flow starts from OFF (null would defer to the
+        // granted permission and read ON).
+        settings.setNotificationsEnabled(false);
         const selection = makeSelection();
         selection.selectSchool('gym1');
         selection.selectEntity('class', '5А');

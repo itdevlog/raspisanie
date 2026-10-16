@@ -42,8 +42,14 @@ export interface Settings {
   scheduleView: ScheduleView;
   /** «Не беспокоить ночью» (Web Push, 22:00–07:00); default on. */
   pushQuietHours: boolean;
-  /** Master switch for Web Push notifications; default off (opt-in). */
-  notificationsEnabled: boolean;
+  /**
+   * Master switch for Web Push notifications. `null` means "the user never
+   * chose" (the key predates this flag, or was corrupted): consumers defer to
+   * the browser permission instead of forcing the control off (which used to
+   * nudge a re-subscribe that could rebind the endpoint). `true`/`false` are an
+   * explicit user choice.
+   */
+  notificationsEnabled: boolean | null;
 }
 
 /** Human-readable labels, shared by the Settings screen and its tests. */
@@ -88,7 +94,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showLessonTime: true,
   scheduleView: 'cards',
   pushQuietHours: true,
-  notificationsEnabled: false,
+  notificationsEnabled: null,
 };
 
 const SKINS: readonly Skin[] = ['classic', 'minimal', 'dark', 'contrast', 'youth'];
@@ -137,9 +143,7 @@ function sanitizeSettings(raw: unknown): Settings {
         ? obj.pushQuietHours
         : DEFAULT_SETTINGS.pushQuietHours,
     notificationsEnabled:
-      typeof obj.notificationsEnabled === 'boolean'
-        ? obj.notificationsEnabled
-        : DEFAULT_SETTINGS.notificationsEnabled,
+      typeof obj.notificationsEnabled === 'boolean' ? obj.notificationsEnabled : null,
   };
 }
 
@@ -188,7 +192,7 @@ export function createSettingsStore(storage?: StorageLike | null) {
     get pushQuietHours(): boolean {
       return state.pushQuietHours;
     },
-    get notificationsEnabled(): boolean {
+    get notificationsEnabled(): boolean | null {
       return state.notificationsEnabled;
     },
     setSkin(skin: Skin): void {

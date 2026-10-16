@@ -32,7 +32,7 @@ describe('settings store', () => {
     expect(store.showLessonTime).toBe(true);
     expect(store.scheduleView).toBe('cards');
     expect(store.pushQuietHours).toBe(true);
-    expect(store.notificationsEnabled).toBe(false);
+    expect(store.notificationsEnabled).toBeNull();
   });
 
   it('persists each change under the namespaced key', () => {
@@ -83,21 +83,29 @@ describe('settings store', () => {
     expect(createSettingsStore(storage).pushQuietHours).toBe(false);
   });
 
-  it('persists notificationsEnabled across a new store and defaults it off', () => {
+  it('persists notificationsEnabled across a new store and defaults it to null', () => {
     const storage = memoryStorage();
     const store = createSettingsStore(storage);
-    expect(store.notificationsEnabled).toBe(false);
+    expect(store.notificationsEnabled).toBeNull();
 
     store.setNotificationsEnabled(true);
     expect(store.notificationsEnabled).toBe(true);
     expect(createSettingsStore(storage).notificationsEnabled).toBe(true);
   });
 
-  it('falls back to the default notificationsEnabled (off) for a non-boolean', () => {
+  it('keeps an explicit notificationsEnabled=false through a reload', () => {
+    const storage = memoryStorage();
+    const store = createSettingsStore(storage);
+    store.setNotificationsEnabled(false);
+    expect(store.notificationsEnabled).toBe(false);
+    expect(createSettingsStore(storage).notificationsEnabled).toBe(false);
+  });
+
+  it('yields null (never chosen) for a non-boolean notificationsEnabled', () => {
     const store = createSettingsStore(
       memoryStorage({ 'raspisanie:settings': JSON.stringify({ notificationsEnabled: 'yes' }) }),
     );
-    expect(store.notificationsEnabled).toBe(false);
+    expect(store.notificationsEnabled).toBeNull();
   });
 
   it('persists the schedule view across a new store', () => {
@@ -180,7 +188,7 @@ describe('settings store', () => {
     store.reset();
 
     expect(store.current).toEqual(DEFAULT_SETTINGS);
-    expect(store.notificationsEnabled).toBe(false);
+    expect(store.notificationsEnabled).toBeNull();
     expect(storage.getItem('raspisanie:settings')).toBeNull();
   });
 });

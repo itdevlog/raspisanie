@@ -96,7 +96,8 @@
       (supportsServiceWorker() && (typeof window === 'undefined' || 'Notification' in window)),
   );
   const isPushOn = $derived(
-    settings.notificationsEnabled && (pushState === 'on' || getPermission() === 'granted'),
+    (settings.notificationsEnabled ?? true) &&
+      (pushState === 'on' || getPermission() === 'granted'),
   );
   /** Push is class-only (MVP) and needs a saved class name. */
   const savedClass = $derived(
