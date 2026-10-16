@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -53,6 +54,22 @@ PUSH_TIMEOUT_SECONDS = 30.0
 # Окно «не беспокоить ночью»: [22:00, 07:00), пересекает полночь.
 QUIET_START_HOUR = 22
 QUIET_END_HOUR = 7
+
+
+@dataclass(frozen=True)
+class PushSendResult:
+    """Результат отправки одной подписки.
+
+    Нужен, чтобы операторский CLI (`services.push_test`) и штатная рассылка
+    ходили ровно через один код отправки (`PushService.send_one`) и одинаково
+    классифицировали ошибку: `dead` — подписка недействительна (404/410),
+    `status_code` — HTTP-статус push-сервиса, `error` — текст ошибки.
+    """
+
+    success: bool
+    status_code: int | None = None
+    error: str = ''
+    dead: bool = False
 
 
 class PushService:
@@ -106,7 +123,6 @@ class PushService:
         moment = now if now is not None else datetime.now(get_timezone())
         quiet_now = self._in_quiet_window(moment)
 
-        payload = json.dumps({'title': title, 'body': body, 'url': url})
         sent = 0
         skipped_quiet = 0
         dead_endpoints: list[str] = []
@@ -116,21 +132,20 @@ class PushService:
             if quiet_now and subscription.get('quiet', True):
                 skipped_quiet += 1
                 continue
-            try:
-                await asyncio.to_thread(self._send_one, subscription, payload)
-            except Exception as e:  # noqa: BLE001 - best-effort: наружу не выходит
-                status = self._status_code(e)
-                endpoint = subscription.get('endpoint')
-                if status in DEAD_SUBSCRIPTION_STATUSES:
-                    self.logger.info(
-                        "Подписка мертва (HTTP %s), удаляем: %s", status, endpoint)
-                    if endpoint:
-                        dead_endpoints.append(endpoint)
-                else:
-                    self.logger.warning(
-                        "Не удалось отправить push на %s: %s", endpoint, e)
+            result = await self.send_one(subscription, title, body, url)
+            if result.success:
+                sent += 1
                 continue
-            sent += 1
+            endpoint = subscription.get('endpoint')
+            if result.dead:
+                self.logger.info(
+                    "Подписка мертва (HTTP %s), удаляем: %s",
+                    result.status_code, endpoint)
+                if endpoint:
+                    dead_endpoints.append(endpoint)
+            else:
+                self.logger.warning(
+                    "Не удалось отправить push на %s: %s", endpoint, result.error)
 
         if skipped_quiet:
             self.logger.info(
@@ -140,6 +155,32 @@ class PushService:
             self._remove_dead(dead_endpoints)
 
         return sent
+
+    async def send_one(
+        self, subscription: dict, title: str, body: str, url: str,
+    ) -> PushSendResult:
+        """Отправляет один push и возвращает результат. Никогда не бросает.
+
+        Единый код отправки: штатная рассылка (`send_exchange_notifications`)
+        вызывает этот метод для каждой подписки, и операторский CLI
+        (`services.push_test`) — тоже. Payload ровно `{title, body, url}` —
+        ровно то, что читает обработчик `push` в service-worker.
+
+        404/410 помечаются как `dead` (подписку нужно удалить), прочие ошибки
+        (5xx, сеть, таймаут) — временные, подписка сохраняется.
+        """
+        payload = json.dumps({'title': title, 'body': body, 'url': url})
+        try:
+            await asyncio.to_thread(self._send_one, subscription, payload)
+        except Exception as e:  # noqa: BLE001 - best-effort: наружу не выходит
+            status = self._status_code(e)
+            return PushSendResult(
+                success=False,
+                status_code=status,
+                error=str(e),
+                dead=status in DEAD_SUBSCRIPTION_STATUSES,
+            )
+        return PushSendResult(success=True)
 
     def _send_one(self, subscription: dict, payload: str) -> None:
         """Синхронная отправка одной подписки (вызывается через to_thread)."""

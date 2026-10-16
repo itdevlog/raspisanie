@@ -997,6 +997,18 @@ cmd_vapid() {
         || die "Не удалось сгенерировать VAPID-пару"
 }
 
+# --- push-test (диагностика Web Push) ------------------------------------------
+cmd_push_test() {
+    # Проксирует аргументы в CLI `services.push_test` (--list/--send ...):
+    # показать сохранённые подписки или отправить тестовый push.
+    local py_bin="$VENV_DIR/bin/python"
+    if [[ ! -x "$py_bin" ]]; then
+        py_bin="$(command -v python3 || true)"
+    fi
+    [[ -n "$py_bin" ]] || die "Python не найден — запустите: ./manage.sh install"
+    ( cd "$SCRIPT_DIR" && "$py_bin" -m services.push_test "$@" )
+}
+
 # --- edge (публичный сайт: Caddy + edge-сервер) --------------------------------
 cmd_edge() {
     # Делегирует в deploy/edge/install.sh (W26): ставит Caddy, Node, venv, собирает
@@ -1096,6 +1108,8 @@ cmd_help() {
   caddy       HTTPS для Mini App: ставит Caddy, берёт домен из WEBAPP_URL,
               выпускает Let's Encrypt сертификат и проксирует на бота
   vapid       Печать VAPID-пары для Web Push (впишите значения в .env)
+  push-test   Диагностика Web Push: список подписок и тестовая отправка
+              (./manage.sh push-test --list | --send --all | --send --school ID ...)
   edge        Публичный сайт (edge-хост): Caddy + edge-сервер, авто-TLS.
               ОБЯЗАТЕЛЬНО EDGE_DOMAIN: sudo EDGE_DOMAIN=домен ./manage.sh edge
   uninstall   Остановка + удаление сервиса и Caddy-фрагмента (с вопросами)
@@ -1203,6 +1217,7 @@ main() {
         doctor)    cmd_doctor ;;
         caddy)     cmd_caddy ;;
         vapid)     cmd_vapid ;;
+        push-test) cmd_push_test "$@" ;;
         edge)      cmd_edge ;;
         uninstall) cmd_uninstall ;;
         help|-h|--help|"") cmd_help ;;

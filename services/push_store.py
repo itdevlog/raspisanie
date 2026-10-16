@@ -97,6 +97,10 @@ class PushSubscriptionStore:
         return self.collection.find(
             {'school_id': school_id, 'kind': kind, 'name': name})
 
+    def list_all(self) -> list[dict]:
+        """Все подписки хранилища (диагностический CLI `services.push_test`)."""
+        return self.collection.find()
+
     def remove_dead(self, endpoints: Iterable[str]) -> int:
         """Удаляет подписки для перечисленных endpoints (404/410 при отправке).
 
