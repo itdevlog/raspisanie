@@ -144,6 +144,7 @@
     font-size: var(--text-sm);
     font-weight: bold;
     color: var(--lesson-time);
+    white-space: nowrap;
   }
 
   .card-body {

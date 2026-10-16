@@ -120,6 +120,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    white-space: nowrap;
     padding: 1px var(--space-2);
     border: none;
     border-radius: 999px;
