@@ -717,7 +717,7 @@ describe('Schedule screen', () => {
       expect(await findByText('05.10.2026, Понедельник')).toBeTruthy();
     });
 
-    it('swipes the day pane to the next/previous day, clamped at the baseline', async () => {
+    it('swipes the day pane forward and freely into the past', async () => {
       const client = makeClient({ getDay: vi.fn().mockResolvedValue(dayFor('05.10.2026')) });
       const { container } = render(Schedule, {
         props: { client, selection: setup(), today: makeToday('05.10.2026') },
@@ -737,11 +737,12 @@ describe('Schedule screen', () => {
         expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '05.10.2026'),
       );
 
-      // Already at the baseline: a right swipe is a no-op (no past days).
+      // A right swipe past the baseline now walks into the past.
       (client.getDay as ReturnType<typeof vi.fn>).mockClear();
       fireSwipe(pane, 60);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(client.getDay).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '04.10.2026'),
+      );
     });
 
     it('swipes the week pane to the next/previous week', async () => {
@@ -812,6 +813,109 @@ describe('Schedule screen', () => {
       );
       // The pinned notice follows the cursor.
       expect(await findByText('Расписание на 08.09.2026')).toBeTruthy();
+    });
+  });
+
+  // The day cursor is free to move into the past (no floor at the baseline).
+  describe('free day navigation', () => {
+    function setup() {
+      const selection = makeSelection();
+      selection.selectSchool('gym1');
+      selection.selectEntity('class', '5А');
+      return selection;
+    }
+
+    it('steps back to yesterday with the «‹» control and requests that date', async () => {
+      const client = makeClient({ getDay: vi.fn().mockResolvedValue(dayFor('05.10.2026')) });
+      const { getByRole, findByText } = render(Schedule, {
+        props: { client, selection: setup(), today: makeToday('05.10.2026') },
+      });
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '05.10.2026'),
+      );
+
+      const prev = getByRole('button', { name: 'Предыдущий день' }) as HTMLButtonElement;
+      // The prev-day control is never gated by the offset.
+      expect(prev.disabled).toBe(false);
+
+      await fireEvent.click(prev);
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '04.10.2026'),
+      );
+      expect(await findByText('04.10.2026, Воскресенье')).toBeTruthy();
+    });
+
+    it('walks two days back from the baseline', async () => {
+      const client = makeClient({ getDay: vi.fn().mockResolvedValue(dayFor('05.10.2026')) });
+      const { getByRole, findByText } = render(Schedule, {
+        props: { client, selection: setup(), today: makeToday('05.10.2026') },
+      });
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '05.10.2026'),
+      );
+
+      const prev = getByRole('button', { name: 'Предыдущий день' });
+      await fireEvent.click(prev);
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '04.10.2026'),
+      );
+      await fireEvent.click(prev);
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '03.10.2026'),
+      );
+      expect(await findByText('03.10.2026, Суббота')).toBeTruthy();
+    });
+
+    it('walks forward past tomorrow', async () => {
+      const client = makeClient({ getDay: vi.fn().mockResolvedValue(dayFor('05.10.2026')) });
+      const { getByRole, findByText } = render(Schedule, {
+        props: { client, selection: setup(), today: makeToday('05.10.2026') },
+      });
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '05.10.2026'),
+      );
+
+      const next = getByRole('button', { name: 'Следующий день' });
+      await fireEvent.click(next);
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '06.10.2026'),
+      );
+      await fireEvent.click(next);
+      await waitFor(() =>
+        expect(client.getDay).toHaveBeenCalledWith('gym1', 'class', '5А', '07.10.2026'),
+      );
+      expect(await findByText('07.10.2026, Среда')).toBeTruthy();
+    });
+
+    it('keeps the day pane but highlights no day tab off the baseline', async () => {
+      const client = makeClient({ getDay: vi.fn().mockResolvedValue(dayFor('05.10.2026')) });
+      const { getByRole, container } = render(Schedule, {
+        props: { client, selection: setup(), today: makeToday('05.10.2026') },
+      });
+      await waitFor(() => expect(client.getDay).toHaveBeenCalled());
+
+      const tab = (name: string) => getByRole('tab', { name });
+      const prev = getByRole('button', { name: 'Предыдущий день' });
+      const next = getByRole('button', { name: 'Следующий день' });
+
+      // Baseline: today is the active day tab.
+      expect(tab('Сегодня').getAttribute('aria-selected')).toBe('true');
+
+      // One day back: neither day tab is active, but the day pane stays.
+      await fireEvent.click(prev);
+      await waitFor(() => expect(tab('Сегодня').getAttribute('aria-selected')).toBe('false'));
+      expect(tab('Завтра').getAttribute('aria-selected')).toBe('false');
+      expect(container.querySelector('.day-pane')).toBeTruthy();
+
+      // Back to the baseline, then one and two days forward.
+      await fireEvent.click(next); // offset 0 → «Сегодня» active again
+      await waitFor(() => expect(tab('Сегодня').getAttribute('aria-selected')).toBe('true'));
+      await fireEvent.click(next); // offset 1 → «Завтра» active
+      await waitFor(() => expect(tab('Завтра').getAttribute('aria-selected')).toBe('true'));
+      await fireEvent.click(next); // offset 2 → neither active, pane still present
+      await waitFor(() => expect(tab('Завтра').getAttribute('aria-selected')).toBe('false'));
+      expect(tab('Сегодня').getAttribute('aria-selected')).toBe('false');
+      expect(container.querySelector('.day-pane')).toBeTruthy();
     });
   });
 

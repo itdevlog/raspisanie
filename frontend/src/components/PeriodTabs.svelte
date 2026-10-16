@@ -3,7 +3,8 @@
   export type Period = 'today' | 'tomorrow' | 'week' | 'month';
 
   interface Props {
-    value: Period;
+    /** Active tab, or `null` when no day tab applies (e.g. a non-baseline day). */
+    value: Period | null;
     onChange: (period: Period) => void;
   }
   let { value, onChange }: Props = $props();

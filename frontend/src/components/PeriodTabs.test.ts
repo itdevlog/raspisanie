@@ -11,6 +11,15 @@ describe('PeriodTabs', () => {
     expect(getByRole('tab', { name: 'Месяц' })).toBeTruthy();
   });
 
+  it('leaves every tab inactive when the value is null', () => {
+    const { getByRole } = render(PeriodTabs, { props: { value: null, onChange: vi.fn() } });
+    for (const name of ['Сегодня', 'Завтра', 'Неделя', 'Месяц']) {
+      const tab = getByRole('tab', { name });
+      expect(tab.getAttribute('aria-selected')).toBe('false');
+      expect(tab.classList.contains('is-active')).toBe(false);
+    }
+  });
+
   it('emits the chosen period', async () => {
     const onChange = vi.fn();
     const { getByRole } = render(PeriodTabs, { props: { value: 'today', onChange } });

@@ -127,8 +127,8 @@
 
   let period = $state<Period>('today');
   // Day cursor: offset from the baseline (server today, or a pinned share date).
-  // «Сегодня» = 0, «Завтра» = 1; swiping left/right moves it. Clamped at 0 so
-  // the day view never walks into the past before the baseline.
+  // «Сегодня» = 0, «Завтра» = 1; swiping left/right moves it freely, so a
+  // negative offset browses past days.
   let dayOffset = $state(0);
   // W38 fix: `weekOffset` is mutable now that prev/next controls exist; the API
   // accepts `offset` in -2..2.
@@ -159,7 +159,19 @@
   const dayBase = $derived(shareDate ?? today.today);
   // The date actually shown in day mode, derived from the baseline + offset.
   const dayDate = $derived(dayBase ? addDays(dayBase, dayOffset) : null);
-  const canGoPrevDay = $derived(dayOffset > 0);
+  // Which period tab is highlighted. In day mode it tracks the cursor, so
+  // «Сегодня»/«Завтра» are active only at offsets 0/1; any other offset leaves
+  // neither day tab selected while the day pane stays visible. Week/month mode
+  // highlights their own tab.
+  const activeTab = $derived<Period | null>(
+    period === 'week' || period === 'month'
+      ? period
+      : dayOffset === 0
+        ? 'today'
+        : dayOffset === 1
+          ? 'tomorrow'
+          : null,
+  );
 
   // Seed the day cursor from a pinned share date. A new pin (deep link) resets
   // the cursor to that date; swiping does not touch `pinnedDate`, so it is not
@@ -375,17 +387,14 @@
   }
 
   /**
-   * Move the day cursor by `delta`. Clamped at 0: the cursor never walks before
-   * the baseline (server today, or a pinned share date) — no past days. The
-   * «Сегодня»/«Завтра» tabs stay meaningful: offset 0 → today, ≥1 → tomorrow.
+   * Move the day cursor by `delta`, freely in both directions: a negative
+   * offset (past days) is allowed, so swiping right / «‹» walks backwards
+   * indefinitely. `period` stays a day-mode marker; the highlighted tab is
+   * derived from the offset by {@link activeTab}.
    */
   function shiftDay(delta: number) {
-    const next = dayOffset + delta;
-    if (next < 0) {
-      return;
-    }
-    dayOffset = next;
-    period = next === 0 ? 'today' : 'tomorrow';
+    dayOffset += delta;
+    period = dayOffset === 0 ? 'today' : 'tomorrow';
   }
 
   const canGoPrevWeek = $derived(weekOffset > WEEK_OFFSET_MIN);
@@ -528,7 +537,7 @@
       </p>
     {/if}
 
-    <PeriodTabs value={period} onChange={handlePeriodChange} />
+    <PeriodTabs value={activeTab} onChange={handlePeriodChange} />
 
     {#if shareDate}
       <p class="pinned" role="status">Расписание на {dayDate}</p>
@@ -622,7 +631,6 @@
               type="button"
               class="nav-arrow nika-btn nika-btn-light"
               aria-label="Предыдущий день"
-              disabled={!canGoPrevDay}
               onclick={() => shiftDay(-1)}
             >
               ‹
