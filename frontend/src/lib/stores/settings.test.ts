@@ -25,6 +25,7 @@ describe('settings store', () => {
     const store = createSettingsStore(null);
     expect(store.current).toEqual(DEFAULT_SETTINGS);
     expect(store.skin).toBe('classic');
+    expect(store.theme).toBe('system');
     expect(store.accent).toBe('blue');
     expect(store.fontSize).toBe('normal');
     expect(store.defaultKind).toBe('class');
@@ -122,6 +123,55 @@ describe('settings store', () => {
     expect(reloaded.skin).toBe('contrast');
   });
 
+  it('defaults the theme mode to «Системный» and persists a change', () => {
+    const storage = memoryStorage();
+    const store = createSettingsStore(storage);
+    expect(store.theme).toBe('system');
+
+    store.setTheme('dark');
+    expect(store.theme).toBe('dark');
+    expect(JSON.parse(storage.getItem('raspisanie:settings') as string)).toMatchObject({
+      theme: 'dark',
+    });
+    expect(createSettingsStore(storage).theme).toBe('dark');
+  });
+
+  it('falls back to «Системный» for an unknown stored theme', () => {
+    const store = createSettingsStore(
+      memoryStorage({ 'raspisanie:settings': JSON.stringify({ theme: 'midnight' }) }),
+    );
+    expect(store.theme).toBe('system');
+  });
+
+  it('resolves «Системный» against the OS preference and pins explicit modes', () => {
+    const dark = createSettingsStore(null, { prefersDark: () => true });
+    const light = createSettingsStore(null, { prefersDark: () => false });
+
+    expect(dark.resolvedTheme).toBe('dark');
+    expect(light.resolvedTheme).toBe('light');
+
+    dark.setTheme('light');
+    expect(dark.resolvedTheme).toBe('light');
+
+    light.setTheme('dark');
+    expect(light.resolvedTheme).toBe('dark');
+
+    light.setTheme('system');
+    expect(light.resolvedTheme).toBe('light');
+  });
+
+  it('writes the resolved data-theme alongside skin/accent/font in apply()', () => {
+    const store = createSettingsStore(null, { prefersDark: () => true });
+    const target: ThemeAttributeTarget = { setAttribute: vi.fn() };
+
+    store.apply(target);
+    expect(target.setAttribute).toHaveBeenCalledWith('data-theme', 'dark');
+
+    store.setTheme('light');
+    store.apply(target);
+    expect(target.setAttribute).toHaveBeenCalledWith('data-theme', 'light');
+  });
+
   it('round-trips the «Молодёжный» (youth) skin through storage and apply()', () => {
     const storage = memoryStorage();
     const store = createSettingsStore(storage);
@@ -182,12 +232,14 @@ describe('settings store', () => {
     const storage = memoryStorage();
     const store = createSettingsStore(storage);
     store.setSkin('dark');
+    store.setTheme('dark');
     store.setAccent('green');
     store.setNotificationsEnabled(false);
 
     store.reset();
 
     expect(store.current).toEqual(DEFAULT_SETTINGS);
+    expect(store.theme).toBe('system');
     expect(store.notificationsEnabled).toBeNull();
     expect(storage.getItem('raspisanie:settings')).toBeNull();
   });

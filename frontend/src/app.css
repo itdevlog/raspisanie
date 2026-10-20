@@ -11,7 +11,9 @@
  * client theme automatically while a regular browser gets the original look.
  */
 :root {
-  color-scheme: light dark;
+  /* Light by default; `[data-theme='dark']` and the dark skins flip it so
+     form controls and scrollbars match the rendered palette. */
+  color-scheme: light;
   font-family: Helvetica, Arial, 'Segoe UI', sans-serif;
 
   /* ---- Nikasoft original palette ---------------------------------------- */
@@ -125,35 +127,76 @@
 }
 
 /*
- * Dark theme: a derivation of the original palette. The header/button
- * gradients stay as-is (they read well on dark), only surfaces/text invert.
- *
- * Scoped to the `classic` skin so an explicit skin choice (e.g. `minimal`)
- * always wins over the OS preference. Before `apply()` sets the attribute the
- * base `:root` palette applies; the attribute is set at app start.
+ * Dark palettes for the two dual-mode skins. `data-theme` is the *resolved*
+ * light/dark mode written by the settings store (`system` follows the OS at
+ * call time; see `settings.svelte.ts`). Skins that are inherently dark
+ * (`dark`, `youth`) or light (`contrast`) declare their own `color-scheme` and
+ * ignore `data-theme`, so an explicit skin choice always wins. Before
+ * `apply()` sets the attribute the base `:root` palette applies.
  */
-@media (prefers-color-scheme: dark) {
-  :root[data-skin='classic'] {
-    --color-bg: var(--tg-bg, #17191c);
-    --color-surface: #24272b;
-    --color-surface-2: #2e3237;
-    --color-track: #1d2023;
-    --color-text: var(--tg-text, #e8eaed);
-    --color-muted: var(--tg-hint, #a0a4a8);
-    --color-border: #3a3f44;
+:root[data-theme='dark'][data-skin='classic'] {
+  color-scheme: dark;
 
-    --color-exchange: #f59e0b;
-    --color-cancel: #f87171;
-    --color-vacation: #4ade80;
+  --color-bg: var(--tg-bg, #17191c);
+  --color-surface: #24272b;
+  --color-surface-2: #2e3237;
+  --color-track: #1d2023;
+  --color-text: var(--tg-text, #e8eaed);
+  --color-muted: var(--tg-hint, #a0a4a8);
+  --color-border: #3a3f44;
 
-    --cal-cell-text: #c9ccd0;
-    --cal-day-bg: #23303c;
-    --cal-changed-bg: #3a2628;
-    --cal-method-bg: #3a2f22;
+  --color-exchange: #f59e0b;
+  --color-cancel: #f87171;
+  --color-vacation: #4ade80;
 
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
-  }
+  --cal-cell-text: #c9ccd0;
+  --cal-day-bg: #23303c;
+  --cal-changed-bg: #3a2628;
+  --cal-method-bg: #3a2f22;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * «Минимализм» keeps its flat, airy character in the dark: the same soft grey
+ * surfaces and quiet radii, but with a neutral dark header instead of the white
+ * one and no gradients (there are none in the light palette either).
+ */
+:root[data-theme='dark'][data-skin='minimal'] {
+  color-scheme: dark;
+
+  --color-bg: var(--tg-bg, #17191c);
+  --color-surface: #24272b;
+  --color-surface-2: #2e3237;
+  --color-track: #1d2023;
+  --color-text: var(--tg-text, #e8eaed);
+  --color-muted: var(--tg-hint, #a0a4a8);
+  --color-border: #3a3f44;
+
+  --color-exchange: #f59e0b;
+  --color-cancel: #f87171;
+  --color-vacation: #4ade80;
+
+  --cal-cell-text: #c9ccd0;
+  --cal-day-bg: #23303c;
+  --cal-changed-bg: #3a2628;
+  --cal-method-bg: #3a2f22;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 10px rgba(0, 0, 0, 0.5);
+
+  --nika-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --nika-header-bg: #24272b;
+  --nika-header-bg-image: none;
+  --nika-header-border: #3a3f44;
+  --nika-header-text: #e8eaed;
+  --nika-header-text-shadow: none;
+  --nika-btn-light-border: #3a3f44;
+  --nika-btn-light-bg: #2e3237;
+  --nika-btn-light-bg-image: none;
+  --nika-btn-light-text: #e8eaed;
+  --nika-btn-light-text-shadow: none;
 }
 
 /*

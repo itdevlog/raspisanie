@@ -23,6 +23,32 @@ describe('Settings screen', () => {
     expect(getByRole('radio', { name: 'Фиолетовый' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Обычный' })).toBeTruthy();
     expect(getByRole('radio', { name: 'Крупный' })).toBeTruthy();
+    expect(getByRole('radio', { name: 'Системный' })).toBeTruthy();
+    expect(getByRole('radio', { name: 'Светлый' })).toBeTruthy();
+    expect(getByRole('radio', { name: 'Тёмный' })).toBeTruthy();
+  });
+
+  it('persists the theme mode and applies data-theme to <html>', async () => {
+    const settings = makeSettings();
+    const { getByRole } = render(Settings, { props: { settings } });
+
+    await fireEvent.click(getByRole('radio', { name: 'Тёмный' }));
+
+    expect(settings.theme).toBe('dark');
+    await waitFor(() => expect(document.documentElement.getAttribute('data-theme')).toBe('dark'));
+
+    await fireEvent.click(getByRole('radio', { name: 'Светлый' }));
+    expect(settings.theme).toBe('light');
+    await waitFor(() => expect(document.documentElement.getAttribute('data-theme')).toBe('light'));
+  });
+
+  it('notes that «Режим» cannot affect an inherently dark skin', () => {
+    const settings = makeSettings();
+    settings.setSkin('dark');
+    const { container } = render(Settings, { props: { settings } });
+
+    const hints = [...container.querySelectorAll('.hint')].map((node) => node.textContent ?? '');
+    expect(hints.some((text) => text.includes('всегда тёмный'))).toBe(true);
   });
 
   it('persists a skin choice and applies it to <html>', async () => {

@@ -18,9 +18,11 @@
     supportsServiceWorker,
     ACCENT_LABELS,
     DEFAULT_KIND_LABELS,
+    DUAL_THEME_SKINS,
     FONT_LABELS,
     SCHEDULE_VIEW_LABELS,
     SKIN_LABELS,
+    THEME_LABELS,
     type Accent,
     type DefaultKind,
     type FontSize,
@@ -29,6 +31,7 @@
     type SelectionStore,
     type SettingsStore,
     type Skin,
+    type ThemeMode,
   } from '../lib';
   import StateNotice from '../components/StateNotice.svelte';
   import { untrack } from 'svelte';
@@ -73,6 +76,9 @@
   }: Props = $props();
 
   const SKINS: Skin[] = ['classic', 'minimal', 'dark', 'contrast', 'youth'];
+  const THEMES: ThemeMode[] = ['system', 'light', 'dark'];
+  /** Skins that pin `color-scheme: dark` in `app.css` (so «Режим» cannot apply). */
+  const FIXED_DARK_SKINS: Skin[] = ['dark', 'youth'];
   const ACCENTS: Accent[] = ['blue', 'green', 'purple'];
   const FONTS: FontSize[] = ['normal', 'large'];
   const DEFAULT_KINDS: DefaultKind[] = ['class', 'teacher'];
@@ -115,6 +121,9 @@
 
   function handleSkinChange(event: Event) {
     settings.setSkin((event.currentTarget as HTMLInputElement).value as Skin);
+  }
+  function handleThemeChange(event: Event) {
+    settings.setTheme((event.currentTarget as HTMLInputElement).value as ThemeMode);
   }
   function handleAccentChange(event: Event) {
     settings.setAccent((event.currentTarget as HTMLInputElement).value as Accent);
@@ -230,8 +239,8 @@
   <fieldset>
     <legend>Оформление</legend>
 
-    <div class="group" role="radiogroup" aria-label="Тема оформления">
-      <span class="group-label">Тема</span>
+    <div class="group" role="radiogroup" aria-label="Стиль оформления">
+      <span class="group-label">Стиль</span>
       {#each SKINS as skin (skin)}
         <label class="choice">
           <input
@@ -245,6 +254,29 @@
         </label>
       {/each}
     </div>
+
+    <div class="group" role="radiogroup" aria-label="Светлый или тёмный режим">
+      <span class="group-label">Режим</span>
+      {#each THEMES as theme (theme)}
+        <label class="choice">
+          <input
+            type="radio"
+            name="theme"
+            value={theme}
+            checked={settings.theme === theme}
+            onchange={handleThemeChange}
+          />
+          <span>{THEME_LABELS[theme]}</span>
+        </label>
+      {/each}
+    </div>
+
+    {#if !DUAL_THEME_SKINS.includes(settings.skin)}
+      <p class="hint" role="note">
+        Этот стиль всегда {FIXED_DARK_SKINS.includes(settings.skin) ? 'тёмный' : 'светлый'} — «Режим»
+        на него не влияет.
+      </p>
+    {/if}
 
     <div class="group" role="radiogroup" aria-label="Цвет акцента">
       <span class="group-label">Цвет</span>
@@ -352,11 +384,7 @@
         <p class="hint" role="status">Выберите класс, чтобы включить уведомления.</p>
       {/if}
       <label class="toggle">
-        <input
-          type="checkbox"
-          checked={settings.pushQuietHours}
-          onchange={handlePushQuietChange}
-        />
+        <input type="checkbox" checked={settings.pushQuietHours} onchange={handlePushQuietChange} />
         <span>🌙 Не беспокоить ночью (22:00–07:00)</span>
       </label>
       {#if pushNotice}

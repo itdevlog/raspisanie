@@ -133,6 +133,22 @@
     settings.apply();
   });
 
+  // While the theme setting is «Системная», follow the OS preference live:
+  // re-apply on every `prefers-color-scheme` flip. A no-op without matchMedia
+  // (SSR, jsdom) and inert for the explicit light/dark modes.
+  $effect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+    const query = window.matchMedia('(prefers-color-scheme: dark)');
+    if (typeof query.addEventListener !== 'function') {
+      return;
+    }
+    const onChange = () => settings.apply();
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  });
+
   // "Default section on open": adopt the configured kind once, when no entity
   // is selected yet.
   let adoptedDefault = false;
@@ -344,6 +360,7 @@
         >
           <svg class="bell-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
+              class="bell-body"
               d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"
               fill="none"
               stroke="currentColor"
@@ -513,6 +530,13 @@
 
   .bell.on {
     color: var(--color-accent);
+  }
+
+  /* A filled bell body is the non-colour cue for "on": on the `minimal` skin the
+     muted/accent greys alone are easy to confuse (WCAG 1.4.1), and colour
+     blindness must not hide the state. */
+  .bell.on .bell-body {
+    fill: currentColor;
   }
 
   /* Muted while there is no class to subscribe; still tappable so a tap can
