@@ -4,6 +4,8 @@
 Разворачивание edge-хоста — в [deploy/edge/README.md](../deploy/edge/README.md);
 контракт снапшота и дизайн — в
 [спеке](dev/specs/2026-09-24-public-schedule-site-design.md) §1–§9.
+Пошаговый выкат и проверка после него — в
+[runbook](dev/deploy-runbook.md).
 
 ---
 
